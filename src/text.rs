@@ -108,6 +108,48 @@ impl TextBox {
             ..wgpu_glyph::Section::default()
         }
     }
+    
+    pub fn code_rects<T: GlyphCruncher>(&self,
+        glyph_brush: &mut T,
+        screen_position: (f32, f32),
+        bounds: (f32, f32),
+        hidpi_scale: f32,
+    ) -> Vec<Rect> {
+        dbg!(&self.texts);
+        let mut code_bounds = Vec::new();
+        let font = &glyph_brush.fonts()[0].clone();
+        let mut glyph_iter = glyph_brush.glyphs(self.glyph_section(screen_position, bounds, hidpi_scale));
+        let first_glyph = if let Some(first_glyph) = glyph_iter.next() {
+            first_glyph
+        } else {
+            return Vec::new()
+        };
+        let first_bounds = font.glyph_bounds(&first_glyph.glyph);
+        let mut current_section = first_glyph.section_index;
+        let mut is_code = self.texts[current_section].is_code;
+        let (mut min, mut max) = (first_bounds.min, first_bounds.max);
+        for glyph in  glyph_iter {
+            let bounds = font.glyph_bounds(&glyph.glyph);
+            if is_code != self.texts[glyph.section_index].is_code {
+                if self.texts[current_section].is_code {
+                    code_bounds.push(Rect::from_min_max((min.x, min.y), (max.x, max.y)));
+                }
+                current_section = glyph.section_index;
+                is_code = self.texts[glyph.section_index].is_code;
+                min = bounds.min;
+                max = bounds.max;
+            } else if self.texts[glyph.section_index].is_code {
+                min.x = min.x.min(bounds.min.x);
+                min.y = min.y.min(bounds.min.y);
+                max.x = max.x.max(bounds.max.x);
+                max.y = max.y.max(bounds.max.y);
+            }
+        }
+        if self.texts[current_section].is_code {
+            code_bounds.push(Rect::from_min_max((min.x, min.y), (max.x, max.y)));
+        }
+        code_bounds
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +158,7 @@ pub struct Text {
     pub size: f32,
     pub color: [f32; 4],
     pub link: Option<String>,
+    pub is_code: bool,
     pub is_bold: bool,
     pub font: usize,
 }
@@ -129,6 +172,7 @@ impl Text {
             link: None,
             is_bold: false,
             font: 0,
+            is_code: false
         }
     }
 
@@ -149,6 +193,11 @@ impl Text {
 
     pub fn make_bold(mut self, bold: bool) -> Self {
         self.is_bold = bold;
+        self
+    }
+
+    pub fn make_code(mut self, code: bool) -> Self {
+        self.is_code = code;
         self
     }
 

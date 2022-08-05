@@ -30,6 +30,7 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
+#[derive(Debug)]
 pub struct Rect {
     pub pos: (f32, f32),
     pub size: (f32, f32),
@@ -297,10 +298,34 @@ impl Renderer {
             match &mut element.inner {
                 Element::TextBox(text_box) => {
                     self.glyph_brush.queue(text_box.glyph_section(
-                        (pos.0, pos.1),
+                        *pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
                         self.hidpi_scale,
                     ));
+                    for code_rect in text_box.code_rects(&mut self.glyph_brush, *pos, (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1), self.hidpi_scale) {
+                        let mut fill_tessellator = FillTessellator::new();
+
+                        {
+                            let min = (code_rect.pos.0, code_rect.pos.1 - self.scroll_y);
+                            let max = (min.0 + code_rect.size.0, min.1 + code_rect.size.1);
+                            // Compute the tessellation.
+                            fill_tessellator
+                                .tessellate_rectangle(
+                                    &Box2D::new(
+                                        Point2D::from(point(min.0, min.1, screen_size)),
+                                        Point2D::from(point(max.0, max.1, screen_size)),
+                                    ),
+                                    &FillOptions::default(),
+                                    &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
+                                        pos: [vertex.position().x, vertex.position().y, 0.0],
+                                        color: [0.6, 0.6, 0.6, 1.0],
+                                    }),
+                                )
+                                .unwrap();
+                        }
+                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                    }
                 }
                 Element::Image(_) => {}
                 Element::Spacer(_) => {}
@@ -577,4 +602,17 @@ pub enum Align {
     Center,
     Right,
     Justify,
+}
+
+
+pub fn point(
+    x: f32,
+    y: f32,
+    screen: (f32, f32),
+) -> [f32; 2] {
+    let scale_x = 2. / screen.0;
+    let scale_y = 2. / screen.1;
+    let new_x = -1. + (x * scale_x);
+    let new_y = 1. - (y * scale_y);
+    [new_x, new_y]
 }

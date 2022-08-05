@@ -264,6 +264,7 @@ impl TokenSink for TokenPrinter {
         match token {
             TagToken(tag) => {
                 let tag_name = tag.name.to_string();
+                dbg!(&tag_name);
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
                         "a" => {
@@ -414,6 +415,7 @@ impl TokenSink for TokenPrinter {
             }
             CharacterTokens(str) => {
                 let str = str.to_string();
+                dbg!(&str);
                 if !(self.current_textbox.texts.is_empty() && str.trim().is_empty()) {
                     if str == "\n" {
                         if self.is_pre_formated {
@@ -433,6 +435,7 @@ impl TokenSink for TokenPrinter {
                             text = text
                                 .with_color(color::hex_to_linear_rgba(0xEC5800))
                                 .with_font(1)
+                                .make_code(true)
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());
