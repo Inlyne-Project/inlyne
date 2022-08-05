@@ -264,7 +264,6 @@ impl TokenSink for TokenPrinter {
         match token {
             TagToken(tag) => {
                 let tag_name = tag.name.to_string();
-                dbg!(&tag_name);
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
                         "a" => {
@@ -420,7 +419,6 @@ impl TokenSink for TokenPrinter {
             }
             CharacterTokens(str) => {
                 let str = str.to_string();
-                dbg!(&str);
                 if !(self.current_textbox.texts.is_empty() && str.trim().is_empty()) {
                     if str == "\n" {
                         if self.is_pre_formated {
@@ -489,7 +487,6 @@ struct Args {
 }
 
 fn main() {
-    dbg!(crate::color::hex_to_linear_rgba(0x58a6ff));
     let args = Args::parse();
     let inlyne = pollster::block_on(Inlyne::new());
 

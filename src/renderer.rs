@@ -307,8 +307,8 @@ impl Renderer {
                         let mut fill_tessellator = FillTessellator::new();
 
                         {
-                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 5.) ;
-                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 10.);
+                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 10.) ;
+                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 20.);
                             // Compute the tessellation.
                             fill_tessellator
                                 .tessellate_rectangle(
@@ -319,7 +319,7 @@ impl Renderer {
                                     &FillOptions::default(),
                                     &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
                                         pos: [vertex.position().x, vertex.position().y, 0.0],
-                                        color: [0.6, 0.6, 0.6, 1.0],
+                                        color: [0.008023192, 0.010960094, 0.015996292, 1.0],
                                     }),
                                 )
                                 .unwrap();
