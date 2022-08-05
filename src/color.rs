@@ -35,6 +35,6 @@ pub const LIGHT_DEFAULT: Theme = Theme {
     text_color: [0., 0., 0., 1.0],
     clear_color: wgpu::Color::WHITE,
     code_color: [1., 0.057805434, 0.933104762, 1.0],
-    code_block_color: [0.8, 0.8, 0.8, 1.0],
+    code_block_color: [0.9, 0.9, 0.9, 1.0],
     link_color: [0.09758736, 0.1813261, 1.0, 1.0],
 };
