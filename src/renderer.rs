@@ -16,6 +16,13 @@ use winit::window::Window;
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
+pub const CLEAR_COLOR: wgpu::Color = wgpu::Color {
+    r: 0.004024717,
+    g: 0.0056053917,
+    b: 0.008568125,
+    a: 1.0,
+};
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct Vertex {
@@ -430,7 +437,7 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        load: wgpu::LoadOp::Clear(CLEAR_COLOR),
                         store: true,
                     },
                 })],

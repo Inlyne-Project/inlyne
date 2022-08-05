@@ -33,6 +33,13 @@ use std::sync::Mutex;
 
 use crate::renderer::DEFAULT_MARGIN;
 
+pub const DEFAULT_LINK_COLOR: [f32; 4] = [
+    0.09758736,
+    0.3813261,
+    1.0,
+    1.0,
+];
+
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
@@ -429,7 +436,7 @@ impl TokenSink for TokenPrinter {
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());
-                            text = text.with_color([0., 0., 1., 1.]);
+                            text = text.with_color(DEFAULT_LINK_COLOR);
                         }
                         if let Some(Header(size)) = self.is_header {
                             text = text.with_size(size).make_bold(true);
@@ -475,6 +482,7 @@ struct Args {
 }
 
 fn main() {
+    dbg!(crate::color::hex_to_linear_rgba(0x58a6ff));
     let args = Args::parse();
     let inlyne = pollster::block_on(Inlyne::new());
 

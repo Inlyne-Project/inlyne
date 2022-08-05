@@ -3139,7 +3139,8 @@ checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
 
 [[package]]
 name = "wgpu"
-version = "0.13.0"
+version = "0.13.1"
+source = "git+https://github.com/trimental/wgpu?rev=c11efad057d15fe86112ef407eb45fd2f342ef27#c11efad057d15fe86112ef407eb45fd2f342ef27"
 dependencies = [
  "arrayvec 0.7.2",
  "js-sys",
@@ -3159,6 +3160,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.13.0"
+source = "git+https://github.com/trimental/wgpu?rev=c11efad057d15fe86112ef407eb45fd2f342ef27#c11efad057d15fe86112ef407eb45fd2f342ef27"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -3182,6 +3184,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.13.0"
+source = "git+https://github.com/trimental/wgpu?rev=c11efad057d15fe86112ef407eb45fd2f342ef27#c11efad057d15fe86112ef407eb45fd2f342ef27"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -3219,6 +3222,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.13.0"
+source = "git+https://github.com/trimental/wgpu?rev=c11efad057d15fe86112ef407eb45fd2f342ef27#c11efad057d15fe86112ef407eb45fd2f342ef27"
 dependencies = [
  "bitflags",
 ]
@@ -3226,6 +3230,8 @@ dependencies = [
 [[package]]
 name = "wgpu_glyph"
 version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "362152ff06b11372ddfdfc706606fb0f3b6f1b540f017675443a61d074a0a5df"
 dependencies = [
  "bytemuck",
  "glyph_brush",

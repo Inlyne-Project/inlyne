@@ -2,6 +2,11 @@ use crate::renderer::Rect;
 use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, Section};
 use winit::window::CursorIcon;
 
+pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785,
+0.63759696,
+0.6938719,
+1.0];
+
 #[derive(Clone, Debug)]
 pub struct TextBox {
     pub indent: f32,
@@ -120,7 +125,7 @@ impl Text {
         Self {
             text,
             size: 16.,
-            color: [0., 0., 0., 1.],
+            color: DEFAULT_TEXT_COLOR,
             link: None,
             is_bold: false,
             font: 0,
