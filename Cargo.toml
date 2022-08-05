@@ -7,9 +7,9 @@ license = "MIT"
 
 [dependencies]
 pollster = "0.2.5"
-wgpu_glyph = { path = "../wgpu_glyph" }
+wgpu_glyph =  "0.17.0"
 winit = "0.27.0"
-wgpu = { path = "../wgpu/wgpu" }
+wgpu = { git = "https://github.com/trimental/wgpu", rev = "c11efad057d15fe86112ef407eb45fd2f342ef27" }
 bytemuck = "1.11.0"
 lyon = "1.0.0"
 rand = "0.8.5"
@@ -20,3 +20,5 @@ image = "0.24.3"
 reqwest = { version = "0.11.11", features = ["blocking"] }
 clap = {version = "3.2.16", features = ["derive"] }
 
+[patch.crates-io]
+wgpu = { git = "https://github.com/trimental/wgpu", rev = "c11efad057d15fe86112ef407eb45fd2f342ef27" }
