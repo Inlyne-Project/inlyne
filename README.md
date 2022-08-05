@@ -5,7 +5,7 @@
 inlyne README.md
 ```
 <p align="center">
-<img src="example.png" width="600"/>
+<img src="example.png" width="800"/>
 </p>
 
 ## About
