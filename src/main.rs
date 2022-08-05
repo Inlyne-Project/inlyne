@@ -377,7 +377,11 @@ impl TokenSink for TokenPrinter {
                             self.push_spacer();
                             self.is_header = Some(Header(10.72))
                         }
-                        "pre" => self.is_pre_formated = true,
+                        "pre" => {
+                            self.push_current_textbox();
+                            self.current_textbox.set_code_block(true);
+                            self.is_pre_formated = true
+                        },
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
@@ -407,7 +411,8 @@ impl TokenSink for TokenPrinter {
                         "pre" => {
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_pre_formated = false
+                            self.is_pre_formated = false;
+                            self.current_textbox.set_code_block(false);
                         }
                         _ => {}
                     },
@@ -435,7 +440,6 @@ impl TokenSink for TokenPrinter {
                             text = text
                                 .with_color(color::hex_to_linear_rgba(0xEC5800))
                                 .with_font(1)
-                                .make_code(true)
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());

@@ -297,17 +297,18 @@ impl Renderer {
             }
             match &mut element.inner {
                 Element::TextBox(text_box) => {
+                    let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
                     self.glyph_brush.queue(text_box.glyph_section(
                         *pos,
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
+                        bounds,
                         self.hidpi_scale,
                     ));
-                    for code_rect in text_box.code_rects(&mut self.glyph_brush, *pos, (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1), self.hidpi_scale) {
+                    if text_box.is_code_block {
                         let mut fill_tessellator = FillTessellator::new();
 
                         {
-                            let min = (code_rect.pos.0, code_rect.pos.1 - self.scroll_y);
-                            let max = (min.0 + code_rect.size.0, min.1 + code_rect.size.1);
+                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 5.) ;
+                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 10.);
                             // Compute the tessellation.
                             fill_tessellator
                                 .tessellate_rectangle(
