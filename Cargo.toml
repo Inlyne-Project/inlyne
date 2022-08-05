@@ -1,0 +1,22 @@
+[package]
+name = "inlyne"
+version = "0.1.0"
+edition = "2021"
+authors = ["trimental"]
+license = "MIT"
+
+[dependencies]
+pollster = "0.2.5"
+wgpu_glyph = { path = "../wgpu_glyph" }
+winit = "0.27.0"
+wgpu = { path = "../wgpu/wgpu" }
+bytemuck = "1.11.0"
+lyon = "1.0.0"
+rand = "0.8.5"
+comrak = "0.14.0"
+open = "3.0.2"
+html5ever = "0.26.0"
+image = "0.24.3"
+reqwest = { version = "0.11.11", features = ["blocking"] }
+clap = {version = "3.2.16", features = ["derive"] }
+
