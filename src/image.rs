@@ -39,7 +39,11 @@ impl Image {
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
             } else {
-                reqwest::blocking::get(url).unwrap().bytes().unwrap().into()
+                if let Ok(Ok(data)) = reqwest::blocking::get(url).map(|request| request.bytes()) {
+                    data.into()
+                } else {
+                    return;
+                }
             };
 
             if let Ok(image) = image::load_from_memory(&image_data) {

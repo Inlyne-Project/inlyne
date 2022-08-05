@@ -2,7 +2,7 @@
 
 
 ```
-inlyne README.md
+inlyne README.md --theme dark/light
 ```
 <p align="center">
 <img src="example.png" width="800"/>
