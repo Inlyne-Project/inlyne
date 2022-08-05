@@ -12,7 +12,6 @@ winit = "0.27.0"
 wgpu = { git = "https://github.com/trimental/wgpu", rev = "c11efad057d15fe86112ef407eb45fd2f342ef27" }
 bytemuck = "1.11.0"
 lyon = "1.0.0"
-rand = "0.8.5"
 comrak = "0.14.0"
 open = "3.0.2"
 html5ever = "0.26.0"

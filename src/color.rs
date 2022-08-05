@@ -1,18 +1,3 @@
-use rand::seq::IteratorRandom;
-use rand::thread_rng;
-
-pub fn default_palette() -> [[f32; 4]; 7] {
-    [
-        hex_to_linear_rgba(0xA8006D),
-        hex_to_linear_rgba(0xE43F47),
-        hex_to_linear_rgba(0xFF822F),
-        hex_to_linear_rgba(0xF8CE18),
-        hex_to_linear_rgba(0x6BAA2C),
-        hex_to_linear_rgba(0x1E9FD2),
-        hex_to_linear_rgba(0x6B46C1),
-    ]
-}
-
 pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
     let f = |xu: u32| {
         let x = (xu & 0xFF) as f32 / 255.0;
@@ -25,24 +10,31 @@ pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
     [f(c >> 16), f(c >> 8), f(c), 1.0]
 }
 
-pub struct ColorPool {
-    pool: Vec<([f32; 4], bool)>,
+pub struct Theme {
+    pub text_color: [f32; 4],
+    pub clear_color: wgpu::Color,
+    pub code_color: [f32; 4],
+    pub code_block_color: [f32; 4],
+    pub link_color: [f32; 4],
 }
 
-impl ColorPool {
-    pub fn new(colors: &[[f32; 4]]) -> Self {
-        let pool = colors.iter().map(|c| (*c, true)).collect();
-        Self { pool }
-    }
-    pub fn random_color(&mut self) -> Option<[f32; 4]> {
-        let mut rng = thread_rng();
-        self.pool
-            .iter_mut()
-            .filter(|c| c.1)
-            .choose(&mut rng)
-            .map(|c| {
-                c.1 = false;
-                c.0
-            })
-    }
-}
+pub const DARK_DEFAULT: Theme = Theme {
+    text_color: [0.5840785, 0.63759696, 0.6938719, 1.0],
+    clear_color: wgpu::Color {
+        r: 0.004024717,
+        g: 0.0056053917,
+        b: 0.008568125,
+        a: 1.0,
+    },
+    code_color: [0.5840785, 0.63759696, 0.6938719, 1.0],
+    code_block_color: [0.008023192 * 1.5, 0.01096009 * 1.5, 0.015996292 * 1.5, 1.0],
+    link_color: [0.09758736, 0.3813261, 1.0, 1.0],
+};
+
+pub const LIGHT_DEFAULT: Theme = Theme {
+    text_color: [0., 0., 0., 1.0],
+    clear_color: wgpu::Color::WHITE,
+    code_color: [1., 0.057805434, 0.933104762, 1.0],
+    code_block_color: [0.8, 0.8, 0.8, 1.0],
+    link_color: [0.09758736, 0.1813261, 1.0, 1.0],
+};

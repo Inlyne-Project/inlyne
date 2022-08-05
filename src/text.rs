@@ -2,10 +2,7 @@ use crate::renderer::Rect;
 use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, Section};
 use winit::window::CursorIcon;
 
-pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785,
-0.63759696,
-0.6938719,
-1.0];
+pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785, 0.63759696, 0.6938719, 1.0];
 
 #[derive(Clone, Debug)]
 pub struct TextBox {
@@ -16,7 +13,11 @@ pub struct TextBox {
 
 impl TextBox {
     pub fn new(texts: Vec<Text>) -> TextBox {
-        TextBox { indent: 0.0, texts, is_code_block: false }
+        TextBox {
+            indent: 0.0,
+            texts,
+            is_code_block: false,
+        }
     }
 
     pub fn set_code_block(&mut self, is_code_block: bool) {
@@ -42,7 +43,12 @@ impl TextBox {
         hidpi_scale: f32,
     ) -> CursorIcon {
         let font = &glyph_brush.fonts()[0].clone();
-        for glyph in glyph_brush.glyphs(self.glyph_section(screen_position, bounds, hidpi_scale)) {
+        for glyph in glyph_brush.glyphs(self.glyph_section(
+            screen_position,
+            bounds,
+            hidpi_scale,
+            [0., 0., 0., 0.],
+        )) {
             let bounds = font.glyph_bounds(&glyph.glyph);
             let bounds =
                 Rect::from_min_max((bounds.min.x, bounds.min.y), (bounds.max.x, bounds.max.y));
@@ -68,7 +74,12 @@ impl TextBox {
         hidpi_scale: f32,
     ) {
         let font = &glyph_brush.fonts()[0].clone();
-        for glyph in glyph_brush.glyphs(self.glyph_section(screen_position, bounds, hidpi_scale)) {
+        for glyph in glyph_brush.glyphs(self.glyph_section(
+            screen_position,
+            bounds,
+            hidpi_scale,
+            [0., 0., 0., 0.],
+        )) {
             let bounds = font.glyph_bounds(&glyph.glyph);
             let bounds =
                 Rect::from_min_max((bounds.min.x, bounds.min.y), (bounds.max.x, bounds.max.y));
@@ -91,9 +102,12 @@ impl TextBox {
         if self.texts.is_empty() {
             return (0., 0.);
         }
-        if let Some(bounds) =
-            glyph_brush.glyph_bounds(self.glyph_section(screen_position, bounds, hidpi_scale))
-        {
+        if let Some(bounds) = glyph_brush.glyph_bounds(self.glyph_section(
+            screen_position,
+            bounds,
+            hidpi_scale,
+            [0., 0., 0., 0.],
+        )) {
             (bounds.width(), bounds.height())
         } else {
             (0., 0.)
@@ -105,11 +119,12 @@ impl TextBox {
         screen_position: (f32, f32),
         bounds: (f32, f32),
         hidpi_scale: f32,
+        default_color: [f32; 4],
     ) -> Section {
         let texts = self
             .texts
             .iter()
-            .map(|t| t.glyph_text(hidpi_scale))
+            .map(|t| t.glyph_text(hidpi_scale, default_color))
             .collect();
         Section {
             screen_position,
@@ -124,7 +139,7 @@ impl TextBox {
 pub struct Text {
     pub text: String,
     pub size: f32,
-    pub color: [f32; 4],
+    pub color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
     pub font: usize,
@@ -135,7 +150,7 @@ impl Text {
         Self {
             text,
             size: 16.,
-            color: DEFAULT_TEXT_COLOR,
+            color: None,
             link: None,
             is_bold: false,
             font: 0,
@@ -148,7 +163,7 @@ impl Text {
     }
 
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
-        self.color = color;
+        self.color = Some(color);
         self
     }
 
@@ -167,7 +182,7 @@ impl Text {
         self
     }
 
-    fn glyph_text(&self, hidpi_scale: f32) -> wgpu_glyph::Text {
+    fn glyph_text(&self, hidpi_scale: f32, default_color: [f32; 4]) -> wgpu_glyph::Text {
         let font = if self.is_bold {
             FontId(self.font * 2 + 1)
         } else {
@@ -175,7 +190,7 @@ impl Text {
         };
         wgpu_glyph::Text::new(self.text.as_str())
             .with_scale(self.size * hidpi_scale)
-            .with_color(self.color)
+            .with_color(self.color.unwrap_or(default_color))
             .with_font_id(font)
     }
 }

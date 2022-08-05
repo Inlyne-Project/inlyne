@@ -5,6 +5,7 @@ pub mod text;
 
 use crate::image::Image;
 use crate::image::ImageSize;
+use color::Theme;
 use renderer::{Align, Renderer, Spacer};
 
 use comrak::{markdown_to_html, ComrakOptions};
@@ -32,13 +33,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::renderer::DEFAULT_MARGIN;
-
-pub const DEFAULT_LINK_COLOR: [f32; 4] = [
-    0.09758736,
-    0.3813261,
-    1.0,
-    1.0,
-];
 
 #[derive(Debug)]
 pub enum InlyneEvent {
@@ -77,12 +71,12 @@ pub struct Inlyne {
 }
 
 impl Inlyne {
-    pub async fn new() -> Self {
+    pub async fn new(theme: Theme) -> Self {
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Window::new(&event_loop).unwrap();
         window.set_title("Inlyne");
         let renderer = Arc::new(Mutex::new(
-            Renderer::new(&window, event_loop.create_proxy()).await,
+            Renderer::new(&window, event_loop.create_proxy(), theme).await,
         ));
 
         Self {
@@ -380,7 +374,7 @@ impl TokenSink for TokenPrinter {
                             self.push_current_textbox();
                             self.current_textbox.set_code_block(true);
                             self.is_pre_formated = true
-                        },
+                        }
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
@@ -436,12 +430,12 @@ impl TokenSink for TokenPrinter {
                         let mut text = Text::new(str);
                         if self.is_code {
                             text = text
-                                .with_color(color::hex_to_linear_rgba(0xEC5800))
+                                .with_color(self.renderer.lock().unwrap().theme.code_color)
                                 .with_font(1)
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());
-                            text = text.with_color(DEFAULT_LINK_COLOR);
+                            text = text.with_color(self.renderer.lock().unwrap().theme.link_color);
                         }
                         if let Some(Header(size)) = self.is_header {
                             text = text.with_size(size).make_bold(true);
@@ -478,17 +472,30 @@ impl TokenSink for TokenPrinter {
     }
 }
 
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum ThemeOption {
+    Dark,
+    Light,
+}
+
 use clap::Parser;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(value_parser)]
     file_path: PathBuf,
+
+    #[clap(short, long, value_parser, default_value = "light")]
+    theme: ThemeOption,
 }
 
 fn main() {
     let args = Args::parse();
-    let inlyne = pollster::block_on(Inlyne::new());
+    let theme = match args.theme {
+        ThemeOption::Dark => color::DARK_DEFAULT,
+        ThemeOption::Light => color::LIGHT_DEFAULT,
+    };
+    let inlyne = pollster::block_on(Inlyne::new(theme));
 
     let mut md_file = File::open(args.file_path.as_path()).unwrap();
     let md_file_size = std::fs::metadata(args.file_path.as_path()).unwrap().len();

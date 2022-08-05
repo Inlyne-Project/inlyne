@@ -1248,7 +1248,6 @@ dependencies = [
  "lyon",
  "open",
  "pollster",
- "rand",
  "reqwest",
  "wgpu",
  "wgpu_glyph",

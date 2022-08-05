@@ -1,3 +1,4 @@
+use crate::color::Theme;
 use crate::image::ImageRenderer;
 use crate::{Element, InlyneEvent};
 use bytemuck::{Pod, Zeroable};
@@ -15,13 +16,6 @@ use winit::window::Window;
 
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
-
-pub const CLEAR_COLOR: wgpu::Color = wgpu::Color {
-    r: 0.004024717,
-    g: 0.0056053917,
-    b: 0.008568125,
-    a: 1.0,
-};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -107,6 +101,7 @@ pub struct Renderer {
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub occluded: bool,
+    pub theme: Theme,
 }
 
 impl Renderer {
@@ -122,7 +117,11 @@ impl Renderer {
         (self.config.width as f32, self.config.height as f32)
     }
 
-    pub async fn new(window: &Window, eventloop_proxy: EventLoopProxy<InlyneEvent>) -> Self {
+    pub async fn new(
+        window: &Window,
+        eventloop_proxy: EventLoopProxy<InlyneEvent>,
+        theme: Theme,
+    ) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
@@ -244,6 +243,7 @@ impl Renderer {
             image_renderer,
             eventloop_proxy,
             occluded: false,
+            theme,
         }
     }
 
@@ -302,12 +302,13 @@ impl Renderer {
                         *pos,
                         bounds,
                         self.hidpi_scale,
+                        self.theme.text_color,
                     ));
                     if text_box.is_code_block {
                         let mut fill_tessellator = FillTessellator::new();
 
                         {
-                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 10.) ;
+                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 10.);
                             let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 20.);
                             // Compute the tessellation.
                             fill_tessellator
@@ -317,10 +318,13 @@ impl Renderer {
                                         Point2D::from(point(max.0, max.1, screen_size)),
                                     ),
                                     &FillOptions::default(),
-                                    &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
-                                        pos: [vertex.position().x, vertex.position().y, 0.0],
-                                        color: [0.008023192, 0.010960094, 0.015996292, 1.0],
-                                    }),
+                                    &mut BuffersBuilder::new(
+                                        &mut self.lyon_buffer,
+                                        |vertex: FillVertex| Vertex {
+                                            pos: [vertex.position().x, vertex.position().y, 0.0],
+                                            color: self.theme.code_block_color,
+                                        },
+                                    ),
                                 )
                                 .unwrap();
                         }
@@ -463,7 +467,7 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(CLEAR_COLOR),
+                        load: wgpu::LoadOp::Clear(self.theme.clear_color),
                         store: true,
                     },
                 })],
@@ -605,12 +609,7 @@ pub enum Align {
     Justify,
 }
 
-
-pub fn point(
-    x: f32,
-    y: f32,
-    screen: (f32, f32),
-) -> [f32; 2] {
+pub fn point(x: f32, y: f32, screen: (f32, f32)) -> [f32; 2] {
     let scale_x = 2. / screen.0;
     let scale_y = 2. / screen.1;
     let new_x = -1. + (x * scale_x);
