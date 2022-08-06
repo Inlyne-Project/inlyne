@@ -27,7 +27,13 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn create_bind_group(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, sampler: &wgpu::Sampler, bindgroup_layout: &wgpu::BindGroupLayout) {
+    pub fn create_bind_group(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        sampler: &wgpu::Sampler,
+        bindgroup_layout: &wgpu::BindGroupLayout,
+    ) {
         let dimensions = self.buffer_dimensions();
         if let Some(image_data) = self.image.lock().unwrap().as_ref() {
             let texture_size = wgpu::Extent3d {
@@ -69,25 +75,20 @@ impl Image {
             );
 
             let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            let bind_group =
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &bindgroup_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(
-                                &texture_view,
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(
-                                sampler,
-                            ),
-                        },
-                    ],
-                    label: Some("diffuse_bind_group"),
-                });
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bindgroup_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(sampler),
+                    },
+                ],
+                label: Some("diffuse_bind_group"),
+            });
             self.bind_group = Some(Arc::new(bind_group));
         }
     }

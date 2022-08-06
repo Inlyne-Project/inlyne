@@ -19,7 +19,7 @@ use winit::window::Window;
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
-pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(50);
+pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(16);
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -361,7 +361,12 @@ impl Renderer {
             }
             if let Element::Image(ref mut image) = element.inner {
                 if image.bind_group.is_none() {
-                    image.create_bind_group(&self.device, &self.queue, &self.image_renderer.sampler, &self.image_renderer.bindgroup_layout);
+                    image.create_bind_group(
+                        &self.device,
+                        &self.queue,
+                        &self.image_renderer.sampler,
+                        &self.image_renderer.bindgroup_layout,
+                    );
                 }
                 if let Some(ref bind_group) = image.bind_group {
                     let vertex_buf =

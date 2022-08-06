@@ -283,7 +283,7 @@ impl TokenPrinter {
         }
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(20.).into());
+        self.push_element(Spacer::new(10.).into());
     }
     fn push_element(&mut self, element: Element) {
         let mut element_queue = self.element_queue.lock().unwrap();
@@ -600,6 +600,7 @@ impl TokenSink for TokenPrinter {
                         }
                         "ul" | "ol" => {
                             self.push_current_textbox();
+                            self.push_spacer();
                             self.global_indent -= DEFAULT_MARGIN / 4.;
                             self.current_textbox.indent = self.global_indent;
                             self.list_type = None;
