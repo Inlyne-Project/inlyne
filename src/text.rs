@@ -1,5 +1,5 @@
-use crate::renderer::Rect;
-use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, Section};
+use crate::renderer::{Align, Rect};
+use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, HorizontalAlign, Layout, Section};
 use winit::window::CursorIcon;
 
 pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785, 0.63759696, 0.6938719, 1.0];
@@ -9,6 +9,7 @@ pub struct TextBox {
     pub indent: f32,
     pub texts: Vec<Text>,
     pub is_code_block: bool,
+    pub align: Align,
 }
 
 impl TextBox {
@@ -17,6 +18,7 @@ impl TextBox {
             indent: 0.0,
             texts,
             is_code_block: false,
+            align: Align::Left,
         }
     }
 
@@ -32,6 +34,15 @@ impl TextBox {
     pub fn with_indent(mut self, indent: f32) -> Self {
         self.indent = indent;
         self
+    }
+
+    pub fn with_align(mut self, align: Align) -> Self {
+        self.align = align;
+        self
+    }
+
+    pub fn set_align(&mut self, align: Align) {
+        self.align = align;
     }
 
     pub fn hovering_over<T: GlyphCruncher>(
@@ -116,7 +127,7 @@ impl TextBox {
 
     pub fn glyph_section(
         &self,
-        screen_position: (f32, f32),
+        mut screen_position: (f32, f32),
         bounds: (f32, f32),
         hidpi_scale: f32,
         default_color: [f32; 4],
@@ -126,11 +137,25 @@ impl TextBox {
             .iter()
             .map(|t| t.glyph_text(hidpi_scale, default_color))
             .collect();
+
+        let horizontal_align = match self.align {
+            Align::Center => {
+                screen_position = (screen_position.0 + bounds.0 / 2., screen_position.1);
+                HorizontalAlign::Center
+            }
+            Align::Left => HorizontalAlign::Left,
+            Align::Right => {
+                screen_position = (bounds.0 + screen_position.0, screen_position.1);
+                HorizontalAlign::Right
+            }
+            Align::Justify => HorizontalAlign::Center,
+        };
         Section {
             screen_position,
             bounds,
             text: texts,
             ..wgpu_glyph::Section::default()
+                .with_layout(Layout::default().h_align(horizontal_align))
         }
     }
 }

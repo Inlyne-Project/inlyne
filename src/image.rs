@@ -38,12 +38,11 @@ impl Image {
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
+            } else if let Ok(Ok(data)) = reqwest::blocking::get(url).map(|request| request.bytes())
+            {
+                data.into()
             } else {
-                if let Ok(Ok(data)) = reqwest::blocking::get(url).map(|request| request.bytes()) {
-                    data.into()
-                } else {
-                    return;
-                }
+                return;
             };
 
             if let Ok(image) = image::load_from_memory(&image_data) {
@@ -103,20 +102,28 @@ impl Image {
             buffer_size.0 as f32 * hidpi_scale,
             buffer_size.1 as f32 * hidpi_scale,
         );
-        let target_width = screen_size.0 - 2. * DEFAULT_MARGIN;
+        let max_width = screen_size.0 - 2. * DEFAULT_MARGIN;
         if let Some(dimensions) = self
             .size
             .as_ref()
             .map(|image_size| self.dimensions_from_image_size(image_size))
         {
-            (
+            let target_dimensions = (
                 (dimensions.0 as f32 * hidpi_scale) as u32,
                 (dimensions.1 as f32 * hidpi_scale) as u32,
-            )
-        } else if buffer_size.0 > screen_size.0 {
+            );
+            if target_dimensions.0 > max_width as u32 {
+                (
+                    max_width as u32,
+                    ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
+                )
+            } else {
+                target_dimensions
+            }
+        } else if buffer_size.0 * hidpi_scale > max_width {
             (
-                target_width as u32,
-                ((target_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
+                max_width as u32,
+                ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
             )
         } else {
             (buffer_size.0 as u32, buffer_size.1 as u32)

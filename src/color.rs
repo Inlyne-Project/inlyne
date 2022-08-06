@@ -19,22 +19,22 @@ pub struct Theme {
 }
 
 pub const DARK_DEFAULT: Theme = Theme {
-    text_color: [0.5840785, 0.63759696, 0.6938719, 1.0],
+    text_color: [0.5841, 0.6376, 0.6939, 1.0],
     clear_color: wgpu::Color {
-        r: 0.004024717,
-        g: 0.0056053917,
-        b: 0.008568125,
+        r: 0.0040,
+        g: 0.0056,
+        b: 0.0086,
         a: 1.0,
     },
-    code_color: [0.5840785, 0.63759696, 0.6938719, 1.0],
-    code_block_color: [0.008023192 * 1.5, 0.01096009 * 1.5, 0.015996292 * 1.5, 1.0],
-    link_color: [0.09758736, 0.3813261, 1.0, 1.0],
+    code_color: [0.5841, 0.6376, 0.6939, 1.0],
+    code_block_color: [0.0080 * 1.5, 0.0110 * 1.5, 0.0156 * 1.5, 1.0],
+    link_color: [0.0976, 0.3813, 1.0, 1.0],
 };
 
 pub const LIGHT_DEFAULT: Theme = Theme {
     text_color: [0., 0., 0., 1.0],
     clear_color: wgpu::Color::WHITE,
-    code_color: [1., 0.057805434, 0.933104762, 1.0],
+    code_color: [1., 0.0578, 0.9331, 1.0],
     code_block_color: [0.9, 0.9, 0.9, 1.0],
-    link_color: [0.09758736, 0.1813261, 1.0, 1.0],
+    link_color: [0.0975, 0.1813, 1.0, 1.0],
 };

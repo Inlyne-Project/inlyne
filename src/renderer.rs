@@ -308,8 +308,8 @@ impl Renderer {
                         let mut fill_tessellator = FillTessellator::new();
 
                         {
-                            let min = (scrolled_pos.0 - 10., scrolled_pos.1 - 5.);
-                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 10.);
+                            let min = (scrolled_pos.0 - 10., scrolled_pos.1);
+                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 5.);
                             // Compute the tessellation.
                             fill_tessellator
                                 .tessellate_rectangle(

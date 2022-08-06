@@ -226,6 +226,7 @@ struct TokenPrinter {
     is_pre_formated: bool,
     global_indent: f32,
     align: Option<Align>,
+    text_align: Option<Align>,
 }
 
 impl TokenPrinter {
@@ -244,7 +245,7 @@ impl TokenPrinter {
                     .unwrap()
                     .push(self.current_textbox.clone().into());
             }
-            self.current_textbox.texts = Vec::new();
+            self.current_textbox = TextBox::new(Vec::new());
         }
     }
     fn push_spacer(&mut self) {
@@ -317,15 +318,31 @@ impl TokenSink for TokenPrinter {
                                         _ => {}
                                     }
                                 }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
                             }
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "strong" => self.is_bold = true,
                         "code" => self.is_code = true,
-                        "li" => self.is_list_item = true,
+                        "li" => {
+                            self.current_textbox.indent = self.global_indent;
+                            self.is_list_item = true
+                        }
                         "ul" => {
                             self.push_current_textbox();
-                            self.global_indent += DEFAULT_MARGIN / 8.;
-                            self.current_textbox.indent = self.global_indent;
+                            self.global_indent += DEFAULT_MARGIN / 4.;
                             self.list_type = Some(ListType::Unordered);
                         }
                         "ol" => {
@@ -336,39 +353,183 @@ impl TokenSink for TokenPrinter {
                                 }
                             }
                             self.push_current_textbox();
-                            self.global_indent += DEFAULT_MARGIN / 8.;
+                            self.global_indent += DEFAULT_MARGIN / 4.;
                             self.current_textbox.indent = self.global_indent;
                             self.list_type = Some(ListType::Ordered(start_index));
                         }
                         "h1" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(32.))
+                            self.is_header = Some(Header(32.));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "h2" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(24.))
+                            self.is_header = Some(Header(24.));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "h3" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(18.72))
+                            self.is_header = Some(Header(18.72));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "h4" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(16.))
+                            self.is_header = Some(Header(16.));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "h5" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(13.28))
+                            self.is_header = Some(Header(13.28));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "h6" => {
+                            let attrs = tag.attrs;
+                            for attr in attrs {
+                                if attr.name.local == local_name!("align") {
+                                    match attr.value.to_string().as_str() {
+                                        "center" => self.align = Some(Align::Center),
+                                        "left" => self.align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                                if attr.name.local == *"text-align" {
+                                    match attr.value.to_string().as_str() {
+                                        "right" => self.text_align = Some(Align::Right),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "left" => self.text_align = Some(Align::Left),
+                                        _ => {}
+                                    }
+                                }
+                            }
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = Some(Header(10.72))
+                            self.is_header = Some(Header(10.72));
+                            self.current_textbox.set_align(
+                                self.text_align
+                                    .as_ref()
+                                    .unwrap_or_else(|| self.align.as_ref().unwrap_or(&Align::Left))
+                                    .clone(),
+                            );
                         }
                         "pre" => {
                             self.push_current_textbox();
@@ -384,12 +545,15 @@ impl TokenSink for TokenPrinter {
                             self.push_current_textbox();
                             self.push_spacer();
                             self.align = None;
+                            self.text_align = None;
                         }
                         "strong" => self.is_bold = false,
                         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                             self.push_current_textbox();
                             self.push_spacer();
-                            self.is_header = None
+                            self.is_header = None;
+                            self.align = None;
+                            self.text_align = None;
                         }
                         "li" => {
                             self.push_current_textbox();
@@ -397,7 +561,7 @@ impl TokenSink for TokenPrinter {
                         }
                         "ul" | "ol" => {
                             self.push_current_textbox();
-                            self.global_indent -= DEFAULT_MARGIN / 8.;
+                            self.global_indent -= DEFAULT_MARGIN / 4.;
                             self.current_textbox.indent = self.global_indent;
                             self.list_type = None;
                         }
@@ -421,7 +585,8 @@ impl TokenSink for TokenPrinter {
                                 last.text.push('\n');
                             }
                             */
-                            self.push_current_textbox()
+                            self.push_current_textbox();
+                            self.current_textbox.is_code_block = true;
                         } else if !self.current_textbox.texts.is_empty() {
                             self.current_textbox.texts.push(Text::new(" ".to_string()));
                         }
@@ -516,6 +681,7 @@ fn main() {
             list_type: None,
             global_indent: 0.,
             align: None,
+            text_align: None,
         };
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
