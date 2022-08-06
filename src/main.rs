@@ -634,7 +634,10 @@ impl TokenSink for TokenPrinter {
                         // check if str is whitespace only
                         let mut text = Text::new(str);
                         if self.is_code {
-                            text = text.with_color(self.theme.code_color).with_font(1)
+                            text = text
+                                .with_color(self.theme.code_color)
+                                .with_font(1)
+                                .with_size(18.)
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());
