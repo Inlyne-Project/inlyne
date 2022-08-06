@@ -5,6 +5,7 @@ pub mod text;
 
 use crate::image::Image;
 use crate::image::ImageSize;
+use crate::renderer::Rect;
 use color::Theme;
 use renderer::{Align, Renderer, Spacer};
 
@@ -92,6 +93,7 @@ impl Inlyne {
 
     pub fn run(self) {
         let mut click_scheduled = false;
+        let mut scrollbar_held = false;
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
             match event {
@@ -145,11 +147,11 @@ impl Inlyne {
                     WindowEvent::CursorMoved { position, .. } => {
                         let renderer = &mut *(self.renderer.lock().unwrap());
                         let mut over_text = false;
+                        let screen_size = renderer.screen_size();
                         for element in &renderer.elements {
                             let loc = (position.x as f32, position.y as f32 + renderer.scroll_y);
                             if element.contains(loc) {
                                 if let Element::TextBox(ref text_box) = element.deref() {
-                                    let screen_size = renderer.screen_size();
                                     let bounds = element.bounds.as_ref().unwrap();
                                     let cursor = text_box.hovering_over(
                                         &mut renderer.glyph_brush,
@@ -182,17 +184,51 @@ impl Inlyne {
                                 }
                             }
                         }
+                        if Rect::new(
+                            (screen_size.0 * (49. / 50.), 0.),
+                            (screen_size.0 * (1. / 50.), screen_size.1),
+                        )
+                        .contains(position.into())
+                            || scrollbar_held
+                        {
+                            if click_scheduled || scrollbar_held {
+                                let target_scroll = ((position.y as f32 / screen_size.1)
+                                    * renderer.reserved_height)
+                                    - (screen_size.1 / renderer.reserved_height
+                                        * screen_size.1
+                                        * 2.);
+                                renderer.scroll_y = if target_scroll <= 0. {
+                                    0.
+                                } else if target_scroll >= renderer.reserved_height - screen_size.1
+                                {
+                                    renderer.reserved_height - screen_size.1
+                                } else {
+                                    target_scroll
+                                };
+                                self.window.request_redraw();
+                                click_scheduled = false;
+                                if scrollbar_held == false {
+                                    scrollbar_held = true;
+                                }
+                            }
+                        }
+
                         if !over_text {
                             self.window.set_cursor_icon(CursorIcon::Default);
                         }
                     }
                     WindowEvent::MouseInput {
-                        state: ElementState::Pressed,
+                        state,
                         button: MouseButton::Left,
                         ..
-                    } => {
-                        click_scheduled = true;
-                    }
+                    } => match state {
+                        ElementState::Pressed => {
+                            click_scheduled = true;
+                        }
+                        ElementState::Released => {
+                            scrollbar_held = false;
+                        }
+                    },
                     _ => {}
                 },
                 _ => {}
