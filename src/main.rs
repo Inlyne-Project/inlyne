@@ -16,7 +16,6 @@ use html5ever::tokenizer::{BufferQueue, TagKind};
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts};
 use text::{Text, TextBox};
 use winit::event::{ElementState, MouseButton};
-use winit::event_loop::EventLoopBuilder;
 use winit::{
     event::{Event, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -72,7 +71,7 @@ pub struct Inlyne {
 
 impl Inlyne {
     pub async fn new(theme: Theme) -> Self {
-        let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
+        let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Window::new(&event_loop).unwrap();
         window.set_title("Inlyne");
         let renderer = Arc::new(Mutex::new(
@@ -193,12 +192,6 @@ impl Inlyne {
                         ..
                     } => {
                         click_scheduled = true;
-                    }
-                    WindowEvent::Occluded(occluded) => {
-                        self.renderer.lock().unwrap().occluded = occluded;
-                        if !occluded {
-                            self.window.request_redraw();
-                        }
                     }
                     _ => {}
                 },

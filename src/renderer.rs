@@ -100,7 +100,6 @@ pub struct Renderer {
     pub hidpi_scale: f32,
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
-    pub occluded: bool,
     pub theme: Theme,
 }
 
@@ -242,7 +241,6 @@ impl Renderer {
             hidpi_scale: window.scale_factor() as f32,
             image_renderer,
             eventloop_proxy,
-            occluded: false,
             theme,
         }
     }
@@ -427,9 +425,6 @@ impl Renderer {
         bind_groups
     }
     pub fn redraw(&mut self, reserved_height: f32) {
-        if self.occluded {
-            return;
-        }
         let frame = self
             .surface
             .get_current_texture()
