@@ -7,6 +7,7 @@ use lyon::geom::Box2D;
 use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::ops::{Deref, Range};
+use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
 use wgpu::{BindGroup, Buffer};
@@ -16,6 +17,8 @@ use winit::window::Window;
 
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
+
+pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(30);
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -101,6 +104,7 @@ pub struct Renderer {
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
+    pub last_redraw: Instant,
 }
 
 impl Renderer {
@@ -242,6 +246,7 @@ impl Renderer {
             image_renderer,
             eventloop_proxy,
             theme,
+            last_redraw: Instant::now(),
         }
     }
 
@@ -290,9 +295,12 @@ impl Renderer {
             let Rect { pos, size } = element.bounds.as_ref().expect("Element not positioned");
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
-            if scrolled_pos.1 + size.1 <= 0. || scrolled_pos.1 >= screen_size.1 {
+            if scrolled_pos.1 + size.1 <= 0. {
                 continue;
+            } else if scrolled_pos.1 >= screen_size.1 {
+                break;
             }
+
             match &mut element.inner {
                 Element::TextBox(text_box) => {
                     let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
@@ -346,58 +354,10 @@ impl Renderer {
             let Rect { pos, size } = element.bounds.as_ref().unwrap();
             let pos = (pos.0, pos.1 - self.scroll_y);
             if let Element::Image(ref mut image) = element.inner {
-                let dimensions = image.buffer_dimensions();
-                if let Some(image_data) = image.get_image_data().as_deref() {
-                    let texture_size = wgpu::Extent3d {
-                        width: dimensions.0,
-                        height: dimensions.1,
-                        depth_or_array_layers: 1,
-                    };
-                    let diffuse_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-                        // All textures are stored as 3D, we represent our 2D texture
-                        // by setting depth to 1.
-                        size: texture_size,
-                        mip_level_count: 1, // We'll talk about this a little later
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        // Most images are stored using sRGB so we need to reflect that here.
-                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                        // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-                        // COPY_DST means that we want to copy data to this texture
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                        label: Some("diffuse_texture"),
-                    });
-                    self.queue.write_texture(
-                        // Tells wgpu where to copy the pixel data
-                        wgpu::ImageCopyTexture {
-                            texture: &diffuse_texture,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                            aspect: wgpu::TextureAspect::All,
-                        },
-                        // The actual pixel data
-                        image_data,
-                        // The layout of the texture
-                        wgpu::ImageDataLayout {
-                            offset: 0,
-                            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-                            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
-                        },
-                        texture_size,
-                    );
-
-                    let diffuse_texture_view =
-                        diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-                    let diffuse_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
-                        address_mode_u: wgpu::AddressMode::ClampToEdge,
-                        address_mode_v: wgpu::AddressMode::ClampToEdge,
-                        address_mode_w: wgpu::AddressMode::ClampToEdge,
-                        mag_filter: wgpu::FilterMode::Linear,
-                        min_filter: wgpu::FilterMode::Nearest,
-                        mipmap_filter: wgpu::FilterMode::Nearest,
-                        ..Default::default()
-                    });
-
+                if image.wgpu_image.is_none() {
+                    image.create_texture(&self.device, &self.queue);
+                }
+                if let Some(ref mut wgpu_image) = image.wgpu_image {
                     let diffuse_bind_group =
                         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                             layout: &self.image_renderer.bindgroup_layout,
@@ -405,12 +365,14 @@ impl Renderer {
                                 wgpu::BindGroupEntry {
                                     binding: 0,
                                     resource: wgpu::BindingResource::TextureView(
-                                        &diffuse_texture_view,
+                                        &wgpu_image.texture_view,
                                     ),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &self.image_renderer.sampler,
+                                    ),
                                 },
                             ],
                             label: Some("diffuse_bind_group"),
@@ -424,7 +386,13 @@ impl Renderer {
         }
         bind_groups
     }
-    pub fn redraw(&mut self, reserved_height: f32) {
+
+    pub fn redraw(&mut self) {
+        let elapsed_since_redraw = self.last_redraw.elapsed();
+        if elapsed_since_redraw < REDRAW_TARGET_DURATION {
+            std::thread::sleep(REDRAW_TARGET_DURATION - elapsed_since_redraw);
+        }
+        self.last_redraw = Instant::now();
         let frame = self
             .surface
             .get_current_texture()
@@ -438,7 +406,7 @@ impl Renderer {
 
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
-        let indice_ranges = self.render_elements(reserved_height);
+        let indice_ranges = self.render_elements(self.reserved_height);
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -522,10 +490,9 @@ impl Renderer {
         self.staging_belt.recall();
     }
 
-    pub fn position(&mut self, element_id: usize) {
+    pub fn position(&mut self, element_index: usize) -> Rect {
         let screen_size = self.screen_size();
-        let element = &mut self.elements[element_id];
-        match &element.inner {
+        let bounds = match &self.elements[element_index].inner {
             Element::TextBox(text_box) => {
                 let indent = text_box.indent;
                 let pos = (DEFAULT_MARGIN + indent, self.reserved_height);
@@ -537,41 +504,38 @@ impl Renderer {
                     self.hidpi_scale,
                 );
 
-                element.bounds = Some(Rect { pos, size });
-                self.reserved_height += size.1;
+                Rect { pos, size }
             }
-            Element::Spacer(spacer) => {
-                element.bounds = Some(Rect {
-                    pos: (0., self.reserved_height),
-                    size: (0., spacer.space),
-                });
-                self.reserved_height += spacer.space;
-            }
+            Element::Spacer(spacer) => Rect {
+                pos: (0., self.reserved_height),
+                size: (0., spacer.space),
+            },
             Element::Image(image) => {
                 let size = image.size(self.hidpi_scale, screen_size);
-                element.bounds = Some(Rect {
-                    pos: (DEFAULT_MARGIN, self.reserved_height),
-                    size,
-                });
-                match image.is_aligned {
-                    Some(Align::Center) => {
-                        element.bounds = Some(Rect {
-                            pos: (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
-                            size,
-                        });
-                    }
-                    _ => {}
-                }
-                self.reserved_height += size.1;
+                let bounds = match image.is_aligned {
+                    Some(Align::Center) => Rect {
+                        pos: (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
+                        size,
+                    },
+                    _ => Rect {
+                        pos: (DEFAULT_MARGIN, self.reserved_height),
+                        size,
+                    },
+                };
+                bounds
             }
-        }
-        self.reserved_height += DEFAULT_PADDING;
+        };
+        //self.reserved_height += DEFAULT_PADDING + bounds.size.1;
+        bounds
     }
+
     pub fn reposition(&mut self) {
         self.reserved_height = DEFAULT_PADDING;
 
-        for element_id in 0..self.elements.len() {
-            self.position(element_id);
+        for element_index in 0..self.elements.len() {
+            let bounds = self.position(element_index);
+            self.reserved_height += DEFAULT_PADDING + bounds.size.1;
+            self.elements[element_index].bounds = Some(bounds);
         }
     }
 
@@ -579,9 +543,11 @@ impl Renderer {
         if let Element::Image(ref mut image) = element {
             image.add_callback(self.eventloop_proxy.clone());
         }
-        let last_element_id = self.elements.len();
+        let element_index = self.elements.len();
         self.elements.push(Positioned::new(element));
-        self.position(last_element_id)
+        let bounds = self.position(element_index);
+        self.reserved_height += DEFAULT_PADDING + bounds.size.1;
+        self.elements.last_mut().unwrap().bounds = Some(bounds);
     }
 }
 

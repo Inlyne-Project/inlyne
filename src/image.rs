@@ -18,15 +18,65 @@ pub enum ImageSize {
     FullSize((u32, u32)),
 }
 
-#[derive(Debug)]
+pub struct WgpuImage {
+    pub texture_view: wgpu::TextureView,
+}
+
 pub struct Image {
     image: Arc<Mutex<Option<RgbaImage>>>,
     pub is_aligned: Option<Align>,
     callback: Arc<Mutex<Option<EventLoopProxy<InlyneEvent>>>>,
     pub size: Option<ImageSize>,
+    pub wgpu_image: Option<WgpuImage>,
 }
 
 impl Image {
+    pub fn create_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let dimensions = self.buffer_dimensions();
+        if let Some(image_data) = self.image.lock().unwrap().as_ref() {
+            let texture_size = wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            };
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                // All textures are stored as 3D, we represent our 2D texture
+                // by setting depth to 1.
+                size: texture_size,
+                mip_level_count: 1, // We'll talk about this a little later
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                // Most images are stored using sRGB so we need to reflect that here.
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
+                // COPY_DST means that we want to copy data to this texture
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                label: Some("diffuse_texture"),
+            });
+            queue.write_texture(
+                // Tells wgpu where to copy the pixel data
+                wgpu::ImageCopyTexture {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                // The actual pixel data
+                image_data,
+                // The layout of the texture
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
+                    rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+                },
+                texture_size,
+            );
+
+            let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            self.wgpu_image = Some(WgpuImage { texture_view });
+        }
+    }
+
     pub fn from_url(url: String) -> Image {
         let image = Arc::new(Mutex::new(None));
         let callback = Arc::new(Mutex::new(None::<EventLoopProxy<InlyneEvent>>));
@@ -58,6 +108,7 @@ impl Image {
             is_aligned: None,
             callback,
             size: None,
+            wgpu_image: None,
         }
     }
 
@@ -150,6 +201,7 @@ pub struct ImageRenderer {
     pub render_pipeline: wgpu::RenderPipeline,
     pub index_buf: wgpu::Buffer,
     pub bindgroup_layout: wgpu::BindGroupLayout,
+    pub sampler: wgpu::Sampler,
 }
 
 pub fn point(
@@ -244,10 +296,20 @@ impl ImageRenderer {
             contents: bytemuck::cast_slice(INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
         Self {
             render_pipeline: image_pipeline,
             index_buf,
             bindgroup_layout: texture_bind_group_layout,
+            sampler,
         }
     }
 

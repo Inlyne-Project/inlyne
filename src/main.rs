@@ -17,6 +17,7 @@ use html5ever::tokenizer::{BufferQueue, TagKind};
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts};
 use text::{Text, TextBox};
 use winit::event::{ElementState, MouseButton};
+use winit::event_loop::EventLoopProxy;
 use winit::{
     event::{Event, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -24,6 +25,7 @@ use winit::{
 };
 use Token::{CharacterTokens, EOFToken};
 
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
 use std::ops::Deref;
@@ -37,9 +39,9 @@ use crate::renderer::DEFAULT_MARGIN;
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
+    Redraw,
 }
 
-#[derive(Debug)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
@@ -67,7 +69,8 @@ impl From<TextBox> for Element {
 pub struct Inlyne {
     window: Window,
     event_loop: EventLoop<InlyneEvent>,
-    renderer: Arc<Mutex<Renderer>>,
+    renderer: Renderer,
+    element_queue: Arc<Mutex<VecDeque<Element>>>,
 }
 
 impl Inlyne {
@@ -75,23 +78,22 @@ impl Inlyne {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Window::new(&event_loop).unwrap();
         window.set_title("Inlyne");
-        let renderer = Arc::new(Mutex::new(
-            Renderer::new(&window, event_loop.create_proxy(), theme).await,
-        ));
+        let renderer = Renderer::new(&window, event_loop.create_proxy(), theme).await;
 
         Self {
             window,
             event_loop,
             renderer,
+            element_queue: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
     pub fn push<T: Into<Element>>(&mut self, element: T) {
         let element = element.into();
-        self.renderer.lock().unwrap().push(element);
+        self.renderer.push(element);
     }
 
-    pub fn run(self) {
+    pub fn run(mut self) {
         let mut click_scheduled = false;
         let mut scrollbar_held = false;
         self.event_loop.run(move |event, _, control_flow| {
@@ -99,44 +101,45 @@ impl Inlyne {
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
-                        self.renderer.lock().unwrap().reposition();
-                        self.window.request_redraw();
+                        self.renderer.reposition();
+                        self.renderer.redraw()
+                    }
+                    InlyneEvent::Redraw => {
+                        for element in self.element_queue.lock().unwrap().drain(0..) {
+                            self.renderer.push(element)
+                        }
+                        self.renderer.redraw()
                     }
                 },
                 Event::WindowEvent {
                     event: WindowEvent::Resized(size),
                     ..
                 } => {
-                    let mut renderer = &mut *(self.renderer.lock().unwrap());
-                    renderer.config.width = size.width;
-                    renderer.config.height = size.height;
-                    renderer
+                    self.renderer.config.width = size.width;
+                    self.renderer.config.height = size.height;
+                    self.renderer
                         .surface
-                        .configure(&renderer.device, &renderer.config);
-                    renderer.reposition();
+                        .configure(&self.renderer.device, &self.renderer.config);
+                    self.renderer.reposition();
                     self.window.request_redraw();
                 }
-                Event::RedrawRequested(_) => {
-                    let renderer = &mut *(self.renderer.lock().unwrap());
-                    renderer.redraw(renderer.reserved_height)
-                }
+                Event::RedrawRequested(_) => self.renderer.redraw(),
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::MouseWheel { delta, .. } => match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
                             {
-                                let mut renderer = &mut *(self.renderer.lock().unwrap());
-                                let screen_height = renderer.screen_height();
-                                if renderer.reserved_height > screen_height {
-                                    renderer.scroll_y -= pos.y as f32;
+                                let screen_height = self.renderer.screen_height();
+                                if self.renderer.reserved_height > screen_height {
+                                    self.renderer.scroll_y -= pos.y as f32;
 
-                                    if renderer.scroll_y.is_sign_negative() {
-                                        renderer.scroll_y = 0.;
-                                    } else if renderer.scroll_y
-                                        >= (renderer.reserved_height - screen_height)
+                                    if self.renderer.scroll_y.is_sign_negative() {
+                                        self.renderer.scroll_y = 0.;
+                                    } else if self.renderer.scroll_y
+                                        >= (self.renderer.reserved_height - screen_height)
                                     {
-                                        renderer.scroll_y =
-                                            renderer.reserved_height - screen_height;
+                                        self.renderer.scroll_y =
+                                            self.renderer.reserved_height - screen_height;
                                     }
                                 }
                             }
@@ -145,29 +148,31 @@ impl Inlyne {
                         _ => unimplemented!(),
                     },
                     WindowEvent::CursorMoved { position, .. } => {
-                        let renderer = &mut *(self.renderer.lock().unwrap());
                         let mut over_text = false;
-                        let screen_size = renderer.screen_size();
-                        for element in &renderer.elements {
-                            let loc = (position.x as f32, position.y as f32 + renderer.scroll_y);
+                        let screen_size = self.renderer.screen_size();
+                        for element in self.renderer.elements.iter() {
+                            let loc = (
+                                position.x as f32,
+                                position.y as f32 + self.renderer.scroll_y,
+                            );
                             if element.contains(loc) {
                                 if let Element::TextBox(ref text_box) = element.deref() {
                                     let bounds = element.bounds.as_ref().unwrap();
                                     let cursor = text_box.hovering_over(
-                                        &mut renderer.glyph_brush,
+                                        &mut self.renderer.glyph_brush,
                                         loc,
                                         bounds.pos,
                                         (
                                             screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
                                             screen_size.1,
                                         ),
-                                        renderer.hidpi_scale,
+                                        self.renderer.hidpi_scale,
                                     );
                                     self.window.set_cursor_icon(cursor);
                                     over_text = true;
                                     if click_scheduled {
                                         text_box.click(
-                                            &mut renderer.glyph_brush,
+                                            &mut self.renderer.glyph_brush,
                                             loc,
                                             bounds.pos,
                                             (
@@ -176,7 +181,7 @@ impl Inlyne {
                                                     - renderer::DEFAULT_MARGIN,
                                                 screen_size.1,
                                             ),
-                                            renderer.hidpi_scale,
+                                            self.renderer.hidpi_scale,
                                         );
                                         click_scheduled = false;
                                     }
@@ -193,15 +198,16 @@ impl Inlyne {
                         {
                             if click_scheduled || scrollbar_held {
                                 let target_scroll = ((position.y as f32 / screen_size.1)
-                                    * renderer.reserved_height)
-                                    - (screen_size.1 / renderer.reserved_height
+                                    * self.renderer.reserved_height)
+                                    - (screen_size.1 / self.renderer.reserved_height
                                         * screen_size.1
                                         * 2.);
-                                renderer.scroll_y = if target_scroll <= 0. {
+                                self.renderer.scroll_y = if target_scroll <= 0. {
                                     0.
-                                } else if target_scroll >= renderer.reserved_height - screen_size.1
+                                } else if target_scroll
+                                    >= self.renderer.reserved_height - screen_size.1
                                 {
-                                    renderer.reserved_height - screen_size.1
+                                    self.renderer.reserved_height - screen_size.1
                                 } else {
                                     target_scroll
                                 };
@@ -244,7 +250,7 @@ pub enum ListType {
 
 struct Header(f32);
 struct TokenPrinter {
-    renderer: Arc<Mutex<Renderer>>,
+    element_queue: Arc<Mutex<VecDeque<Element>>>,
     current_textbox: TextBox,
     is_link: Option<String>,
     is_header: Option<Header>,
@@ -256,6 +262,8 @@ struct TokenPrinter {
     global_indent: f32,
     align: Option<Align>,
     text_align: Option<Align>,
+    theme: Theme,
+    eventloop_proxy: EventLoopProxy<InlyneEvent>,
 }
 
 impl TokenPrinter {
@@ -269,16 +277,17 @@ impl TokenPrinter {
                 }
             }
             if !empty {
-                self.renderer
-                    .lock()
-                    .unwrap()
-                    .push(self.current_textbox.clone().into());
+                self.push_element(self.current_textbox.clone().into());
             }
             self.current_textbox = TextBox::new(Vec::new());
         }
     }
     fn push_spacer(&mut self) {
-        self.renderer.lock().unwrap().push(Spacer::new(20.).into());
+        self.push_element(Spacer::new(20.).into());
+    }
+    fn push_element(&mut self, element: Element) {
+        let mut element_queue = self.element_queue.lock().unwrap();
+        element_queue.push_back(element);
     }
 }
 impl TokenSink for TokenPrinter {
@@ -331,7 +340,8 @@ impl TokenSink for TokenPrinter {
                                     if let Some(size) = size {
                                         image = image.with_size(size);
                                     }
-                                    self.renderer.lock().unwrap().push(image.into());
+
+                                    self.push_element(image.into());
                                     self.push_spacer();
                                     break;
                                 }
@@ -623,13 +633,11 @@ impl TokenSink for TokenPrinter {
                         // check if str is whitespace only
                         let mut text = Text::new(str);
                         if self.is_code {
-                            text = text
-                                .with_color(self.renderer.lock().unwrap().theme.code_color)
-                                .with_font(1)
+                            text = text.with_color(self.theme.code_color).with_font(1)
                         }
                         if let Some(ref link) = self.is_link {
                             text = text.with_link(link.clone());
-                            text = text.with_color(self.renderer.lock().unwrap().theme.link_color);
+                            text = text.with_color(self.theme.link_color);
                         }
                         if let Some(Header(size)) = self.is_header {
                             text = text.with_size(size).make_bold(true);
@@ -655,10 +663,10 @@ impl TokenSink for TokenPrinter {
                 }
             }
             EOFToken => {
-                self.renderer
-                    .lock()
-                    .unwrap()
-                    .push(self.current_textbox.clone().into());
+                self.push_element(self.current_textbox.clone().into());
+                self.eventloop_proxy
+                    .send_event(InlyneEvent::Redraw)
+                    .unwrap();
             }
             _ => {}
         }
@@ -696,10 +704,11 @@ fn main() {
     let mut md_string = String::with_capacity(md_file_size as usize);
     md_file.read_to_string(&mut md_string).unwrap();
 
-    let renderer_clone = inlyne.renderer.clone();
+    let eventloop_proxy = inlyne.event_loop.create_proxy();
+    let theme = inlyne.renderer.theme.clone();
+    let element_queue_clone = inlyne.element_queue.clone();
     std::thread::spawn(move || {
         let sink = TokenPrinter {
-            renderer: renderer_clone,
             current_textbox: TextBox::new(Vec::new()),
             is_link: None,
             is_header: None,
@@ -711,6 +720,9 @@ fn main() {
             global_indent: 0.,
             align: None,
             text_align: None,
+            theme,
+            eventloop_proxy,
+            element_queue: element_queue_clone,
         };
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
