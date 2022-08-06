@@ -7,6 +7,7 @@ use lyon::geom::Box2D;
 use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::ops::{Deref, Range};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
@@ -18,7 +19,7 @@ use winit::window::Window;
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
-pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(30);
+pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(50);
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -347,40 +348,25 @@ impl Renderer {
         indice_ranges
     }
 
-    pub fn image_bindgroups(&mut self) -> Vec<(BindGroup, Buffer)> {
+    pub fn image_bindgroups(&mut self) -> Vec<(Arc<BindGroup>, Buffer)> {
         let screen_size = self.screen_size();
         let mut bind_groups = Vec::new();
         for element in &mut self.elements {
             let Rect { pos, size } = element.bounds.as_ref().unwrap();
             let pos = (pos.0, pos.1 - self.scroll_y);
+            if pos.1 + size.1 <= 0. {
+                continue;
+            } else if pos.1 >= screen_size.1 {
+                break;
+            }
             if let Element::Image(ref mut image) = element.inner {
-                if image.wgpu_image.is_none() {
-                    image.create_texture(&self.device, &self.queue);
+                if image.bind_group.is_none() {
+                    image.create_bind_group(&self.device, &self.queue, &self.image_renderer.sampler, &self.image_renderer.bindgroup_layout);
                 }
-                if let Some(ref mut wgpu_image) = image.wgpu_image {
-                    let diffuse_bind_group =
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            layout: &self.image_renderer.bindgroup_layout,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(
-                                        &wgpu_image.texture_view,
-                                    ),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(
-                                        &self.image_renderer.sampler,
-                                    ),
-                                },
-                            ],
-                            label: Some("diffuse_bind_group"),
-                        });
-
+                if let Some(ref bind_group) = image.bind_group {
                     let vertex_buf =
                         ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
-                    bind_groups.push((diffuse_bind_group, vertex_buf));
+                    bind_groups.push((bind_group.clone(), vertex_buf));
                 }
             }
         }

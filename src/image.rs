@@ -18,20 +18,16 @@ pub enum ImageSize {
     FullSize((u32, u32)),
 }
 
-pub struct WgpuImage {
-    pub texture_view: wgpu::TextureView,
-}
-
 pub struct Image {
     image: Arc<Mutex<Option<RgbaImage>>>,
     pub is_aligned: Option<Align>,
     callback: Arc<Mutex<Option<EventLoopProxy<InlyneEvent>>>>,
     pub size: Option<ImageSize>,
-    pub wgpu_image: Option<WgpuImage>,
+    pub bind_group: Option<Arc<wgpu::BindGroup>>,
 }
 
 impl Image {
-    pub fn create_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub fn create_bind_group(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, sampler: &wgpu::Sampler, bindgroup_layout: &wgpu::BindGroupLayout) {
         let dimensions = self.buffer_dimensions();
         if let Some(image_data) = self.image.lock().unwrap().as_ref() {
             let texture_size = wgpu::Extent3d {
@@ -73,7 +69,26 @@ impl Image {
             );
 
             let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            self.wgpu_image = Some(WgpuImage { texture_view });
+            let bind_group =
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &bindgroup_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                &texture_view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(
+                                sampler,
+                            ),
+                        },
+                    ],
+                    label: Some("diffuse_bind_group"),
+                });
+            self.bind_group = Some(Arc::new(bind_group));
         }
     }
 
@@ -108,7 +123,7 @@ impl Image {
             is_aligned: None,
             callback,
             size: None,
-            wgpu_image: None,
+            bind_group: None,
         }
     }
 

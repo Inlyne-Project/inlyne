@@ -108,7 +108,7 @@ impl Inlyne {
                         for element in self.element_queue.lock().unwrap().drain(0..) {
                             self.renderer.push(element)
                         }
-                        self.renderer.redraw()
+                        self.renderer.redraw();
                     }
                 },
                 Event::WindowEvent {
