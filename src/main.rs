@@ -107,6 +107,9 @@ impl Inlyne {
                     InlyneEvent::Redraw => {
                         while let Some(element) = self.element_queue.pop() {
                             self.renderer.push(element);
+                            if self.renderer.reserved_height < self.renderer.screen_height()  {
+                                self.renderer.redraw()
+                            }
                         }
                         self.renderer.redraw();
                     }
