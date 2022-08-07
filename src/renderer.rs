@@ -1,5 +1,6 @@
 use crate::color::Theme;
 use crate::image::ImageRenderer;
+use crate::utils::{Align, Rect};
 use crate::{Element, InlyneEvent};
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
@@ -26,40 +27,6 @@ pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(16);
 pub struct Vertex {
     pub pos: [f32; 3],
     pub color: [f32; 4],
-}
-
-#[derive(Debug)]
-pub struct Rect {
-    pub pos: (f32, f32),
-    pub size: (f32, f32),
-}
-
-impl Rect {
-    pub fn new(pos: (f32, f32), size: (f32, f32)) -> Rect {
-        Rect { pos, size }
-    }
-
-    pub fn pos(&self) -> (f32, f32) {
-        self.pos
-    }
-
-    pub fn size(&self) -> (f32, f32) {
-        self.size
-    }
-
-    pub fn contains(&self, loc: (f32, f32)) -> bool {
-        loc.0 >= self.pos.0
-            && loc.0 <= self.pos.0 + self.size.0
-            && loc.1 >= self.pos.1
-            && loc.1 <= self.pos.1 + self.size.1
-    }
-
-    pub fn from_min_max(min: (f32, f32), max: (f32, f32)) -> Rect {
-        Rect {
-            pos: min,
-            size: (max.0 - min.0, max.1 - min.1),
-        }
-    }
 }
 
 pub struct Positioned<T> {
@@ -133,19 +100,16 @@ impl Renderer {
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
                 force_fallback_adapter: false,
-                // Request an adapter which can render to our surface
                 compatible_surface: Some(&surface),
             })
             .await
             .expect("Failed to find an appropriate adapter");
 
-        // Create the logical device and command queue
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
                     features: wgpu::Features::empty(),
-                    // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
                     limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
                 },
@@ -154,10 +118,8 @@ impl Renderer {
             .await
             .expect("Failed to create device");
 
-        // Create staging belt
         let staging_belt = wgpu::util::StagingBelt::new(1024);
 
-        // Load the shaders from disk
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shaders/shader.wgsl"))),
@@ -251,7 +213,7 @@ impl Renderer {
         }
     }
 
-    pub fn draw_scrollbar(&mut self, reserved_height: f32) -> u32 {
+    fn draw_scrollbar(&mut self, reserved_height: f32) -> u32 {
         let screen_height = self.screen_height();
         let screen_width = self.config.width as f32;
         let top = if screen_height < reserved_height {
@@ -269,7 +231,6 @@ impl Renderer {
         let mut fill_tessellator = FillTessellator::new();
 
         {
-            // Compute the tessellation.
             fill_tessellator
                 .tessellate_rectangle(
                     &Box2D::new(
@@ -288,12 +249,13 @@ impl Renderer {
         self.lyon_buffer.indices.len() as u32
     }
 
-    pub fn render_elements(&mut self, reserved_height: f32) -> Vec<Range<u32>> {
+    fn render_elements(&mut self, reserved_height: f32) -> Vec<Range<u32>> {
         let mut indice_ranges = Vec::new();
         let mut _prev_indice_num = 0;
         let screen_size = self.screen_size();
         for element in &mut self.elements {
-            let Rect { pos, size } = element.bounds.as_ref().expect("Element not positioned");
+            let Rect { pos, size, max: _ } =
+                element.bounds.as_ref().expect("Element not positioned");
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
             if scrolled_pos.1 + size.1 <= 0. {
@@ -317,7 +279,6 @@ impl Renderer {
                         {
                             let min = (scrolled_pos.0 - 10., scrolled_pos.1);
                             let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 5.);
-                            // Compute the tessellation.
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
@@ -348,13 +309,13 @@ impl Renderer {
         indice_ranges
     }
 
-    pub fn image_bindgroups(&mut self) -> Vec<(Arc<BindGroup>, Buffer)> {
+    fn image_bindgroups(&mut self) -> Vec<(Arc<BindGroup>, Buffer)> {
         let screen_size = self.screen_size();
         let mut bind_groups = Vec::new();
         for element in &mut self.elements {
-            let Rect { pos, size } = element.bounds.as_ref().unwrap();
+            let Rect { pos, size, max } = element.bounds.as_ref().unwrap();
             let pos = (pos.0, pos.1 - self.scroll_y);
-            if pos.1 + size.1 <= 0. {
+            if max.1 <= 0. {
                 continue;
             } else if pos.1 >= screen_size.1 {
                 break;
@@ -379,11 +340,13 @@ impl Renderer {
     }
 
     pub fn redraw(&mut self) {
+        // Draw with a time gap of at least REDRAW_TARGET_DURATION
         let elapsed_since_redraw = self.last_redraw.elapsed();
         if elapsed_since_redraw < REDRAW_TARGET_DURATION {
             std::thread::sleep(REDRAW_TARGET_DURATION - elapsed_since_redraw);
         }
         self.last_redraw = Instant::now();
+
         let frame = self
             .surface
             .get_current_texture()
@@ -395,6 +358,7 @@ impl Renderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        // Prepare and render elements that use lyon
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         let indice_ranges = self.render_elements(self.reserved_height);
@@ -412,6 +376,8 @@ impl Renderer {
                 contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
+
+        // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups();
 
         {
@@ -428,6 +394,7 @@ impl Renderer {
                 depth_stencil_attachment: None,
             });
 
+            // Draw lyon elements
             rpass.set_pipeline(&self.render_pipeline);
             rpass.set_vertex_buffer(0, vertex_buf.slice(..));
             rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -435,6 +402,7 @@ impl Renderer {
                 rpass.draw_indexed(range, 0, 0..1);
             }
 
+            // Draw images
             rpass.set_pipeline(&self.image_renderer.render_pipeline);
             for (bindgroup, vertex_buf) in image_bindgroups.iter() {
                 rpass.set_bind_group(0, bindgroup, &[]);
@@ -444,7 +412,8 @@ impl Renderer {
         }
 
         let screen_size = self.screen_size();
-        // Draw the text!
+
+        // Draw wgpu brush elements
         self.glyph_brush
             .draw_queued_with_transform(
                 &self.device,
@@ -472,16 +441,14 @@ impl Renderer {
             )
             .expect("Draw queued");
 
-        // Submit the work!
         self.staging_belt.finish();
         self.queue.submit(Some(encoder.finish()));
         frame.present();
 
-        // Recall unused staging buffers
         self.staging_belt.recall();
     }
 
-    pub fn position(&mut self, element_index: usize) -> Rect {
+    fn position(&mut self, element_index: usize) -> Rect {
         let screen_size = self.screen_size();
         match &self.elements[element_index].inner {
             Element::TextBox(text_box) => {
@@ -495,23 +462,17 @@ impl Renderer {
                     self.hidpi_scale,
                 );
 
-                Rect { pos, size }
+                Rect::new(pos, size)
             }
-            Element::Spacer(spacer) => Rect {
-                pos: (0., self.reserved_height),
-                size: (0., spacer.space),
-            },
+            Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
             Element::Image(image) => {
                 let size = image.size(self.hidpi_scale, screen_size);
                 match image.is_aligned {
-                    Some(Align::Center) => Rect {
-                        pos: (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
+                    Some(Align::Center) => Rect::new(
+                        (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
                         size,
-                    },
-                    _ => Rect {
-                        pos: (DEFAULT_MARGIN, self.reserved_height),
-                        size,
-                    },
+                    ),
+                    _ => Rect::new((DEFAULT_MARGIN, self.reserved_height), size),
                 }
             }
         }
@@ -535,7 +496,7 @@ impl Renderer {
         self.elements.push(Positioned::new(element));
         let bounds = self.position(element_index);
         self.reserved_height += DEFAULT_PADDING + bounds.size.1;
-        self.elements.last_mut().unwrap().bounds = Some(bounds);
+        self.elements[element_index].bounds = Some(bounds);
     }
 }
 
@@ -550,14 +511,7 @@ impl Spacer {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Align {
-    Left,
-    Center,
-    Right,
-    Justify,
-}
-
+// Translates points from pixel coordinates to wgpu coordinates
 pub fn point(x: f32, y: f32, screen: (f32, f32)) -> [f32; 2] {
     let scale_x = 2. / screen.0;
     let scale_y = 2. / screen.1;

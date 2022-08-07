@@ -1,10 +1,11 @@
-use crate::renderer::{Align, DEFAULT_MARGIN};
+use crate::renderer::DEFAULT_MARGIN;
+use crate::utils::Align;
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
 use image::RgbaImage;
 use std::fs::File;
 use std::io::Read;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
@@ -42,18 +43,13 @@ impl Image {
                 depth_or_array_layers: 1,
             };
             let texture = device.create_texture(&wgpu::TextureDescriptor {
-                // All textures are stored as 3D, we represent our 2D texture
-                // by setting depth to 1.
                 size: texture_size,
-                mip_level_count: 1, // We'll talk about this a little later
+                mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                // Most images are stored using sRGB so we need to reflect that here.
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-                // COPY_DST means that we want to copy data to this texture
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                label: Some("diffuse_texture"),
+                label: Some("Image Texture"),
             });
             queue.write_texture(
                 // Tells wgpu where to copy the pixel data
@@ -87,7 +83,7 @@ impl Image {
                         resource: wgpu::BindingResource::Sampler(sampler),
                     },
                 ],
-                label: Some("diffuse_bind_group"),
+                label: Some("Image Bind Group"),
             });
             self.bind_group = Some(Arc::new(bind_group));
         }
@@ -136,10 +132,12 @@ impl Image {
         self.is_aligned = Some(align);
         self
     }
+
     pub fn with_size(mut self, size: ImageSize) -> Self {
         self.size = Some(size);
         self
     }
+
     pub fn dimensions_from_image_size(&self, size: &ImageSize) -> (u32, u32) {
         let image_dimensions = self.buffer_dimensions();
         match size {
@@ -195,10 +193,6 @@ impl Image {
         } else {
             (buffer_size.0 as u32, buffer_size.1 as u32)
         }
-    }
-
-    pub fn get_image_data(&mut self) -> MutexGuard<Option<RgbaImage>> {
-        self.image.lock().unwrap()
     }
 
     pub fn size(&self, hidpi_scale: f32, screen_size: (f32, f32)) -> (f32, f32) {

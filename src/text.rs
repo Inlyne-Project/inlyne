@@ -1,4 +1,4 @@
-use crate::renderer::{Align, Rect};
+use crate::utils::{Align, Rect};
 use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, HorizontalAlign, Layout, Section};
 use winit::window::CursorIcon;
 
@@ -60,9 +60,7 @@ impl TextBox {
             hidpi_scale,
             [0., 0., 0., 0.],
         )) {
-            let bounds = font.glyph_bounds(&glyph.glyph);
-            let bounds =
-                Rect::from_min_max((bounds.min.x, bounds.min.y), (bounds.max.x, bounds.max.y));
+            let bounds = Rect::from(font.glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
                 let cursor = if text.link.is_some() {
@@ -91,9 +89,7 @@ impl TextBox {
             hidpi_scale,
             [0., 0., 0., 0.],
         )) {
-            let bounds = font.glyph_bounds(&glyph.glyph);
-            let bounds =
-                Rect::from_min_max((bounds.min.x, bounds.min.y), (bounds.max.x, bounds.max.y));
+            let bounds = Rect::from(font.glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
                 if let Some(ref link) = text.link {
@@ -148,7 +144,6 @@ impl TextBox {
                 screen_position = (bounds.0 + screen_position.0, screen_position.1);
                 HorizontalAlign::Right
             }
-            Align::Justify => HorizontalAlign::Center,
         };
         Section {
             screen_position,

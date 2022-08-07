@@ -22,6 +22,7 @@ html5ever = "0.26.0"
 image = "0.24.3"
 reqwest = { version = "0.11.11", features = ["blocking"] }
 clap = {version = "3.2.16", features = ["derive"] }
+crossbeam-queue = "0.3.6"
 
 [profile.release]
 debug = true

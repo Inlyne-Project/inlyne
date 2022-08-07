@@ -2,12 +2,14 @@ pub mod color;
 pub mod image;
 pub mod renderer;
 pub mod text;
+pub mod utils;
 
 use crate::image::Image;
 use crate::image::ImageSize;
-use crate::renderer::Rect;
 use color::Theme;
-use renderer::{Align, Renderer, Spacer};
+use crossbeam_queue::SegQueue;
+use renderer::{Renderer, Spacer};
+use utils::{Align, Rect};
 
 use comrak::{markdown_to_html, ComrakOptions};
 use html5ever::local_name;
@@ -25,14 +27,12 @@ use winit::{
 };
 use Token::{CharacterTokens, EOFToken};
 
-use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use crate::renderer::DEFAULT_MARGIN;
 
@@ -70,7 +70,7 @@ pub struct Inlyne {
     window: Window,
     event_loop: EventLoop<InlyneEvent>,
     renderer: Renderer,
-    element_queue: Arc<Mutex<VecDeque<Element>>>,
+    element_queue: Arc<SegQueue<Element>>,
 }
 
 impl Inlyne {
@@ -84,7 +84,7 @@ impl Inlyne {
             window,
             event_loop,
             renderer,
-            element_queue: Arc::new(Mutex::new(VecDeque::new())),
+            element_queue: Arc::new(SegQueue::new()),
         }
     }
 
@@ -105,8 +105,8 @@ impl Inlyne {
                         self.renderer.redraw()
                     }
                     InlyneEvent::Redraw => {
-                        for element in self.element_queue.lock().unwrap().drain(0..) {
-                            self.renderer.push(element)
+                        while let Some(element) = self.element_queue.pop() {
+                            self.renderer.push(element);
                         }
                         self.renderer.redraw();
                     }
@@ -246,7 +246,7 @@ pub enum ListType {
 
 struct Header(f32);
 struct TokenPrinter {
-    element_queue: Arc<Mutex<VecDeque<Element>>>,
+    element_queue: Arc<SegQueue<Element>>,
     current_textbox: TextBox,
     is_link: Option<String>,
     is_header: Option<Header>,
@@ -282,8 +282,7 @@ impl TokenPrinter {
         self.push_element(Spacer::new(10.).into());
     }
     fn push_element(&mut self, element: Element) {
-        let mut element_queue = self.element_queue.lock().unwrap();
-        element_queue.push_back(element);
+        self.element_queue.push(element);
     }
 }
 impl TokenSink for TokenPrinter {
