@@ -483,7 +483,7 @@ impl Renderer {
 
     pub fn position(&mut self, element_index: usize) -> Rect {
         let screen_size = self.screen_size();
-        let bounds = match &self.elements[element_index].inner {
+        match &self.elements[element_index].inner {
             Element::TextBox(text_box) => {
                 let indent = text_box.indent;
                 let pos = (DEFAULT_MARGIN + indent, self.reserved_height);
@@ -503,7 +503,7 @@ impl Renderer {
             },
             Element::Image(image) => {
                 let size = image.size(self.hidpi_scale, screen_size);
-                let bounds = match image.is_aligned {
+                match image.is_aligned {
                     Some(Align::Center) => Rect {
                         pos: (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
                         size,
@@ -512,12 +512,9 @@ impl Renderer {
                         pos: (DEFAULT_MARGIN, self.reserved_height),
                         size,
                     },
-                };
-                bounds
+                }
             }
-        };
-        //self.reserved_height += DEFAULT_PADDING + bounds.size.1;
-        bounds
+        }
     }
 
     pub fn reposition(&mut self) {

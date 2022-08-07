@@ -76,7 +76,7 @@ impl Image {
 
             let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bindgroup_layout,
+                layout: bindgroup_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,

@@ -189,33 +189,29 @@ impl Inlyne {
                                 }
                             }
                         }
-                        if Rect::new(
-                            (screen_size.0 * (49. / 50.), 0.),
-                            (screen_size.0 * (1. / 50.), screen_size.1),
-                        )
-                        .contains(position.into())
-                            || scrollbar_held
+                        if scrollbar_held
+                            || (Rect::new(
+                                (screen_size.0 * (49. / 50.), 0.),
+                                (screen_size.0 * (1. / 50.), screen_size.1),
+                            )
+                            .contains(position.into())
+                                && click_scheduled)
                         {
-                            if click_scheduled || scrollbar_held {
-                                let target_scroll = ((position.y as f32 / screen_size.1)
-                                    * self.renderer.reserved_height)
-                                    - (screen_size.1 / self.renderer.reserved_height
-                                        * screen_size.1
-                                        * 2.);
-                                self.renderer.scroll_y = if target_scroll <= 0. {
-                                    0.
-                                } else if target_scroll
-                                    >= self.renderer.reserved_height - screen_size.1
-                                {
-                                    self.renderer.reserved_height - screen_size.1
-                                } else {
-                                    target_scroll
-                                };
-                                self.window.request_redraw();
-                                click_scheduled = false;
-                                if scrollbar_held == false {
-                                    scrollbar_held = true;
-                                }
+                            let target_scroll = ((position.y as f32 / screen_size.1)
+                                * self.renderer.reserved_height)
+                                - (screen_size.1 / self.renderer.reserved_height * screen_size.1);
+                            self.renderer.scroll_y = if target_scroll <= 0. {
+                                0.
+                            } else if target_scroll >= self.renderer.reserved_height - screen_size.1
+                            {
+                                self.renderer.reserved_height - screen_size.1
+                            } else {
+                                target_scroll
+                            };
+                            self.window.request_redraw();
+                            click_scheduled = false;
+                            if !scrollbar_held {
+                                scrollbar_held = true;
                             }
                         }
 
@@ -730,6 +726,7 @@ fn main() {
         };
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
+        options.extension.table = true;
         options.parse.smart = true;
         options.render.unsafe_ = true;
         let htmlified = markdown_to_html(&md_string, &options);
