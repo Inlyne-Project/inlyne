@@ -1,5 +1,6 @@
 use crate::color::Theme;
 use crate::image::ImageRenderer;
+use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::utils::{Align, Rect};
 use crate::{Element, InlyneEvent};
 use bytemuck::{Pod, Zeroable};
@@ -300,6 +301,105 @@ impl Renderer {
                         _prev_indice_num = self.lyon_buffer.indices.len() as u32;
                     }
                 }
+                Element::Table(table) => {
+                    let mut fill_tessellator = FillTessellator::new();
+                    let row_heights = table.row_heights(
+                        &mut self.glyph_brush,
+                        *pos,
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.hidpi_scale,
+                    );
+                    //dbg!(&row_heights);
+                    let column_widths = table.column_widths(
+                        &mut self.glyph_brush,
+                        *pos,
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.hidpi_scale,
+                    );
+                    let mut x = 0.;
+                    let mut y = 0.;
+
+                    let header_height = row_heights.first().unwrap();
+                    for (col, width) in column_widths.iter().enumerate() {
+                        let text_box = table.headers.get(col).unwrap();
+                        let bounds = (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
+                        self.glyph_brush.queue(text_box.glyph_section(
+                            (pos.0 + x, pos.1 + y),
+                            bounds,
+                            self.hidpi_scale,
+                            self.theme.text_color,
+                        ));
+                        x += width + TABLE_COL_GAP;
+                    }
+                    y += header_height + (TABLE_ROW_GAP / 2.);
+                    {
+                        let min = (scrolled_pos.0, scrolled_pos.1 + y);
+                        let max = (scrolled_pos.0 + x, scrolled_pos.1 + y + 3.);
+                        fill_tessellator
+                            .tessellate_rectangle(
+                                &Box2D::new(
+                                    Point2D::from(point(min.0, min.1, screen_size)),
+                                    Point2D::from(point(max.0, max.1, screen_size)),
+                                ),
+                                &FillOptions::default(),
+                                &mut BuffersBuilder::new(
+                                    &mut self.lyon_buffer,
+                                    |vertex: FillVertex| Vertex {
+                                        pos: [vertex.position().x, vertex.position().y, 0.0],
+                                        color: self.theme.text_color,
+                                    },
+                                ),
+                            )
+                            .unwrap();
+                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                    }
+
+                    y += TABLE_ROW_GAP / 2.;
+                    for (row, height) in row_heights.iter().skip(1).enumerate() {
+                        let mut x = 0.;
+                        for (col, width) in column_widths.iter().enumerate() {
+                            if let Some(row) = table.rows.get(row) {
+                                if let Some(text_box) = row.get(col) {
+                                    let bounds =
+                                        (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
+                                    self.glyph_brush.queue(text_box.glyph_section(
+                                        (pos.0 + x, pos.1 + y),
+                                        bounds,
+                                        self.hidpi_scale,
+                                        self.theme.text_color,
+                                    ));
+                                }
+                            }
+                            x += width + TABLE_COL_GAP;
+                        }
+                        y += height + (TABLE_COL_GAP / 2.);
+                        {
+                            let min = (scrolled_pos.0, scrolled_pos.1 + y);
+                            let max = (scrolled_pos.0 + x, scrolled_pos.1 + y + 3.);
+                            fill_tessellator
+                                .tessellate_rectangle(
+                                    &Box2D::new(
+                                        Point2D::from(point(min.0, min.1, screen_size)),
+                                        Point2D::from(point(max.0, max.1, screen_size)),
+                                    ),
+                                    &FillOptions::default(),
+                                    &mut BuffersBuilder::new(
+                                        &mut self.lyon_buffer,
+                                        |vertex: FillVertex| Vertex {
+                                            pos: [vertex.position().x, vertex.position().y, 0.0],
+                                            color: self.theme.code_block_color,
+                                        },
+                                    ),
+                                )
+                                .unwrap();
+                            indice_ranges
+                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                        }
+                        y += TABLE_ROW_GAP / 2.;
+                    }
+                }
                 Element::Image(_) => {}
                 Element::Spacer(_) => {}
             }
@@ -474,6 +574,34 @@ impl Renderer {
                     ),
                     _ => Rect::new((DEFAULT_MARGIN, self.reserved_height), size),
                 }
+            }
+            Element::Table(table) => {
+                let pos = (DEFAULT_MARGIN, self.reserved_height);
+                let width = table
+                    .column_widths(
+                        &mut self.glyph_brush,
+                        pos,
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.hidpi_scale,
+                    )
+                    .iter()
+                    .fold(0., |acc, x| acc + x);
+                let height = table
+                    .row_heights(
+                        &mut self.glyph_brush,
+                        pos,
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.hidpi_scale,
+                    )
+                    .iter()
+                    .fold(0., |acc, x| acc + x);
+                Rect::new(
+                    pos,
+                    (
+                        width * (TABLE_COL_GAP * table.headers.len() as f32),
+                        height + (TABLE_ROW_GAP * (table.rows.len() + 1) as f32),
+                    ),
+                )
             }
         }
     }

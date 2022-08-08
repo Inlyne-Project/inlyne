@@ -52,6 +52,7 @@ impl TextBox {
         screen_position: (f32, f32),
         bounds: (f32, f32),
         hidpi_scale: f32,
+        click: bool,
     ) -> CursorIcon {
         let font = &glyph_brush.fonts()[0].clone();
         for glyph in glyph_brush.glyphs(self.glyph_section(
@@ -63,7 +64,10 @@ impl TextBox {
             let bounds = Rect::from(font.glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
-                let cursor = if text.link.is_some() {
+                let cursor = if let Some(ref link) = text.link {
+                    if click {
+                        open::that(link).unwrap();
+                    }
                     CursorIcon::Hand
                 } else {
                     CursorIcon::Text

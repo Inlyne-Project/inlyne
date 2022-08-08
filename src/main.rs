@@ -1,11 +1,14 @@
 pub mod color;
 pub mod image;
 pub mod renderer;
+pub mod table;
 pub mod text;
 pub mod utils;
 
 use crate::image::Image;
 use crate::image::ImageSize;
+use crate::table::Table;
+
 use color::Theme;
 use crossbeam_queue::SegQueue;
 use renderer::{Renderer, Spacer};
@@ -46,6 +49,7 @@ pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
     Image(Image),
+    Table(Table),
 }
 
 impl From<Image> for Element {
@@ -63,6 +67,12 @@ impl From<Spacer> for Element {
 impl From<TextBox> for Element {
     fn from(text_box: TextBox) -> Self {
         Element::TextBox(text_box)
+    }
+}
+
+impl From<Table> for Element {
+    fn from(table: Table) -> Self {
+        Element::Table(table)
     }
 }
 
@@ -107,7 +117,7 @@ impl Inlyne {
                     InlyneEvent::Redraw => {
                         while let Some(element) = self.element_queue.pop() {
                             self.renderer.push(element);
-                            if self.renderer.reserved_height < self.renderer.screen_height()  {
+                            if self.renderer.reserved_height < self.renderer.screen_height() {
                                 self.renderer.redraw()
                             }
                         }
@@ -159,22 +169,10 @@ impl Inlyne {
                                 position.y as f32 + self.renderer.scroll_y,
                             );
                             if element.contains(loc) {
-                                if let Element::TextBox(ref text_box) = element.deref() {
-                                    let bounds = element.bounds.as_ref().unwrap();
-                                    let cursor = text_box.hovering_over(
-                                        &mut self.renderer.glyph_brush,
-                                        loc,
-                                        bounds.pos,
-                                        (
-                                            screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
-                                            screen_size.1,
-                                        ),
-                                        self.renderer.hidpi_scale,
-                                    );
-                                    self.window.set_cursor_icon(cursor);
-                                    over_text = true;
-                                    if click_scheduled {
-                                        text_box.click(
+                                match element.deref() {
+                                    Element::TextBox(ref text_box) => {
+                                        let bounds = element.bounds.as_ref().unwrap();
+                                        let cursor = text_box.hovering_over(
                                             &mut self.renderer.glyph_brush,
                                             loc,
                                             bounds.pos,
@@ -185,10 +183,38 @@ impl Inlyne {
                                                 screen_size.1,
                                             ),
                                             self.renderer.hidpi_scale,
+                                            click_scheduled,
                                         );
-                                        click_scheduled = false;
+                                        self.window.set_cursor_icon(cursor);
+                                        over_text = true;
+                                        if click_scheduled {
+                                            click_scheduled = false;
+                                        }
+                                        break;
                                     }
-                                    break;
+                                    Element::Table(ref table) => {
+                                        let bounds = element.bounds.as_ref().unwrap();
+                                        let cursor = table.hovering_over(
+                                            &mut self.renderer.glyph_brush,
+                                            loc,
+                                            bounds.pos,
+                                            (
+                                                screen_size.0
+                                                    - bounds.pos.0
+                                                    - renderer::DEFAULT_MARGIN,
+                                                screen_size.1,
+                                            ),
+                                            self.renderer.hidpi_scale,
+                                            click_scheduled,
+                                        );
+                                        self.window.set_cursor_icon(cursor);
+                                        over_text = true;
+                                        if click_scheduled {
+                                            click_scheduled = false;
+                                        }
+                                        break;
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -261,6 +287,10 @@ struct TokenPrinter {
     global_indent: f32,
     align: Option<Align>,
     text_align: Option<Align>,
+    is_table: Option<Table>,
+    is_table_row: Option<Vec<TextBox>>,
+    is_table_header: Option<TextBox>,
+    is_table_data: Option<TextBox>,
     theme: Theme,
     eventloop_proxy: EventLoopProxy<InlyneEvent>,
 }
@@ -297,6 +327,12 @@ impl TokenSink for TokenPrinter {
                 let tag_name = tag.name.to_string();
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
+                        "th" => self.is_table_header = Some(TextBox::new(Vec::new())),
+                        "td" => self.is_table_data = Some(TextBox::new(Vec::new())),
+                        "table" => {
+                            self.is_table = Some(Table::new());
+                            self.push_spacer();
+                        }
                         "a" => {
                             let attrs = tag.attrs;
                             for attr in attrs {
@@ -573,9 +609,31 @@ impl TokenSink for TokenPrinter {
                             self.current_textbox.set_code_block(true);
                             self.is_pre_formated = true
                         }
+                        "tr" => {
+                            self.is_table_row = Some(Vec::new());
+                        }
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
+                        "th" => {
+                            let table_header = self.is_table_header.take().unwrap();
+                            self.is_table.as_mut().unwrap().push_header(table_header);
+                        }
+                        "td" => {
+                            let table_data = self.is_table_data.take().unwrap();
+                            self.is_table_row.as_mut().unwrap().push(table_data);
+                        }
+                        "tr" => {
+                            let table_row = self.is_table_row.take().unwrap();
+                            if !table_row.is_empty() {
+                                self.is_table.as_mut().unwrap().push_row(table_row);
+                            }
+                        }
+                        "table" => {
+                            let is_table = self.is_table.take();
+                            self.push_element(is_table.unwrap().into());
+                            self.push_spacer();
+                        }
                         "a" => self.is_link = None,
                         "code" => self.is_code = false,
                         "p" => {
@@ -660,7 +718,13 @@ impl TokenSink for TokenPrinter {
                         if self.is_bold {
                             text = text.make_bold(true);
                         }
-                        self.current_textbox.texts.push(text);
+                        if let Some(ref mut table_header) = self.is_table_header {
+                            table_header.texts.push(text);
+                        } else if let Some(ref mut table_data) = self.is_table_data {
+                            table_data.texts.push(text);
+                        } else {
+                            self.current_textbox.texts.push(text);
+                        }
                     }
                 }
             }
@@ -722,6 +786,10 @@ fn main() {
             global_indent: 0.,
             align: None,
             text_align: None,
+            is_table: None,
+            is_table_data: None,
+            is_table_header: None,
+            is_table_row: None,
             theme,
             eventloop_proxy,
             element_queue: element_queue_clone,
