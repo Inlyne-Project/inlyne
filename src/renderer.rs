@@ -178,20 +178,36 @@ impl Renderer {
         let roboto_reg =
             ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Regular.ttf"))
                 .unwrap();
+        let roboto_reg_italic =
+            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Italic.ttf"))
+                .unwrap();
         let roboto_bold =
             ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Bold.ttf"))
+                .unwrap();
+        let roboto_bold_italic =
+            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-BoldItalic.ttf"))
                 .unwrap();
         let sf_reg =
             ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Regular.otf"))
                 .unwrap();
+        let sf_reg_italic =
+            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Italic.otf"))
+                .unwrap();
         let sf_bold =
             ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Bold.otf")).unwrap();
+        let sf_bold_italic =
+            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-BoldItalicG1.otf"))
+                .unwrap();
 
         let mut glyph_brush =
             GlyphBrushBuilder::using_font(sf_reg).build(&device, swapchain_format);
+        glyph_brush.add_font(sf_reg_italic);
         glyph_brush.add_font(sf_bold);
+        glyph_brush.add_font(sf_bold_italic);
         glyph_brush.add_font(roboto_reg);
+        glyph_brush.add_font(roboto_reg_italic);
         glyph_brush.add_font(roboto_bold);
+        glyph_brush.add_font(roboto_bold_italic);
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 
         Self {

@@ -166,6 +166,7 @@ pub struct Text {
     pub color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
+    pub is_italic: bool,
     pub font: usize,
 }
 
@@ -177,6 +178,7 @@ impl Text {
             color: None,
             link: None,
             is_bold: false,
+            is_italic: false,
             font: 0,
         }
     }
@@ -201,20 +203,34 @@ impl Text {
         self
     }
 
+    pub fn make_italic(mut self, italic: bool) -> Self {
+        self.is_italic = italic;
+        self
+    }
+
     pub fn with_font(mut self, font_index: usize) -> Self {
         self.font = font_index;
         self
     }
 
     fn glyph_text(&self, hidpi_scale: f32, default_color: [f32; 4]) -> wgpu_glyph::Text {
+        let base = self.font * 4;
         let font = if self.is_bold {
-            FontId(self.font * 2 + 1)
+            if self.is_italic {
+                base + 3
+            } else {
+                base + 2
+            }
         } else {
-            FontId(self.font * 2)
+            if self.is_italic {
+                base + 1
+            } else {
+                base
+            }
         };
         wgpu_glyph::Text::new(self.text.as_str())
             .with_scale(self.size * hidpi_scale)
             .with_color(self.color.unwrap_or(default_color))
-            .with_font_id(font)
+            .with_font_id(FontId(font))
     }
 }

@@ -283,6 +283,7 @@ struct TokenPrinter {
     is_list_item: bool,
     list_type: Option<ListType>,
     is_bold: bool,
+    is_italic: bool,
     is_pre_formated: bool,
     global_indent: f32,
     align: Option<Align>,
@@ -407,7 +408,8 @@ impl TokenSink for TokenPrinter {
                                     .clone(),
                             );
                         }
-                        "strong" => self.is_bold = true,
+                        "em" | "i" => self.is_italic = true,
+                        "bold" | "strong" => self.is_bold = true,
                         "code" => self.is_code = true,
                         "li" => {
                             self.current_textbox.indent = self.global_indent;
@@ -642,7 +644,8 @@ impl TokenSink for TokenPrinter {
                             self.align = None;
                             self.text_align = None;
                         }
-                        "strong" => self.is_bold = false,
+                        "em" | "i" => self.is_italic = false,
+                        "strong" | "bold" => self.is_bold = false,
                         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                             self.push_current_textbox();
                             self.push_spacer();
@@ -718,6 +721,9 @@ impl TokenSink for TokenPrinter {
                         if self.is_bold {
                             text = text.make_bold(true);
                         }
+                        if self.is_italic {
+                            text = text.make_italic(true);
+                        }
                         if let Some(ref mut table_header) = self.is_table_header {
                             table_header.texts.push(text);
                         } else if let Some(ref mut table_data) = self.is_table_data {
@@ -781,6 +787,7 @@ fn main() {
             is_code: false,
             is_list_item: false,
             is_bold: false,
+            is_italic: false,
             is_pre_formated: false,
             list_type: None,
             global_indent: 0.,
