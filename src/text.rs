@@ -1,5 +1,11 @@
-use crate::utils::{Align, Rect};
-use wgpu_glyph::{ab_glyph::Font, FontId, GlyphCruncher, HorizontalAlign, Layout, Section};
+use crate::{
+    color::Theme,
+    utils::{Align, Rect},
+};
+use wgpu_glyph::{
+    ab_glyph::{Font, FontArc, PxScale},
+    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, OwnedSection, OwnedText, Section,
+};
 use winit::window::CursorIcon;
 
 pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785, 0.63759696, 0.6938719, 1.0];
@@ -10,15 +16,19 @@ pub struct TextBox {
     pub texts: Vec<Text>,
     pub is_code_block: bool,
     pub align: Align,
+    pub hidpi_scale: f32,
+    pub default_text_color: [f32; 4],
 }
 
 impl TextBox {
-    pub fn new(texts: Vec<Text>) -> TextBox {
+    pub fn new(texts: Vec<Text>, hidpi_scale: f32, theme: &Theme) -> TextBox {
         TextBox {
             indent: 0.0,
             texts,
             is_code_block: false,
             align: Align::Left,
+            hidpi_scale,
+            default_text_color: theme.text_color.clone(),
         }
     }
 
@@ -51,17 +61,11 @@ impl TextBox {
         loc: (f32, f32),
         screen_position: (f32, f32),
         bounds: (f32, f32),
-        hidpi_scale: f32,
         click: bool,
     ) -> CursorIcon {
-        let font = &glyph_brush.fonts()[0].clone();
-        for glyph in glyph_brush.glyphs(self.glyph_section(
-            screen_position,
-            bounds,
-            hidpi_scale,
-            [0., 0., 0., 0.],
-        )) {
-            let bounds = Rect::from(font.glyph_bounds(&glyph.glyph));
+        let fonts: Vec<FontArc> = glyph_brush.fonts().iter().map(|f| f.clone()).collect();
+        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
+            let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
                 let cursor = if let Some(ref link) = text.link {
@@ -78,64 +82,32 @@ impl TextBox {
         CursorIcon::Default
     }
 
-    pub fn click<T: GlyphCruncher>(
-        &self,
-        glyph_brush: &mut T,
-        loc: (f32, f32),
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
-        hidpi_scale: f32,
-    ) {
-        let font = &glyph_brush.fonts()[0].clone();
-        for glyph in glyph_brush.glyphs(self.glyph_section(
-            screen_position,
-            bounds,
-            hidpi_scale,
-            [0., 0., 0., 0.],
-        )) {
-            let bounds = Rect::from(font.glyph_bounds(&glyph.glyph));
-            if bounds.contains(loc) {
-                let text = &self.texts[glyph.section_index];
-                if let Some(ref link) = text.link {
-                    open::that(link).unwrap()
-                }
-            }
-        }
-    }
-
     pub fn size<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
-        hidpi_scale: f32,
     ) -> (f32, f32) {
         if self.texts.is_empty() {
             return (0., 0.);
         }
-        if let Some(bounds) = glyph_brush.glyph_bounds(self.glyph_section(
-            screen_position,
-            bounds,
-            hidpi_scale,
-            [0., 0., 0., 0.],
-        )) {
+        if let Some(bounds) = glyph_brush.glyph_bounds(&self.glyph_section(screen_position, bounds))
+        {
             (bounds.width(), bounds.height())
         } else {
             (0., 0.)
         }
     }
 
-    pub fn glyph_section(
-        &self,
+    pub fn glyph_section<'a>(
+        &'a self,
         mut screen_position: (f32, f32),
         bounds: (f32, f32),
-        hidpi_scale: f32,
-        default_color: [f32; 4],
     ) -> Section {
         let texts = self
             .texts
             .iter()
-            .map(|t| t.glyph_text(hidpi_scale, default_color))
+            .map(|t| <&OwnedText as Into<wgpu_glyph::Text<'a, Extra>>>::into(&t.wgpu_text).clone())
             .collect();
 
         let horizontal_align = match self.align {
@@ -161,35 +133,41 @@ impl TextBox {
 
 #[derive(Debug, Clone)]
 pub struct Text {
-    pub text: String,
     pub size: f32,
     pub color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
     pub is_italic: bool,
     pub font: usize,
+    pub wgpu_text: wgpu_glyph::OwnedText,
+    pub hidpi_scale: f32,
+    pub default_color: [f32; 4],
 }
 
 impl Text {
-    pub fn new(text: String) -> Self {
+    pub fn new(text: String, hidpi_scale: f32, default_text_color: [f32; 4]) -> Self {
         Self {
-            text,
+            wgpu_text: wgpu_glyph::OwnedText::new(text).with_scale(hidpi_scale * 16.),
             size: 16.,
             color: None,
             link: None,
             is_bold: false,
             is_italic: false,
             font: 0,
+            hidpi_scale,
+            default_color: default_text_color,
         }
     }
 
     pub fn with_size(mut self, size: f32) -> Self {
         self.size = size;
+        self.wgpu_text.scale = PxScale::from(self.size * self.hidpi_scale);
         self
     }
 
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
         self.color = Some(color);
+        self.wgpu_text.extra.color = color;
         self
     }
 
@@ -200,20 +178,23 @@ impl Text {
 
     pub fn make_bold(mut self, bold: bool) -> Self {
         self.is_bold = bold;
+        self.set_font();
         self
     }
 
     pub fn make_italic(mut self, italic: bool) -> Self {
         self.is_italic = italic;
+        self.set_font();
         self
     }
 
     pub fn with_font(mut self, font_index: usize) -> Self {
         self.font = font_index;
+        self.set_font();
         self
     }
 
-    fn glyph_text(&self, hidpi_scale: f32, default_color: [f32; 4]) -> wgpu_glyph::Text {
+    fn set_font(&mut self) {
         let base = self.font * 4;
         let font = if self.is_bold {
             if self.is_italic {
@@ -228,9 +209,6 @@ impl Text {
                 base
             }
         };
-        wgpu_glyph::Text::new(self.text.as_str())
-            .with_scale(self.size * hidpi_scale)
-            .with_color(self.color.unwrap_or(default_color))
-            .with_font_id(FontId(font))
+        self.wgpu_text.font_id = FontId(font);
     }
 }

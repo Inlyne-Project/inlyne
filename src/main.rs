@@ -182,7 +182,6 @@ impl Inlyne {
                                                     - renderer::DEFAULT_MARGIN,
                                                 screen_size.1,
                                             ),
-                                            self.renderer.hidpi_scale,
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(cursor);
@@ -204,7 +203,6 @@ impl Inlyne {
                                                     - renderer::DEFAULT_MARGIN,
                                                 screen_size.1,
                                             ),
-                                            self.renderer.hidpi_scale,
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(cursor);
@@ -292,6 +290,7 @@ struct TokenPrinter {
     is_table_row: Option<Vec<TextBox>>,
     is_table_header: Option<TextBox>,
     is_table_data: Option<TextBox>,
+    hidpi_scale: f32,
     theme: Theme,
     eventloop_proxy: EventLoopProxy<InlyneEvent>,
 }
@@ -301,7 +300,7 @@ impl TokenPrinter {
         if !self.current_textbox.texts.is_empty() {
             let mut empty = true;
             for text in &self.current_textbox.texts {
-                if !text.text.trim().is_empty() {
+                if !text.wgpu_text.text.trim().is_empty() {
                     empty = false;
                     break;
                 }
@@ -309,7 +308,7 @@ impl TokenPrinter {
             if !empty {
                 self.push_element(self.current_textbox.clone().into());
             }
-            self.current_textbox = TextBox::new(Vec::new());
+            self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale, &self.theme);
         }
     }
     fn push_spacer(&mut self) {
@@ -328,8 +327,14 @@ impl TokenSink for TokenPrinter {
                 let tag_name = tag.name.to_string();
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
-                        "th" => self.is_table_header = Some(TextBox::new(Vec::new())),
-                        "td" => self.is_table_data = Some(TextBox::new(Vec::new())),
+                        "th" => {
+                            self.is_table_header =
+                                Some(TextBox::new(Vec::new(), self.hidpi_scale, &self.theme))
+                        }
+                        "td" => {
+                            self.is_table_data =
+                                Some(TextBox::new(Vec::new(), self.hidpi_scale, &self.theme))
+                        }
                         "table" => {
                             self.is_table = Some(Table::new());
                             self.push_spacer();
@@ -687,11 +692,15 @@ impl TokenSink for TokenPrinter {
                             self.push_current_textbox();
                             self.current_textbox.is_code_block = true;
                         } else if !self.current_textbox.texts.is_empty() {
-                            self.current_textbox.texts.push(Text::new(" ".to_string()));
+                            self.current_textbox.texts.push(Text::new(
+                                " ".to_string(),
+                                self.hidpi_scale,
+                                self.theme.text_color,
+                            ));
                         }
                     } else {
                         // check if str is whitespace only
-                        let mut text = Text::new(str);
+                        let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                         if self.is_code {
                             text = text
                                 .with_color(self.theme.code_color)
@@ -707,14 +716,24 @@ impl TokenSink for TokenPrinter {
                         }
                         if self.is_list_item {
                             if let Some(ListType::Ordered(ref mut index)) = self.list_type {
-                                self.current_textbox
-                                    .texts
-                                    .push(Text::new(format!("{}. ", index)).make_bold(true));
+                                self.current_textbox.texts.push(
+                                    Text::new(
+                                        format!("{}. ", index),
+                                        self.hidpi_scale,
+                                        self.theme.text_color,
+                                    )
+                                    .make_bold(true),
+                                );
                                 *index += 1;
                             } else {
-                                self.current_textbox
-                                    .texts
-                                    .push(Text::new("· ".to_string()).make_bold(true))
+                                self.current_textbox.texts.push(
+                                    Text::new(
+                                        "· ".to_string(),
+                                        self.hidpi_scale,
+                                        self.theme.text_color,
+                                    )
+                                    .make_bold(true),
+                                )
                             }
                             self.is_list_item = false;
                         }
@@ -779,9 +798,10 @@ fn main() {
     let eventloop_proxy = inlyne.event_loop.create_proxy();
     let theme = inlyne.renderer.theme.clone();
     let element_queue_clone = inlyne.element_queue.clone();
+    let hidpi_scale = inlyne.window.scale_factor() as f32;
     std::thread::spawn(move || {
         let sink = TokenPrinter {
-            current_textbox: TextBox::new(Vec::new()),
+            current_textbox: TextBox::new(Vec::new(), hidpi_scale, &theme),
             is_link: None,
             is_header: None,
             is_code: false,
@@ -797,6 +817,7 @@ fn main() {
             is_table_data: None,
             is_table_header: None,
             is_table_row: None,
+            hidpi_scale,
             theme,
             eventloop_proxy,
             element_queue: element_queue_clone,

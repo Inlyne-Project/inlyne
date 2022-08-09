@@ -284,12 +284,8 @@ impl Renderer {
             match &mut element.inner {
                 Element::TextBox(text_box) => {
                     let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
-                    self.glyph_brush.queue(text_box.glyph_section(
-                        *pos,
-                        bounds,
-                        self.hidpi_scale,
-                        self.theme.text_color,
-                    ));
+                    self.glyph_brush
+                        .queue(&text_box.glyph_section(*pos, bounds));
                     if text_box.is_code_block {
                         let mut fill_tessellator = FillTessellator::new();
 
@@ -323,14 +319,11 @@ impl Renderer {
                         &mut self.glyph_brush,
                         *pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.hidpi_scale,
                     );
-                    //dbg!(&row_heights);
                     let column_widths = table.column_widths(
                         &mut self.glyph_brush,
                         *pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.hidpi_scale,
                     );
                     let mut x = 0.;
                     let mut y = 0.;
@@ -339,12 +332,8 @@ impl Renderer {
                     for (col, width) in column_widths.iter().enumerate() {
                         let text_box = table.headers.get(col).unwrap();
                         let bounds = (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
-                        self.glyph_brush.queue(text_box.glyph_section(
-                            (pos.0 + x, pos.1 + y),
-                            bounds,
-                            self.hidpi_scale,
-                            self.theme.text_color,
-                        ));
+                        self.glyph_brush
+                            .queue(&text_box.glyph_section((pos.0 + x, pos.1 + y), bounds));
                         x += width + TABLE_COL_GAP;
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
@@ -379,12 +368,9 @@ impl Renderer {
                                 if let Some(text_box) = row.get(col) {
                                     let bounds =
                                         (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
-                                    self.glyph_brush.queue(text_box.glyph_section(
-                                        (pos.0 + x, pos.1 + y),
-                                        bounds,
-                                        self.hidpi_scale,
-                                        self.theme.text_color,
-                                    ));
+                                    self.glyph_brush.queue(
+                                        &text_box.glyph_section((pos.0 + x, pos.1 + y), bounds),
+                                    );
                                 }
                             }
                             x += width + TABLE_COL_GAP;
@@ -575,7 +561,6 @@ impl Renderer {
                     &mut self.glyph_brush,
                     pos,
                     (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
-                    self.hidpi_scale,
                 );
 
                 Rect::new(pos, size)
@@ -598,7 +583,6 @@ impl Renderer {
                         &mut self.glyph_brush,
                         pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.hidpi_scale,
                     )
                     .iter()
                     .fold(0., |acc, x| acc + x);
@@ -607,7 +591,6 @@ impl Renderer {
                         &mut self.glyph_brush,
                         pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.hidpi_scale,
                     )
                     .iter()
                     .fold(0., |acc, x| acc + x);
