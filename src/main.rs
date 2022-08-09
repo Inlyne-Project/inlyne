@@ -10,7 +10,6 @@ use crate::image::ImageSize;
 use crate::table::Table;
 
 use color::Theme;
-use crossbeam_queue::SegQueue;
 use renderer::{Renderer, Spacer};
 use utils::{Align, Rect};
 
@@ -30,12 +29,14 @@ use winit::{
 };
 use Token::{CharacterTokens, EOFToken};
 
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use crate::renderer::DEFAULT_MARGIN;
 
@@ -80,7 +81,7 @@ pub struct Inlyne {
     window: Window,
     event_loop: EventLoop<InlyneEvent>,
     renderer: Renderer,
-    element_queue: Arc<SegQueue<Element>>,
+    element_queue: Arc<Mutex<VecDeque<Element>>>,
 }
 
 impl Inlyne {
@@ -94,7 +95,7 @@ impl Inlyne {
             window,
             event_loop,
             renderer,
-            element_queue: Arc::new(SegQueue::new()),
+            element_queue: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -115,10 +116,12 @@ impl Inlyne {
                         self.renderer.redraw()
                     }
                     InlyneEvent::Redraw => {
-                        while let Some(element) = self.element_queue.pop() {
-                            self.renderer.push(element);
-                            if self.renderer.reserved_height < self.renderer.screen_height() {
-                                self.renderer.redraw()
+                        if let Ok(mut element_queue) = self.element_queue.try_lock() {
+                            for element in element_queue.drain(0..) {
+                                self.renderer.push(element);
+                                if self.renderer.reserved_height < self.renderer.screen_height() {
+                                    self.renderer.redraw()
+                                }
                             }
                         }
                         self.renderer.redraw();
@@ -273,7 +276,7 @@ pub enum ListType {
 
 struct Header(f32);
 struct TokenPrinter {
-    element_queue: Arc<SegQueue<Element>>,
+    element_queue: Arc<Mutex<VecDeque<Element>>>,
     current_textbox: TextBox,
     is_link: Option<String>,
     is_header: Option<Header>,
@@ -315,7 +318,7 @@ impl TokenPrinter {
         self.push_element(Spacer::new(10.).into());
     }
     fn push_element(&mut self, element: Element) {
-        self.element_queue.push(element);
+        self.element_queue.lock().unwrap().push_back(element);
     }
 }
 impl TokenSink for TokenPrinter {

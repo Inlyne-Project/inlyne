@@ -10,7 +10,6 @@ use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
 use wgpu::{BindGroup, Buffer};
@@ -20,8 +19,6 @@ use winit::window::Window;
 
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
-
-pub const REDRAW_TARGET_DURATION: Duration = Duration::from_millis(16);
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -73,7 +70,6 @@ pub struct Renderer {
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
-    pub last_redraw: Instant,
 }
 
 impl Renderer {
@@ -226,7 +222,6 @@ impl Renderer {
             image_renderer,
             eventloop_proxy,
             theme,
-            last_redraw: Instant::now(),
         }
     }
 
@@ -442,13 +437,6 @@ impl Renderer {
     }
 
     pub fn redraw(&mut self) {
-        // Draw with a time gap of at least REDRAW_TARGET_DURATION
-        let elapsed_since_redraw = self.last_redraw.elapsed();
-        if elapsed_since_redraw < REDRAW_TARGET_DURATION {
-            std::thread::sleep(REDRAW_TARGET_DURATION - elapsed_since_redraw);
-        }
-        self.last_redraw = Instant::now();
-
         let frame = self
             .surface
             .get_current_texture()
