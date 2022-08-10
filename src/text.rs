@@ -4,7 +4,7 @@ use crate::{
 };
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
-    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, OwnedSection, OwnedText, Section,
+    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section,
 };
 use winit::window::CursorIcon;
 
@@ -104,11 +104,7 @@ impl TextBox {
         mut screen_position: (f32, f32),
         bounds: (f32, f32),
     ) -> Section {
-        let texts = self
-            .texts
-            .iter()
-            .map(|t| <&OwnedText as Into<wgpu_glyph::Text<'a, Extra>>>::into(&t.wgpu_text).clone())
-            .collect();
+        let texts = self.texts.iter().map(|t| t.wgpu_text()).collect();
 
         let horizontal_align = match self.align {
             Align::Center => {
@@ -133,13 +129,13 @@ impl TextBox {
 
 #[derive(Debug, Clone)]
 pub struct Text {
+    pub text: String,
     pub size: f32,
     pub color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
     pub is_italic: bool,
     pub font: usize,
-    pub wgpu_text: wgpu_glyph::OwnedText,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
 }
@@ -147,7 +143,7 @@ pub struct Text {
 impl Text {
     pub fn new(text: String, hidpi_scale: f32, default_text_color: [f32; 4]) -> Self {
         Self {
-            wgpu_text: wgpu_glyph::OwnedText::new(text).with_scale(hidpi_scale * 16.),
+            text,
             size: 16.,
             color: None,
             link: None,
@@ -161,13 +157,11 @@ impl Text {
 
     pub fn with_size(mut self, size: f32) -> Self {
         self.size = size;
-        self.wgpu_text.scale = PxScale::from(self.size * self.hidpi_scale);
         self
     }
 
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
         self.color = Some(color);
-        self.wgpu_text.extra.color = color;
         self
     }
 
@@ -178,23 +172,20 @@ impl Text {
 
     pub fn make_bold(mut self, bold: bool) -> Self {
         self.is_bold = bold;
-        self.set_font();
         self
     }
 
     pub fn make_italic(mut self, italic: bool) -> Self {
         self.is_italic = italic;
-        self.set_font();
         self
     }
 
     pub fn with_font(mut self, font_index: usize) -> Self {
         self.font = font_index;
-        self.set_font();
         self
     }
 
-    fn set_font(&mut self) {
+    fn font_id(&self) -> FontId {
         let base = self.font * 4;
         let font = if self.is_bold {
             if self.is_italic {
@@ -209,6 +200,26 @@ impl Text {
                 base
             }
         };
-        self.wgpu_text.font_id = FontId(font);
+        FontId(font)
+    }
+
+    fn color(&self) -> [f32; 4] {
+        if let Some(color) = self.color {
+            color
+        } else {
+            self.default_color
+        }
+    }
+
+    pub fn wgpu_text(&self) -> wgpu_glyph::Text {
+        wgpu_glyph::Text {
+            text: &self.text,
+            scale: PxScale::from(self.size * self.hidpi_scale),
+            font_id: self.font_id(),
+            extra: Extra {
+                color: self.color(),
+                z: 0.0,
+            },
+        }
     }
 }

@@ -293,6 +293,7 @@ struct TokenPrinter {
     is_table_row: Option<Vec<TextBox>>,
     is_table_header: Option<TextBox>,
     is_table_data: Option<TextBox>,
+    is_small: bool,
     hidpi_scale: f32,
     theme: Theme,
     eventloop_proxy: EventLoopProxy<InlyneEvent>,
@@ -303,7 +304,7 @@ impl TokenPrinter {
         if !self.current_textbox.texts.is_empty() {
             let mut empty = true;
             for text in &self.current_textbox.texts {
-                if !text.wgpu_text.text.trim().is_empty() {
+                if !text.text.trim().is_empty() {
                     empty = false;
                     break;
                 }
@@ -350,6 +351,10 @@ impl TokenSink for TokenPrinter {
                                     break;
                                 }
                             }
+                        }
+                        "small" => self.is_small = true,
+                        "br" => {
+                            self.push_current_textbox();
                         }
                         "img" => {
                             let attrs = tag.attrs;
@@ -625,6 +630,7 @@ impl TokenSink for TokenPrinter {
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
+                        "small" => self.is_small = false,
                         "th" => {
                             let table_header = self.is_table_header.take().unwrap();
                             self.is_table.as_mut().unwrap().push_header(table_header);
@@ -746,6 +752,9 @@ impl TokenSink for TokenPrinter {
                         if self.is_italic {
                             text = text.make_italic(true);
                         }
+                        if self.is_small {
+                            text = text.with_size(12.);
+                        }
                         if let Some(ref mut table_header) = self.is_table_header {
                             table_header.texts.push(text);
                         } else if let Some(ref mut table_data) = self.is_table_data {
@@ -820,6 +829,7 @@ fn main() {
             is_table_data: None,
             is_table_header: None,
             is_table_row: None,
+            is_small: false,
             hidpi_scale,
             theme,
             eventloop_proxy,
