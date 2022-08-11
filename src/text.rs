@@ -70,7 +70,9 @@ impl TextBox {
                 let text = &self.texts[glyph.section_index];
                 let cursor = if let Some(ref link) = text.link {
                     if click {
-                        open::that(link).unwrap();
+                        if let Err(_) = open::that(link) {
+                            eprintln!("Could not open link");
+                        }
                     }
                     CursorIcon::Hand
                 } else {
@@ -179,6 +181,9 @@ impl TextBox {
     ) -> (Vec<Rect>, String) {
         let mut selection_rects = Vec::new();
         let mut selection_text = String::new();
+        if selection.0 == selection.1 {
+            return (selection_rects, selection_text);
+        }
         if selection.0 .1 > selection.1 .1 {
             std::mem::swap(&mut selection.0, &mut selection.1);
         }

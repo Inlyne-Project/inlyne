@@ -178,9 +178,6 @@ impl Inlyne {
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        if click_scheduled {
-                            self.renderer.selection = Some((loc, loc));
-                        }
                         for element in self.renderer.elements.iter() {
                             if element.contains(loc) {
                                 match element.deref() {
@@ -222,6 +219,9 @@ impl Inlyne {
                                     }
                                     _ => {}
                                 }
+                            }
+                            if click_scheduled {
+                                self.renderer.selection = Some((loc, loc));
                             }
                             if let Some(ref mut selection) = self.renderer.selection && mouse_down {
                                 selection.1 = loc;
@@ -431,16 +431,17 @@ impl TokenSink for TokenPrinter {
                             for attr in attrs {
                                 if attr.name.local == local_name!("align") {
                                     match attr.value.to_string().as_str() {
-                                        "center" => self.align = Some(Align::Center),
                                         "left" => self.align = Some(Align::Left),
+                                        "center" => self.align = Some(Align::Center),
+                                        "right" => self.text_align = Some(Align::Right),
                                         _ => {}
                                     }
                                 }
                                 if attr.name.local == *"text-align" {
                                     match attr.value.to_string().as_str() {
-                                        "right" => self.text_align = Some(Align::Right),
-                                        "center" => self.text_align = Some(Align::Center),
                                         "left" => self.text_align = Some(Align::Left),
+                                        "center" => self.text_align = Some(Align::Center),
+                                        "right" => self.text_align = Some(Align::Right),
                                         _ => {}
                                     }
                                 }
@@ -788,11 +789,18 @@ impl TokenSink for TokenPrinter {
                             }
                             self.is_list_item = false;
                         }
-                        text = text
-                            .make_bold(self.is_bold)
-                            .make_italic(self.is_italic)
-                            .make_underlined(self.is_underlined)
-                            .make_striked(self.is_striked);
+                        if self.is_bold {
+                            text = text.make_bold(true);
+                        }
+                        if self.is_italic {
+                            text = text.make_italic(true);
+                        }
+                        if self.is_underlined {
+                            text = text.make_underlined(true);
+                        }
+                        if self.is_striked {
+                            text = text.make_striked(true);
+                        }
                         if self.is_small {
                             text = text.with_size(12.);
                         }
@@ -879,6 +887,7 @@ fn main() {
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
         options.extension.table = true;
+        options.extension.strikethrough = true;
         options.parse.smart = true;
         options.render.unsafe_ = true;
         let htmlified = markdown_to_html(&md_string, &options);
