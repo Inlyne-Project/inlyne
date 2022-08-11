@@ -2,7 +2,7 @@ use crate::renderer::DEFAULT_MARGIN;
 use crate::utils::Align;
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
-use image::RgbaImage;
+use image::{ImageBuffer, RgbaImage};
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -25,6 +25,7 @@ pub struct Image {
     callback: Arc<Mutex<Option<EventLoopProxy<InlyneEvent>>>>,
     pub size: Option<ImageSize>,
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
+    pub is_link: Option<String>,
 }
 
 impl Image {
@@ -109,6 +110,26 @@ impl Image {
 
             if let Ok(image) = image::load_from_memory(&image_data) {
                 *(image_clone.lock().unwrap()) = Some(image.to_rgba8());
+            } else {
+                let mut opt = usvg::Options::default();
+                opt.fontdb.load_system_fonts();
+                if let Ok(rtree) = usvg::Tree::from_data(&image_data, &opt.to_ref()) {
+                    let pixmap_size = rtree.svg_node().size.to_screen_size();
+                    let mut pixmap =
+                        tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+                    resvg::render(
+                        &rtree,
+                        usvg::FitTo::Original,
+                        tiny_skia::Transform::default(),
+                        pixmap.as_mut(),
+                    )
+                    .unwrap();
+                    *(image_clone.lock().unwrap()) = ImageBuffer::from_raw(
+                        pixmap.width(),
+                        pixmap.height(),
+                        pixmap.data().into(),
+                    );
+                }
             }
             if let Ok(Some(callback)) = callback_clone.try_lock().as_deref() {
                 callback.send_event(InlyneEvent::Reposition).unwrap();
@@ -121,7 +142,12 @@ impl Image {
             callback,
             size: None,
             bind_group: None,
+            is_link: None,
         }
+    }
+
+    pub fn set_link(&mut self, link: String) {
+        self.is_link = Some(link);
     }
 
     pub fn add_callback(&mut self, eventloop_proxy: EventLoopProxy<InlyneEvent>) {

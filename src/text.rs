@@ -69,10 +69,8 @@ impl TextBox {
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
                 let cursor = if let Some(ref link) = text.link {
-                    if click {
-                        if let Err(_) = open::that(link) {
+                    if click && open::that(link).is_err() {
                             eprintln!("Could not open link");
-                        }
                     }
                     CursorIcon::Hand
                 } else {

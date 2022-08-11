@@ -172,7 +172,7 @@ impl Inlyne {
                         _ => unimplemented!(),
                     },
                     WindowEvent::CursorMoved { position, .. } => {
-                        let mut over_text = false;
+                        let mut over_link = false;
                         let screen_size = self.renderer.screen_size();
                         let loc = (
                             position.x as f32,
@@ -196,7 +196,7 @@ impl Inlyne {
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(cursor);
-                                        over_text = true;
+                                        over_link = true;
                                         break;
                                     }
                                     Element::Table(ref table) => {
@@ -214,8 +214,17 @@ impl Inlyne {
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(cursor);
-                                        over_text = true;
+                                        over_link = true;
                                         break;
+                                    }
+                                    Element::Image(image) => {
+                                        if let Some(ref link) = image.is_link {
+                                            if click_scheduled && open::that(link).is_err() {
+                                                eprintln!("Could not open link");
+                                            }
+                                            self.window.set_cursor_icon(CursorIcon::Hand);
+                                            over_link = true;
+                                        }
                                     }
                                     _ => {}
                                 }
@@ -256,7 +265,7 @@ impl Inlyne {
                             }
                         }
 
-                        if !over_text {
+                        if !over_link {
                             self.window.set_cursor_icon(CursorIcon::Default);
                         }
                         click_scheduled = false;
@@ -419,6 +428,9 @@ impl TokenSink for TokenPrinter {
                                     let align = self.align.as_ref().unwrap_or(&Align::Left);
                                     let mut image = Image::from_url(attr.value.to_string())
                                         .with_align(local_align.unwrap_or_else(|| align.clone()));
+                                    if let Some(ref link) = self.is_link {
+                                        image.set_link(link.clone())
+                                    }
                                     if let Some(size) = size {
                                         image = image.with_size(size);
                                     }
