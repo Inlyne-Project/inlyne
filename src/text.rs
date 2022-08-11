@@ -70,7 +70,7 @@ impl TextBox {
                 let text = &self.texts[glyph.section_index];
                 let cursor = if let Some(ref link) = text.link {
                     if click && open::that(link).is_err() {
-                            eprintln!("Could not open link");
+                        eprintln!("Could not open link");
                     }
                     CursorIcon::Hand
                 } else {
@@ -155,13 +155,23 @@ impl TextBox {
         }
         let mut lines = Vec::new();
         for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
-            if self.texts[glyph.section_index].is_underlined {
-                lines.push(((glyph_bounds.pos.0, glyph_bounds.max.1), glyph_bounds.max));
+            if self.texts[glyph.section_index].is_underlined
+                && glyph_bounds.max.0 <= screen_position.0 + bounds.0
+            {
+                lines.push((
+                    (
+                        glyph_bounds.pos.0.max(screen_position.0),
+                        glyph_bounds.max.1,
+                    ),
+                    (glyph_bounds.max.0, glyph_bounds.max.1),
+                ));
             }
-            if self.texts[glyph.section_index].is_striked {
+            if self.texts[glyph.section_index].is_striked
+                && glyph_bounds.max.0 <= screen_position.0 + bounds.0
+            {
                 let mid_height = glyph_bounds.pos.1 + glyph_bounds.size.1 / 2.;
                 lines.push((
-                    (glyph_bounds.pos.0, mid_height),
+                    (glyph_bounds.pos.0.max(screen_position.0), mid_height),
                     (glyph_bounds.max.0, mid_height),
                 ));
             }
