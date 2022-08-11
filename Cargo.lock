@@ -1177,7 +1177,7 @@ dependencies = [
 
 [[package]]
 name = "inlyne"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytemuck",
  "clap 3.2.16",
