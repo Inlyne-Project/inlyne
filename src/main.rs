@@ -169,7 +169,7 @@ impl Inlyne {
                             }
                             self.window.request_redraw();
                         }
-                        _ => unimplemented!(),
+                        _ => {},
                     },
                     WindowEvent::CursorMoved { position, .. } => {
                         let mut over_link = false;
