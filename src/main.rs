@@ -14,14 +14,16 @@ use renderer::{Renderer, Spacer};
 use utils::{Align, Rect};
 
 use comrak::{markdown_to_html, ComrakOptions};
+use copypasta::{ClipboardContext, ClipboardProvider};
 use html5ever::local_name;
 use html5ever::tendril::*;
 use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{BufferQueue, TagKind};
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts};
 use text::{Text, TextBox};
+use winit::event::ModifiersState;
+use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
-use winit::event_loop::EventLoopProxy;
 use winit::{
     event::{Event, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -43,7 +45,6 @@ use crate::renderer::DEFAULT_MARGIN;
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
-    Redraw,
 }
 
 pub enum Element {
@@ -78,24 +79,27 @@ impl From<Table> for Element {
 }
 
 pub struct Inlyne {
-    window: Window,
+    window: Arc<Window>,
     event_loop: EventLoop<InlyneEvent>,
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
+    clipboard: ClipboardContext,
 }
 
 impl Inlyne {
     pub async fn new(theme: Theme) -> Self {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
-        let window = Window::new(&event_loop).unwrap();
+        let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
         let renderer = Renderer::new(&window, event_loop.create_proxy(), theme).await;
+        let clipboard = ClipboardContext::new().unwrap();
 
         Self {
             window,
             event_loop,
             renderer,
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
+            clipboard,
         }
     }
 
@@ -107,24 +111,15 @@ impl Inlyne {
     pub fn run(mut self) {
         let mut click_scheduled = false;
         let mut scrollbar_held = false;
+        let mut mouse_down = false;
+        let mut modifiers = ModifiersState::empty();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
                         self.renderer.reposition();
-                        self.renderer.redraw()
-                    }
-                    InlyneEvent::Redraw => {
-                        if let Ok(mut element_queue) = self.element_queue.try_lock() {
-                            for element in element_queue.drain(0..) {
-                                self.renderer.push(element);
-                                if self.renderer.reserved_height < self.renderer.screen_height() {
-                                    self.renderer.redraw()
-                                }
-                            }
-                        }
-                        self.renderer.redraw();
+                        self.window.request_redraw()
                     }
                 },
                 Event::WindowEvent {
@@ -139,7 +134,20 @@ impl Inlyne {
                     self.renderer.reposition();
                     self.window.request_redraw();
                 }
-                Event::RedrawRequested(_) => self.renderer.redraw(),
+                Event::RedrawRequested(_) => {
+                    let queued_elements =
+                        if let Ok(mut element_queue) = self.element_queue.try_lock() {
+                            Some(element_queue.drain(0..).collect::<Vec<Element>>())
+                        } else {
+                            None
+                        };
+                    if let Some(queue) = queued_elements {
+                        for element in queue {
+                            self.renderer.push(element);
+                        }
+                    }
+                    self.renderer.redraw();
+                }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::MouseWheel { delta, .. } => match delta {
@@ -166,11 +174,14 @@ impl Inlyne {
                     WindowEvent::CursorMoved { position, .. } => {
                         let mut over_text = false;
                         let screen_size = self.renderer.screen_size();
+                        let loc = (
+                            position.x as f32,
+                            position.y as f32 + self.renderer.scroll_y,
+                        );
+                                        if click_scheduled {
+                                            self.renderer.selection = Some((loc, loc));
+                                        }
                         for element in self.renderer.elements.iter() {
-                            let loc = (
-                                position.x as f32,
-                                position.y as f32 + self.renderer.scroll_y,
-                            );
                             if element.contains(loc) {
                                 match element.deref() {
                                     Element::TextBox(ref text_box) => {
@@ -189,9 +200,6 @@ impl Inlyne {
                                         );
                                         self.window.set_cursor_icon(cursor);
                                         over_text = true;
-                                        if click_scheduled {
-                                            click_scheduled = false;
-                                        }
                                         break;
                                     }
                                     Element::Table(ref table) => {
@@ -210,13 +218,14 @@ impl Inlyne {
                                         );
                                         self.window.set_cursor_icon(cursor);
                                         over_text = true;
-                                        if click_scheduled {
-                                            click_scheduled = false;
-                                        }
                                         break;
                                     }
                                     _ => {}
                                 }
+                            }
+                            if let Some(ref mut selection) = self.renderer.selection && mouse_down {
+                                selection.1 = loc;
+                                self.window.request_redraw();
                             }
                         }
                         if scrollbar_held
@@ -239,7 +248,6 @@ impl Inlyne {
                                 target_scroll
                             };
                             self.window.request_redraw();
-                            click_scheduled = false;
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
@@ -248,6 +256,7 @@ impl Inlyne {
                         if !over_text {
                             self.window.set_cursor_icon(CursorIcon::Default);
                         }
+                        click_scheduled = false;
                     }
                     WindowEvent::MouseInput {
                         state,
@@ -255,12 +264,29 @@ impl Inlyne {
                         ..
                     } => match state {
                         ElementState::Pressed => {
+                            self.renderer.selection = None;
+                            mouse_down = true;
                             click_scheduled = true;
+                            self.window.request_redraw();
                         }
                         ElementState::Released => {
+                            click_scheduled = false;
                             scrollbar_held = false;
+                            mouse_down = false;
                         }
                     },
+                    WindowEvent::ModifiersChanged(modifier_state) => modifiers = modifier_state,
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        if input.virtual_keycode == Some(VirtualKeyCode::C) {
+                            let copy = (cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl());
+                            if copy {
+                                self.clipboard
+                                    .set_contents(self.renderer.selection_text.trim().to_owned())
+                                    .unwrap()
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -296,7 +322,7 @@ struct TokenPrinter {
     is_small: bool,
     hidpi_scale: f32,
     theme: Theme,
-    eventloop_proxy: EventLoopProxy<InlyneEvent>,
+    window: Arc<Window>,
 }
 
 impl TokenPrinter {
@@ -320,6 +346,7 @@ impl TokenPrinter {
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);
+        self.window.request_redraw()
     }
 }
 impl TokenSink for TokenPrinter {
@@ -767,9 +794,7 @@ impl TokenSink for TokenPrinter {
             }
             EOFToken => {
                 self.push_element(self.current_textbox.clone().into());
-                self.eventloop_proxy
-                    .send_event(InlyneEvent::Redraw)
-                    .unwrap();
+                self.window.request_redraw();
             }
             _ => {}
         }
@@ -807,10 +832,10 @@ fn main() {
     let mut md_string = String::with_capacity(md_file_size as usize);
     md_file.read_to_string(&mut md_string).unwrap();
 
-    let eventloop_proxy = inlyne.event_loop.create_proxy();
     let theme = inlyne.renderer.theme.clone();
     let element_queue_clone = inlyne.element_queue.clone();
     let hidpi_scale = inlyne.window.scale_factor() as f32;
+    let window_clone = inlyne.window.clone();
     std::thread::spawn(move || {
         let sink = TokenPrinter {
             current_textbox: TextBox::new(Vec::new(), hidpi_scale, &theme),
@@ -832,8 +857,8 @@ fn main() {
             is_small: false,
             hidpi_scale,
             theme,
-            eventloop_proxy,
             element_queue: element_queue_clone,
+            window: window_clone,
         };
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();

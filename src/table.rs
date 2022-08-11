@@ -6,6 +6,7 @@ use crate::{text::TextBox, utils::Rect};
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
 
+#[derive(Default)]
 pub struct Table {
     pub headers: Vec<TextBox>,
     pub rows: Vec<Vec<TextBox>>,
@@ -13,10 +14,7 @@ pub struct Table {
 
 impl Table {
     pub fn new() -> Table {
-        Table {
-            headers: Vec::new(),
-            rows: Vec::new(),
-        }
+        Table::default()
     }
 
     pub fn hovering_over<T: GlyphCruncher>(

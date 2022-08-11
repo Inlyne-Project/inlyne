@@ -4,7 +4,7 @@ use crate::{
 };
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
-    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section,
+    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
 };
 use winit::window::CursorIcon;
 
@@ -28,7 +28,7 @@ impl TextBox {
             is_code_block: false,
             align: Align::Left,
             hidpi_scale,
-            default_text_color: theme.text_color.clone(),
+            default_text_color: theme.text_color,
         }
     }
 
@@ -63,7 +63,7 @@ impl TextBox {
         bounds: (f32, f32),
         click: bool,
     ) -> CursorIcon {
-        let fonts: Vec<FontArc> = glyph_brush.fonts().iter().map(|f| f.clone()).collect();
+        let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
         for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
             let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
@@ -80,6 +80,21 @@ impl TextBox {
             }
         }
         CursorIcon::Default
+    }
+
+    pub fn glyph_bounds<T: GlyphCruncher>(
+        &self,
+        glyph_brush: &mut T,
+        screen_position: (f32, f32),
+        bounds: (f32, f32),
+    ) -> Vec<(Rect, SectionGlyph)> {
+        let mut glyph_bounds = Vec::new();
+        let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
+        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
+            let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
+            glyph_bounds.push((bounds, glyph.clone()));
+        }
+        glyph_bounds
     }
 
     pub fn size<T: GlyphCruncher>(
@@ -99,11 +114,7 @@ impl TextBox {
         }
     }
 
-    pub fn glyph_section<'a>(
-        &'a self,
-        mut screen_position: (f32, f32),
-        bounds: (f32, f32),
-    ) -> Section {
+    pub fn glyph_section(&self, mut screen_position: (f32, f32), bounds: (f32, f32)) -> Section {
         let texts = self.texts.iter().map(|t| t.wgpu_text()).collect();
 
         let horizontal_align = match self.align {
@@ -193,12 +204,10 @@ impl Text {
             } else {
                 base + 2
             }
+        } else if self.is_italic {
+            base + 1
         } else {
-            if self.is_italic {
-                base + 1
-            } else {
-                base
-            }
+            base
         };
         FontId(font)
     }
