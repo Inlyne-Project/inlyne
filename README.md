@@ -16,6 +16,10 @@ Except 9 times out of 10 you need an entire web browser to quickly open a file..
 Introducing **Inlyne**, a GPU powered yet browsless tool to help you quickly
 view markdown files in the blink of an eye.
 
+## Install
+
+To install just use `cargo install inlyne`, everything comes pre-bundled.
+
 ## Features
 
 Over time the features of this application will continue to grow. However there are a few
