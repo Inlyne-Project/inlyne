@@ -100,7 +100,7 @@ impl Image {
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
-            } else if let Ok(Ok(data)) = reqwest::blocking::get(url).map(|request| request.bytes())
+            } else if let Ok(data) = reqwest::blocking::get(url).and_then(|request| request.bytes())
             {
                 data.into()
             } else {
