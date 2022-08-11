@@ -313,74 +313,55 @@ impl Renderer {
                         indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
                         _prev_indice_num = self.lyon_buffer.indices.len() as u32;
                     }
-                    if let Some(mut selection) = self.selection {
-                        if selection.0 .1 > selection.1 .1 {
-                            std::mem::swap(&mut selection.0, &mut selection.1);
-                        }
-                        let rect = element.bounds.as_ref().unwrap();
-                        if rect.contains(selection.0) {
-                            for (glyph_bounds, glyph) in
-                                text_box.glyph_bounds(&mut self.glyph_brush, *pos, bounds)
-                            {
-                                if (glyph_bounds.pos.1 >= selection.0 .1
-                                    && glyph_bounds.max.1 <= selection.1 .1)
-                                    || (glyph_bounds.max.1 <= selection.1 .1
-                                        && glyph_bounds.max.1 >= selection.0 .1
-                                        && glyph_bounds.max.0 >= selection.0 .0)
-                                    || (glyph_bounds.max.1 >= selection.1 .1
-                                        && glyph_bounds.pos.1 <= selection.0 .1
-                                        && glyph_bounds.pos.0 <= selection.0 .0.max(selection.1 .0)
-                                        && glyph_bounds.max.0 >= selection.0 .0.min(selection.1 .0))
-                                {
-                                    let min =
-                                        (glyph_bounds.pos.0, glyph_bounds.pos.1 - self.scroll_y);
-                                    let max =
-                                        (glyph_bounds.max.0, glyph_bounds.max.1 - self.scroll_y);
-                                    fill_tessellator
-                                        .tessellate_rectangle(
-                                            &Box2D::new(
-                                                Point2D::from(point(min.0, min.1, screen_size)),
-                                                Point2D::from(point(max.0, max.1, screen_size)),
-                                            ),
-                                            &FillOptions::default(),
-                                            &mut BuffersBuilder::new(
-                                                &mut self.lyon_buffer,
-                                                |vertex: FillVertex| Vertex {
-                                                    pos: [
-                                                        vertex.position().x,
-                                                        vertex.position().y,
-                                                        0.0,
-                                                    ],
-                                                    color: self.theme.select_color,
-                                                },
-                                            ),
-                                        )
-                                        .unwrap();
-                                    indice_ranges.push(
-                                        _prev_indice_num..self.lyon_buffer.indices.len() as u32,
-                                    );
-                                    _prev_indice_num = self.lyon_buffer.indices.len() as u32;
-                                    if let Some(char) = text_box.texts[glyph.section_index]
-                                        .text
-                                        .chars()
-                                        .nth(glyph.byte_index)
-                                    {
-                                        self.selection_text.push(char);
-                                    }
-                                }
-                            }
-                            self.selection_text.push('\n');
-                        }
-                        if rect.pos.1 >= selection.0 .1.min(selection.1 .1)
-                            && rect.max.1 <= selection.0 .1.max(selection.1 .1)
-                        {
-                            let min = scrolled_pos;
-                            let max = (scrolled_pos.0 + size.0, scrolled_pos.1 + size.1);
+                    if let Some(ref lines) =
+                        text_box.render_lines(&mut self.glyph_brush, scrolled_pos, bounds)
+                    {
+                        for line in lines {
+                            let min = line.0;
+                            let max = (line.1 .0, line.1 .1 + 2.);
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
                                         Point2D::from(point(min.0, min.1, screen_size)),
                                         Point2D::from(point(max.0, max.1, screen_size)),
+                                    ),
+                                    &FillOptions::default(),
+                                    &mut BuffersBuilder::new(
+                                        &mut self.lyon_buffer,
+                                        |vertex: FillVertex| Vertex {
+                                            pos: [vertex.position().x, vertex.position().y, 0.0],
+                                            color: self.theme.text_color,
+                                        },
+                                    ),
+                                )
+                                .unwrap();
+                            indice_ranges
+                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                        }
+                    }
+                    if let Some(selection) = self.selection {
+                        let (selection_rects, selection_text) = text_box.render_selection(
+                            &mut self.glyph_brush,
+                            *pos,
+                            bounds,
+                            selection,
+                        );
+                        self.selection_text.push_str(&selection_text);
+                        for rect in selection_rects {
+                            fill_tessellator
+                                .tessellate_rectangle(
+                                    &Box2D::new(
+                                        Point2D::from(point(
+                                            rect.pos.0,
+                                            rect.pos.1 - self.scroll_y,
+                                            screen_size,
+                                        )),
+                                        Point2D::from(point(
+                                            rect.max.0,
+                                            rect.max.1 - self.scroll_y,
+                                            screen_size,
+                                        )),
                                     ),
                                     &FillOptions::default(),
                                     &mut BuffersBuilder::new(
@@ -395,59 +376,6 @@ impl Renderer {
                             indice_ranges
                                 .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
                             _prev_indice_num = self.lyon_buffer.indices.len() as u32;
-                            for text in &text_box.texts {
-                                self.selection_text.push_str(&text.text);
-                            }
-                            self.selection_text.push('\n');
-                        }
-                        if rect.contains(selection.1) {
-                            for (glyph_bounds, glyph) in
-                                text_box.glyph_bounds(&mut self.glyph_brush, *pos, bounds)
-                            {
-                                if (glyph_bounds.pos.1 >= selection.0 .1
-                                    && glyph_bounds.max.1 <= selection.1 .1)
-                                    || (glyph_bounds.pos.1 <= selection.1 .1
-                                        && glyph_bounds.pos.1 >= selection.0 .1
-                                        && glyph_bounds.pos.0 <= selection.1 .0)
-                                {
-                                    let min =
-                                        (glyph_bounds.pos.0, glyph_bounds.pos.1 - self.scroll_y);
-                                    let max =
-                                        (glyph_bounds.max.0, glyph_bounds.max.1 - self.scroll_y);
-                                    fill_tessellator
-                                        .tessellate_rectangle(
-                                            &Box2D::new(
-                                                Point2D::from(point(min.0, min.1, screen_size)),
-                                                Point2D::from(point(max.0, max.1, screen_size)),
-                                            ),
-                                            &FillOptions::default(),
-                                            &mut BuffersBuilder::new(
-                                                &mut self.lyon_buffer,
-                                                |vertex: FillVertex| Vertex {
-                                                    pos: [
-                                                        vertex.position().x,
-                                                        vertex.position().y,
-                                                        0.0,
-                                                    ],
-                                                    color: self.theme.select_color,
-                                                },
-                                            ),
-                                        )
-                                        .unwrap();
-                                    indice_ranges.push(
-                                        _prev_indice_num..self.lyon_buffer.indices.len() as u32,
-                                    );
-                                    _prev_indice_num = self.lyon_buffer.indices.len() as u32;
-                                    if let Some(char) = text_box.texts[glyph.section_index]
-                                        .text
-                                        .chars()
-                                        .nth(glyph.byte_index)
-                                    {
-                                        self.selection_text.push(char);
-                                    }
-                                }
-                            }
-                            self.selection_text.push('\n');
                         }
                     }
                 }
@@ -472,6 +400,48 @@ impl Renderer {
                         let bounds = (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
                         self.glyph_brush
                             .queue(&text_box.glyph_section((pos.0 + x, pos.1 + y), bounds));
+                        if let Some(selection) = self.selection {
+                            let (selection_rects, selection_text) = text_box.render_selection(
+                                &mut self.glyph_brush,
+                                (pos.0 + x, pos.1 + y),
+                                bounds,
+                                selection,
+                            );
+                            self.selection_text.push_str(&selection_text);
+                            for rect in selection_rects {
+                                fill_tessellator
+                                    .tessellate_rectangle(
+                                        &Box2D::new(
+                                            Point2D::from(point(
+                                                rect.pos.0,
+                                                rect.pos.1 - self.scroll_y,
+                                                screen_size,
+                                            )),
+                                            Point2D::from(point(
+                                                rect.max.0,
+                                                rect.max.1 - self.scroll_y,
+                                                screen_size,
+                                            )),
+                                        ),
+                                        &FillOptions::default(),
+                                        &mut BuffersBuilder::new(
+                                            &mut self.lyon_buffer,
+                                            |vertex: FillVertex| Vertex {
+                                                pos: [
+                                                    vertex.position().x,
+                                                    vertex.position().y,
+                                                    0.0,
+                                                ],
+                                                color: self.theme.select_color,
+                                            },
+                                        ),
+                                    )
+                                    .unwrap();
+                                indice_ranges
+                                    .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                                _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                            }
+                        }
                         x += width + TABLE_COL_GAP;
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
@@ -509,6 +479,53 @@ impl Renderer {
                                     self.glyph_brush.queue(
                                         &text_box.glyph_section((pos.0 + x, pos.1 + y), bounds),
                                     );
+
+                                    if let Some(selection) = self.selection {
+                                        let (selection_rects, selection_text) = text_box
+                                            .render_selection(
+                                                &mut self.glyph_brush,
+                                                (pos.0 + x, pos.1 + y),
+                                                bounds,
+                                                selection,
+                                            );
+                                        self.selection_text.push_str(&selection_text);
+                                        for rect in selection_rects {
+                                            fill_tessellator
+                                                .tessellate_rectangle(
+                                                    &Box2D::new(
+                                                        Point2D::from(point(
+                                                            rect.pos.0,
+                                                            rect.pos.1 - self.scroll_y,
+                                                            screen_size,
+                                                        )),
+                                                        Point2D::from(point(
+                                                            rect.max.0,
+                                                            rect.max.1 - self.scroll_y,
+                                                            screen_size,
+                                                        )),
+                                                    ),
+                                                    &FillOptions::default(),
+                                                    &mut BuffersBuilder::new(
+                                                        &mut self.lyon_buffer,
+                                                        |vertex: FillVertex| Vertex {
+                                                            pos: [
+                                                                vertex.position().x,
+                                                                vertex.position().y,
+                                                                0.0,
+                                                            ],
+                                                            color: self.theme.select_color,
+                                                        },
+                                                    ),
+                                                )
+                                                .unwrap();
+                                            indice_ranges.push(
+                                                _prev_indice_num
+                                                    ..self.lyon_buffer.indices.len() as u32,
+                                            );
+                                            _prev_indice_num =
+                                                self.lyon_buffer.indices.len() as u32;
+                                        }
+                                    }
                                 }
                             }
                             x += width + TABLE_COL_GAP;

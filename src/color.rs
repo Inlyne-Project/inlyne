@@ -28,7 +28,7 @@ pub const DARK_DEFAULT: Theme = Theme {
         b: 0.0086,
         a: 1.0,
     },
-    code_color: [0.5841, 0.6376, 0.6939, 1.0],
+    code_color: [1., 0.0578, 0.9331, 1.0],
     code_block_color: [0.0080 * 1.5, 0.0110 * 1.5, 0.0156 * 1.5, 1.0],
     link_color: [0.0976, 0.3813, 1.0, 1.0],
     select_color: [0.17, 0.22, 0.3, 1.0],

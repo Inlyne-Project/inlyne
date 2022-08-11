@@ -178,9 +178,9 @@ impl Inlyne {
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                                        if click_scheduled {
-                                            self.renderer.selection = Some((loc, loc));
-                                        }
+                        if click_scheduled {
+                            self.renderer.selection = Some((loc, loc));
+                        }
                         for element in self.renderer.elements.iter() {
                             if element.contains(loc) {
                                 match element.deref() {
@@ -311,6 +311,8 @@ struct TokenPrinter {
     list_type: Option<ListType>,
     is_bold: bool,
     is_italic: bool,
+    is_underlined: bool,
+    is_striked: bool,
     is_pre_formated: bool,
     global_indent: f32,
     align: Option<Align>,
@@ -383,6 +385,8 @@ impl TokenSink for TokenPrinter {
                         "br" => {
                             self.push_current_textbox();
                         }
+                        "ins" | "u" => self.is_underlined = true,
+                        "del" | "s" => self.is_striked = true,
                         "img" => {
                             let attrs = tag.attrs;
                             let mut local_align = None;
@@ -490,6 +494,7 @@ impl TokenSink for TokenPrinter {
                                         _ => {}
                                     }
                                 }
+                                self.is_underlined = true;
                             }
                             self.push_current_textbox();
                             self.push_spacer();
@@ -657,6 +662,8 @@ impl TokenSink for TokenPrinter {
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
+                        "ins" | "u" => self.is_underlined = false,
+                        "del" | "s" => self.is_striked = false,
                         "small" => self.is_small = false,
                         "th" => {
                             let table_header = self.is_table_header.take().unwrap();
@@ -687,7 +694,15 @@ impl TokenSink for TokenPrinter {
                         }
                         "em" | "i" => self.is_italic = false,
                         "strong" | "bold" => self.is_bold = false,
-                        "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
+                        "h1" => {
+                            self.push_current_textbox();
+                            self.push_spacer();
+                            self.is_header = None;
+                            self.align = None;
+                            self.text_align = None;
+                            self.is_underlined = false;
+                        }
+                        "h2" | "h3" | "h4" | "h5" | "h6" => {
                             self.push_current_textbox();
                             self.push_spacer();
                             self.is_header = None;
@@ -773,12 +788,11 @@ impl TokenSink for TokenPrinter {
                             }
                             self.is_list_item = false;
                         }
-                        if self.is_bold {
-                            text = text.make_bold(true);
-                        }
-                        if self.is_italic {
-                            text = text.make_italic(true);
-                        }
+                        text = text
+                            .make_bold(self.is_bold)
+                            .make_italic(self.is_italic)
+                            .make_underlined(self.is_underlined)
+                            .make_striked(self.is_striked);
                         if self.is_small {
                             text = text.with_size(12.);
                         }
@@ -845,6 +859,8 @@ fn main() {
             is_list_item: false,
             is_bold: false,
             is_italic: false,
+            is_underlined: false,
+            is_striked: false,
             is_pre_formated: false,
             list_type: None,
             global_indent: 0.,

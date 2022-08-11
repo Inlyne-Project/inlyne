@@ -136,9 +136,109 @@ impl TextBox {
                 .with_layout(Layout::default().h_align(horizontal_align))
         }
     }
+
+    pub fn render_lines<T: GlyphCruncher>(
+        &self,
+        glyph_brush: &mut T,
+        screen_position: (f32, f32),
+        bounds: (f32, f32),
+    ) -> Option<Vec<((f32, f32), (f32, f32))>> {
+        let mut has_lines = false;
+        for text in &self.texts {
+            if text.is_striked || text.is_underlined {
+                has_lines = true;
+                break;
+            }
+        }
+        if !has_lines {
+            return None;
+        }
+        let mut lines = Vec::new();
+        for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+            if self.texts[glyph.section_index].is_underlined {
+                lines.push(((glyph_bounds.pos.0, glyph_bounds.max.1), glyph_bounds.max));
+            }
+            if self.texts[glyph.section_index].is_striked {
+                let mid_height = glyph_bounds.pos.1 + glyph_bounds.size.1 / 2.;
+                lines.push((
+                    (glyph_bounds.pos.0, mid_height),
+                    (glyph_bounds.max.0, mid_height),
+                ));
+            }
+        }
+
+        Some(lines)
+    }
+
+    pub fn render_selection<T: GlyphCruncher>(
+        &self,
+        glyph_brush: &mut T,
+        screen_position: (f32, f32),
+        bounds: (f32, f32),
+        mut selection: ((f32, f32), (f32, f32)),
+    ) -> (Vec<Rect>, String) {
+        let mut selection_rects = Vec::new();
+        let mut selection_text = String::new();
+        if selection.0 .1 > selection.1 .1 {
+            std::mem::swap(&mut selection.0, &mut selection.1);
+        }
+        let rect = Rect::new(screen_position, bounds);
+        if rect.contains(selection.0) {
+            for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
+                    || (glyph_bounds.max.1 <= selection.1 .1
+                        && glyph_bounds.max.1 >= selection.0 .1
+                        && glyph_bounds.max.0 >= selection.0 .0)
+                    || (glyph_bounds.max.1 >= selection.1 .1
+                        && glyph_bounds.pos.1 <= selection.0 .1
+                        && glyph_bounds.pos.0 <= selection.0 .0.max(selection.1 .0)
+                        && glyph_bounds.max.0 >= selection.0 .0.min(selection.1 .0))
+                {
+                    selection_rects.push(glyph_bounds);
+                    if let Some(char) = self.texts[glyph.section_index]
+                        .text
+                        .chars()
+                        .nth(glyph.byte_index)
+                    {
+                        selection_text.push(char);
+                    }
+                }
+            }
+            selection_text.push('\n');
+        }
+        if rect.pos.1 >= selection.0 .1.min(selection.1 .1)
+            && rect.max.1 <= selection.0 .1.max(selection.1 .1)
+        {
+            selection_rects.push(rect.clone());
+            for text in &self.texts {
+                selection_text.push_str(&text.text);
+            }
+            selection_text.push('\n');
+        }
+        if rect.contains(selection.1) {
+            for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
+                    || (glyph_bounds.pos.1 <= selection.1 .1
+                        && glyph_bounds.pos.1 >= selection.0 .1
+                        && glyph_bounds.pos.0 <= selection.1 .0)
+                {
+                    selection_rects.push(glyph_bounds);
+                    if let Some(char) = self.texts[glyph.section_index]
+                        .text
+                        .chars()
+                        .nth(glyph.byte_index)
+                    {
+                        selection_text.push(char);
+                    }
+                }
+            }
+            selection_text.push('\n');
+        }
+        (selection_rects, selection_text)
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Text {
     pub text: String,
     pub size: f32,
@@ -146,6 +246,8 @@ pub struct Text {
     pub link: Option<String>,
     pub is_bold: bool,
     pub is_italic: bool,
+    pub is_underlined: bool,
+    pub is_striked: bool,
     pub font: usize,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
@@ -156,13 +258,9 @@ impl Text {
         Self {
             text,
             size: 16.,
-            color: None,
-            link: None,
-            is_bold: false,
-            is_italic: false,
-            font: 0,
             hidpi_scale,
             default_color: default_text_color,
+            ..Default::default()
         }
     }
 
@@ -188,6 +286,16 @@ impl Text {
 
     pub fn make_italic(mut self, italic: bool) -> Self {
         self.is_italic = italic;
+        self
+    }
+
+    pub fn make_underlined(mut self, underlined: bool) -> Self {
+        self.is_underlined = underlined;
+        self
+    }
+
+    pub fn make_striked(mut self, striked: bool) -> Self {
+        self.is_striked = striked;
         self
     }
 
