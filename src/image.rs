@@ -26,6 +26,7 @@ pub struct Image {
     pub size: Option<ImageSize>,
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
     pub is_link: Option<String>,
+    pub hidpi_scale: f32,
 }
 
 impl Image {
@@ -90,7 +91,7 @@ impl Image {
         }
     }
 
-    pub fn from_url(url: String) -> Image {
+    pub fn from_url(url: String, hidpi_scale: f32) -> Image {
         let image = Arc::new(Mutex::new(None));
         let callback = Arc::new(Mutex::new(None::<EventLoopProxy<InlyneEvent>>));
         let image_clone = image.clone();
@@ -115,11 +116,14 @@ impl Image {
                 opt.fontdb.load_system_fonts();
                 if let Ok(rtree) = usvg::Tree::from_data(&image_data, &opt.to_ref()) {
                     let pixmap_size = rtree.svg_node().size.to_screen_size();
-                    let mut pixmap =
-                        tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+                    let mut pixmap = tiny_skia::Pixmap::new(
+                        (pixmap_size.width() as f32 * hidpi_scale) as u32,
+                        (pixmap_size.height() as f32 * hidpi_scale) as u32,
+                    )
+                    .unwrap();
                     resvg::render(
                         &rtree,
-                        usvg::FitTo::Original,
+                        usvg::FitTo::Zoom(hidpi_scale),
                         tiny_skia::Transform::default(),
                         pixmap.as_mut(),
                     )
@@ -143,6 +147,7 @@ impl Image {
             size: None,
             bind_group: None,
             is_link: None,
+            hidpi_scale,
         }
     }
 
@@ -187,11 +192,11 @@ impl Image {
             (0, 0)
         }
     }
-    pub fn dimensions(&self, hidpi_scale: f32, screen_size: (f32, f32)) -> (u32, u32) {
+    pub fn dimensions(&self, screen_size: (f32, f32)) -> (u32, u32) {
         let buffer_size = self.buffer_dimensions();
         let buffer_size = (
-            buffer_size.0 as f32 * hidpi_scale,
-            buffer_size.1 as f32 * hidpi_scale,
+            buffer_size.0 as f32 * self.hidpi_scale,
+            buffer_size.1 as f32 * self.hidpi_scale,
         );
         let max_width = screen_size.0 - 2. * DEFAULT_MARGIN;
         if let Some(dimensions) = self
@@ -200,8 +205,8 @@ impl Image {
             .map(|image_size| self.dimensions_from_image_size(image_size))
         {
             let target_dimensions = (
-                (dimensions.0 as f32 * hidpi_scale) as u32,
-                (dimensions.1 as f32 * hidpi_scale) as u32,
+                (dimensions.0 as f32 * self.hidpi_scale) as u32,
+                (dimensions.1 as f32 * self.hidpi_scale) as u32,
             );
             if target_dimensions.0 > max_width as u32 {
                 (
@@ -211,7 +216,7 @@ impl Image {
             } else {
                 target_dimensions
             }
-        } else if buffer_size.0 * hidpi_scale > max_width {
+        } else if buffer_size.0 > max_width {
             (
                 max_width as u32,
                 ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
@@ -221,8 +226,8 @@ impl Image {
         }
     }
 
-    pub fn size(&self, hidpi_scale: f32, screen_size: (f32, f32)) -> (f32, f32) {
-        let dimensions = self.dimensions(hidpi_scale, screen_size);
+    pub fn size(&self, screen_size: (f32, f32)) -> (f32, f32) {
+        let dimensions = self.dimensions(screen_size);
         (dimensions.0 as f32, dimensions.1 as f32)
     }
 }

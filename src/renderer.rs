@@ -716,7 +716,7 @@ impl Renderer {
             }
             Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
             Element::Image(image) => {
-                let size = image.size(self.hidpi_scale, screen_size);
+                let size = image.size(screen_size);
                 match image.is_aligned {
                     Some(Align::Center) => Rect::new(
                         (screen_size.0 / 2. - size.0 / 2., self.reserved_height),

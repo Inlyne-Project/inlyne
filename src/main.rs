@@ -426,8 +426,11 @@ impl TokenSink for TokenPrinter {
                             for attr in attrs {
                                 if attr.name.local == local_name!("src") {
                                     let align = self.align.as_ref().unwrap_or(&Align::Left);
-                                    let mut image = Image::from_url(attr.value.to_string())
-                                        .with_align(local_align.unwrap_or_else(|| align.clone()));
+                                    let mut image =
+                                        Image::from_url(attr.value.to_string(), self.hidpi_scale)
+                                            .with_align(
+                                                local_align.unwrap_or_else(|| align.clone()),
+                                            );
                                     if let Some(ref link) = self.is_link {
                                         image.set_link(link.clone())
                                     }
