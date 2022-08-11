@@ -498,8 +498,8 @@ impl TokenSink for TokenPrinter {
                                         _ => {}
                                     }
                                 }
-                                self.is_underlined = true;
                             }
+                            self.is_underlined = true;
                             self.push_current_textbox();
                             self.push_spacer();
                             self.is_header = Some(Header(32.));
