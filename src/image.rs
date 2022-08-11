@@ -19,8 +19,13 @@ pub enum ImageSize {
     FullSize((u32, u32)),
 }
 
+struct ImageData {
+    rgba_image: RgbaImage,
+    scale: bool,
+}
+
 pub struct Image {
-    image: Arc<Mutex<Option<RgbaImage>>>,
+    image: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,
     callback: Arc<Mutex<Option<EventLoopProxy<InlyneEvent>>>>,
     pub size: Option<ImageSize>,
@@ -62,7 +67,7 @@ impl Image {
                     aspect: wgpu::TextureAspect::All,
                 },
                 // The actual pixel data
-                image_data,
+                &image_data.rgba_image,
                 // The layout of the texture
                 wgpu::ImageDataLayout {
                     offset: 0,
@@ -110,7 +115,10 @@ impl Image {
             };
 
             if let Ok(image) = image::load_from_memory(&image_data) {
-                *(image_clone.lock().unwrap()) = Some(image.to_rgba8());
+                *(image_clone.lock().unwrap()) = Some(ImageData {
+                    rgba_image: image.to_rgba8(),
+                    scale: true,
+                });
             } else {
                 let mut opt = usvg::Options::default();
                 opt.fontdb.load_system_fonts();
@@ -128,11 +136,15 @@ impl Image {
                         pixmap.as_mut(),
                     )
                     .unwrap();
-                    *(image_clone.lock().unwrap()) = ImageBuffer::from_raw(
-                        pixmap.width(),
-                        pixmap.height(),
-                        pixmap.data().into(),
-                    );
+                    *(image_clone.lock().unwrap()) = Some(ImageData {
+                        rgba_image: ImageBuffer::from_raw(
+                            pixmap.width(),
+                            pixmap.height(),
+                            pixmap.data().into(),
+                        )
+                        .unwrap(),
+                        scale: false,
+                    });
                 }
             }
             if let Ok(Some(callback)) = callback_clone.try_lock().as_deref() {
@@ -187,17 +199,20 @@ impl Image {
 
     pub fn buffer_dimensions(&self) -> (u32, u32) {
         if let Ok(Some(image)) = self.image.try_lock().as_deref() {
-            image.dimensions()
+            image.rgba_image.dimensions()
         } else {
             (0, 0)
         }
     }
     pub fn dimensions(&self, screen_size: (f32, f32)) -> (u32, u32) {
         let buffer_size = self.buffer_dimensions();
-        let buffer_size = (
-            buffer_size.0 as f32 * self.hidpi_scale,
-            buffer_size.1 as f32 * self.hidpi_scale,
-        );
+        let mut buffer_size = (buffer_size.0 as f32, buffer_size.1 as f32);
+        if let Ok(Some(image)) = self.image.try_lock().as_deref() {
+            if image.scale {
+                buffer_size.0 *= self.hidpi_scale;
+                buffer_size.1 *= self.hidpi_scale;
+            }
+        }
         let max_width = screen_size.0 - 2. * DEFAULT_MARGIN;
         if let Some(dimensions) = self
             .size
