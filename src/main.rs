@@ -220,13 +220,6 @@ impl Inlyne {
                                     _ => {}
                                 }
                             }
-                            if click_scheduled {
-                                self.renderer.selection = Some((loc, loc));
-                            }
-                            if let Some(ref mut selection) = self.renderer.selection && mouse_down {
-                                selection.1 = loc;
-                                self.window.request_redraw();
-                            }
                         }
                         if scrollbar_held
                             || (Rect::new(
@@ -250,6 +243,14 @@ impl Inlyne {
                             self.window.request_redraw();
                             if !scrollbar_held {
                                 scrollbar_held = true;
+                            }
+                        } else {
+                            if click_scheduled {
+                                self.renderer.selection = Some((loc, loc));
+                            }
+                            if let Some(ref mut selection) = self.renderer.selection && mouse_down {
+                                selection.1 = loc;
+                                self.window.request_redraw();
                             }
                         }
 
