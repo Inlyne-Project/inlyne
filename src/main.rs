@@ -248,9 +248,11 @@ impl Inlyne {
                             if click_scheduled {
                                 self.renderer.selection = Some((loc, loc));
                             }
-                            if let Some(ref mut selection) = self.renderer.selection && mouse_down {
-                                selection.1 = loc;
-                                self.window.request_redraw();
+                            if let Some(ref mut selection) = self.renderer.selection {
+                                if mouse_down {
+                                    selection.1 = loc;
+                                    self.window.request_redraw();
+                                }
                             }
                         }
 
