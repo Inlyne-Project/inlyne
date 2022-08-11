@@ -803,7 +803,7 @@ checksum = "122fa73a5566372f9df09768a16e8e3dad7ad18abe07835f1f0b71f84078ba4c"
 dependencies = [
  "fontconfig-parser",
  "log",
- "memmap2 0.5.5",
+ "memmap2 0.5.6",
  "ttf-parser",
 ]
 
@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "inlyne"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "bytemuck",
  "clap 3.2.16",
@@ -1495,9 +1495,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a79b39c93a7a5a27eeaf9a23b5ff43f1b9e0ad6b1cdd441140ae53c35613fc7"
+checksum = "8e2e4455be2010e8c5e77f0d10234b30f3a636a5305725609b5a71ad00d22577"
 dependencies = [
  "libc",
 ]
@@ -2640,7 +2640,7 @@ dependencies = [
  "dlib",
  "lazy_static",
  "log",
- "memmap2 0.5.5",
+ "memmap2 0.5.6",
  "nix 0.24.2",
  "pkg-config",
  "wayland-client",
