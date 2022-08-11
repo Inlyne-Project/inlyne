@@ -87,11 +87,11 @@ pub struct Inlyne {
 }
 
 impl Inlyne {
-    pub async fn new(theme: Theme) -> Self {
+    pub async fn new(theme: Theme, scale: Option<f32>) -> Self {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
-        let renderer = Renderer::new(&window, event_loop.create_proxy(), theme).await;
+        let renderer = Renderer::new(&window, event_loop.create_proxy(), theme, scale.unwrap_or(window.scale_factor() as f32)).await;
         let clipboard = ClipboardContext::new().unwrap();
 
         Self {
@@ -169,7 +169,24 @@ impl Inlyne {
                             }
                             self.window.request_redraw();
                         }
-                        _ => {}
+                        MouseScrollDelta::LineDelta(_, y_delta) => {
+                            {
+                                let screen_height = self.renderer.screen_height();
+                                if self.renderer.reserved_height > screen_height {
+                                    self.renderer.scroll_y -= y_delta;
+
+                                    if self.renderer.scroll_y.is_sign_negative() {
+                                        self.renderer.scroll_y = 0.;
+                                    } else if self.renderer.scroll_y
+                                        >= (self.renderer.reserved_height - screen_height)
+                                    {
+                                        self.renderer.scroll_y =
+                                            self.renderer.reserved_height - screen_height;
+                                    }
+                                }
+                            }
+                            self.window.request_redraw();
+                        }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
                         let mut over_link = false;
@@ -857,6 +874,9 @@ struct Args {
 
     #[clap(short, long, value_parser, default_value = "light")]
     theme: ThemeOption,
+
+    #[clap(short, long, value_parser)]
+    scale: Option<f32>,
 }
 
 fn main() {
@@ -865,7 +885,7 @@ fn main() {
         ThemeOption::Dark => color::DARK_DEFAULT,
         ThemeOption::Light => color::LIGHT_DEFAULT,
     };
-    let inlyne = pollster::block_on(Inlyne::new(theme));
+    let inlyne = pollster::block_on(Inlyne::new(theme, args.scale.clone()));
 
     let mut md_file = File::open(args.file_path.as_path()).unwrap();
     let md_file_size = std::fs::metadata(args.file_path.as_path()).unwrap().len();
@@ -874,7 +894,7 @@ fn main() {
 
     let theme = inlyne.renderer.theme.clone();
     let element_queue_clone = inlyne.element_queue.clone();
-    let hidpi_scale = inlyne.window.scale_factor() as f32;
+    let hidpi_scale = args.scale.unwrap_or(inlyne.window.scale_factor() as f32);
     let window_clone = inlyne.window.clone();
     std::thread::spawn(move || {
         let sink = TokenPrinter {

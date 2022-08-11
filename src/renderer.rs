@@ -91,6 +91,7 @@ impl Renderer {
         window: &Window,
         eventloop_proxy: EventLoopProxy<InlyneEvent>,
         theme: Theme,
+        hidpi_scale: f32,
     ) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
@@ -220,7 +221,7 @@ impl Renderer {
             scroll_y: 0.,
             lyon_buffer,
             reserved_height: DEFAULT_PADDING,
-            hidpi_scale: window.scale_factor() as f32,
+            hidpi_scale,
             image_renderer,
             eventloop_proxy,
             theme,
