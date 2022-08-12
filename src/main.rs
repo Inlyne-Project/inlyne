@@ -891,7 +891,7 @@ fn main() -> anyhow::Result<()> {
         ThemeOption::Light => color::LIGHT_DEFAULT,
     };
     let md_string = std::fs::read_to_string(&args.file_path)
-        .with_context(|| format!("Error reading file at {:?}", args.file_path))?;
+        .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
 
     let inlyne = pollster::block_on(Inlyne::new(theme, args.scale.clone()));
     let theme = inlyne.renderer.theme.clone();
