@@ -90,7 +90,13 @@ impl Inlyne {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
-        let renderer = Renderer::new(&window, event_loop.create_proxy(), theme, scale.unwrap_or(window.scale_factor() as f32)).await;
+        let renderer = Renderer::new(
+            &window,
+            event_loop.create_proxy(),
+            theme,
+            scale.unwrap_or(window.scale_factor() as f32),
+        )
+        .await;
         let clipboard = ClipboardContext::new().unwrap();
 
         Self {
@@ -885,7 +891,7 @@ fn main() -> anyhow::Result<()> {
         ThemeOption::Light => color::LIGHT_DEFAULT,
     };
     let md_string = std::fs::read_to_string(&args.file_path)
-        .with_context(|| format!("No file found at {:?}", args.file_path))?;
+        .with_context(|| format!("Error reading file at {:?}", args.file_path))?;
 
     let inlyne = pollster::block_on(Inlyne::new(theme, args.scale.clone()));
     let theme = inlyne.renderer.theme.clone();
