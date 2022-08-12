@@ -154,7 +154,9 @@ impl Inlyne {
                         let y_pixel_shift = match delta {
                             MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
                             // Arbitrarily pick x30 as the number of pixels to shift per line
-                            MouseScrollDelta::LineDelta(_, y_delta) => y_delta as f32 * 30.0,
+                            MouseScrollDelta::LineDelta(_, y_delta) => {
+                                y_delta as f32 * 32.0 * self.renderer.hidpi_scale
+                            }
                         };
 
                         let screen_height = self.renderer.screen_height();
