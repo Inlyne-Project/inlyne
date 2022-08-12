@@ -150,44 +150,28 @@ impl Inlyne {
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::MouseWheel { delta, .. } => match delta {
-                        MouseScrollDelta::PixelDelta(pos) => {
-                            {
-                                let screen_height = self.renderer.screen_height();
-                                if self.renderer.reserved_height > screen_height {
-                                    self.renderer.scroll_y -= pos.y as f32;
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        let y_pixel_shift = match delta {
+                            MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+                            // Arbitrarily pick x30 as the number of pixels to shift per line
+                            MouseScrollDelta::LineDelta(_, y_delta) => y_delta as f32 * 30.0,
+                        };
 
-                                    if self.renderer.scroll_y.is_sign_negative() {
-                                        self.renderer.scroll_y = 0.;
-                                    } else if self.renderer.scroll_y
-                                        >= (self.renderer.reserved_height - screen_height)
-                                    {
-                                        self.renderer.scroll_y =
-                                            self.renderer.reserved_height - screen_height;
-                                    }
-                                }
-                            }
-                            self.window.request_redraw();
-                        }
-                        MouseScrollDelta::LineDelta(_, y_delta) => {
-                            {
-                                let screen_height = self.renderer.screen_height();
-                                if self.renderer.reserved_height > screen_height {
-                                    self.renderer.scroll_y -= y_delta;
+                        let screen_height = self.renderer.screen_height();
+                        if self.renderer.reserved_height > screen_height {
+                            self.renderer.scroll_y -= y_pixel_shift;
 
-                                    if self.renderer.scroll_y.is_sign_negative() {
-                                        self.renderer.scroll_y = 0.;
-                                    } else if self.renderer.scroll_y
-                                        >= (self.renderer.reserved_height - screen_height)
-                                    {
-                                        self.renderer.scroll_y =
-                                            self.renderer.reserved_height - screen_height;
-                                    }
-                                }
+                            if self.renderer.scroll_y.is_sign_negative() {
+                                self.renderer.scroll_y = 0.;
+                            } else if self.renderer.scroll_y
+                                >= (self.renderer.reserved_height - screen_height)
+                            {
+                                self.renderer.scroll_y =
+                                    self.renderer.reserved_height - screen_height;
                             }
-                            self.window.request_redraw();
                         }
-                    },
+                        self.window.request_redraw();
+                    }
                     WindowEvent::CursorMoved { position, .. } => {
                         let mut over_link = false;
                         let screen_size = self.renderer.screen_size();
