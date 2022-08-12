@@ -26,6 +26,7 @@ copypasta = "0.8.1"
 resvg = { version = "0.23.0", features = ["text", "system-fonts", "memmap-fonts"] }
 usvg = "0.23.0"
 tiny-skia = "0.6.0"
+anyhow = "1.0.61"
 
 # Uncomment for profiling
 # [profile.release]

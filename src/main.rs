@@ -13,6 +13,7 @@ use color::Theme;
 use renderer::{Renderer, Spacer};
 use utils::{Align, Rect};
 
+use anyhow::Context;
 use comrak::{markdown_to_html, ComrakOptions};
 use copypasta::{ClipboardContext, ClipboardProvider};
 use html5ever::local_name;
@@ -32,8 +33,6 @@ use winit::{
 use Token::{CharacterTokens, EOFToken};
 
 use std::collections::VecDeque;
-use std::fs::File;
-use std::io::Read;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -91,7 +90,13 @@ impl Inlyne {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
-        let renderer = Renderer::new(&window, event_loop.create_proxy(), theme, scale.unwrap_or(window.scale_factor() as f32)).await;
+        let renderer = Renderer::new(
+            &window,
+            event_loop.create_proxy(),
+            theme,
+            scale.unwrap_or(window.scale_factor() as f32),
+        )
+        .await;
         let clipboard = ClipboardContext::new().unwrap();
 
         Self {
@@ -865,19 +870,16 @@ struct Args {
     scale: Option<f32>,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let theme = match args.theme {
         ThemeOption::Dark => color::DARK_DEFAULT,
         ThemeOption::Light => color::LIGHT_DEFAULT,
     };
+    let md_string = std::fs::read_to_string(&args.file_path)
+        .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
+
     let inlyne = pollster::block_on(Inlyne::new(theme, args.scale.clone()));
-
-    let mut md_file = File::open(args.file_path.as_path()).unwrap();
-    let md_file_size = std::fs::metadata(args.file_path.as_path()).unwrap().len();
-    let mut md_string = String::with_capacity(md_file_size as usize);
-    md_file.read_to_string(&mut md_string).unwrap();
-
     let theme = inlyne.renderer.theme.clone();
     let element_queue_clone = inlyne.element_queue.clone();
     let hidpi_scale = args.scale.unwrap_or(inlyne.window.scale_factor() as f32);
@@ -929,4 +931,6 @@ fn main() {
         tok.end();
     });
     inlyne.run();
+
+    Ok(())
 }
