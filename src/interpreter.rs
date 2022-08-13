@@ -1,3 +1,4 @@
+use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
 use crate::image::ImageSize;
 use crate::table::Table;
@@ -8,7 +9,7 @@ use crate::text::{Text, TextBox};
 use crate::utils::Align;
 use crate::Element;
 
-use comrak::{markdown_to_html, ComrakOptions};
+use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use html5ever::local_name;
 use html5ever::tendril::*;
 use html5ever::tokenizer::BufferQueue;
@@ -16,6 +17,7 @@ use html5ever::tokenizer::TagKind;
 use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
+use html5ever::Attribute;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
 
@@ -97,6 +99,7 @@ struct State {
     global_indent: f32,
     element_stack: Vec<html::Element>,
     text_options: html::TextOptions,
+    span_color: [f32; 4],
 }
 
 pub struct HtmlInterpreter {
@@ -119,9 +122,12 @@ impl HtmlInterpreter {
             window,
             element_queue,
             current_textbox: TextBox::new(Vec::new(), hidpi_scale, &theme),
-            theme,
             hidpi_scale,
-            state: State::default(),
+            state: State {
+                span_color: theme.code_color,
+                ..Default::default()
+            },
+            theme,
         }
     }
 
@@ -132,7 +138,12 @@ impl HtmlInterpreter {
         options.extension.strikethrough = true;
         options.parse.smart = true;
         options.render.unsafe_ = true;
-        let htmlified = markdown_to_html(md_string, &options);
+
+        let mut plugins = comrak::ComrakPlugins::default();
+        let adapter = comrak::plugins::syntect::SyntectAdapter::new(self.theme.code_highlighter);
+        plugins.render.codefence_syntax_highlighter = Some(&adapter);
+
+        let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);
 
         input.push_back(
             Tendril::from_str(&htmlified)
@@ -352,6 +363,23 @@ impl TokenSink for HtmlInterpreter {
                                 .element_stack
                                 .push(html::Element::TableRow(Vec::new()));
                         }
+                        // HACK: spans are only supported enough to get syntax highlighting in code
+                        // blocks working
+                        "span" => {
+                            if let Some(Attribute { name, value }) = tag.attrs.get(0) {
+                                if &name.local == "style" {
+                                    let styles = value.to_string();
+                                    if let Some(hex_str) = styles
+                                        .split(';')
+                                        .find_map(|style| style.strip_prefix("color:#"))
+                                    {
+                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
+                                            self.state.span_color = hex_to_linear_rgba(hex);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
@@ -439,14 +467,22 @@ impl TokenSink for HtmlInterpreter {
                             self.state.text_options.pre_formatted -= 1;
                             self.current_textbox.set_code_block(false);
                         }
+                        "span" => self.state.span_color = self.theme.code_color,
                         _ => {}
                     },
                 }
             }
             CharacterTokens(str) => {
                 let str = str.to_string();
-                if str == "\n" && self.state.text_options.pre_formatted == 0 {
-                    if !self.current_textbox.texts.is_empty() {
+                if str == "\n" {
+                    if self.state.text_options.pre_formatted >= 1 {
+                        if !self.current_textbox.texts.is_empty() {
+                            self.push_element(self.current_textbox.clone().into());
+                            self.current_textbox.texts.clear();
+                        } else {
+                            self.push_element(self.current_textbox.clone().with_padding(18.).into())
+                        }
+                    } else if !self.current_textbox.texts.is_empty() {
                         self.current_textbox.texts.push(Text::new(
                             " ".to_string(),
                             self.hidpi_scale,
@@ -497,7 +533,7 @@ impl TokenSink for HtmlInterpreter {
                     }
                     if self.state.text_options.code >= 1 {
                         text = text
-                            .with_color(self.theme.code_color)
+                            .with_color(self.state.span_color)
                             .with_font(1)
                             .with_size(18.)
                     }

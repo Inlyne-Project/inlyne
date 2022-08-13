@@ -18,6 +18,7 @@ pub struct TextBox {
     pub align: Align,
     pub hidpi_scale: f32,
     pub default_text_color: [f32; 4],
+    pub padding_height: f32,
 }
 
 impl TextBox {
@@ -29,6 +30,7 @@ impl TextBox {
             align: Align::Left,
             hidpi_scale,
             default_text_color: theme.text_color,
+            padding_height: 0.,
         }
     }
 
@@ -43,6 +45,11 @@ impl TextBox {
 
     pub fn with_indent(mut self, indent: f32) -> Self {
         self.indent = indent;
+        self
+    }
+
+    pub fn with_padding(mut self, padding_height: f32) -> Self {
+        self.padding_height = padding_height;
         self
     }
 
@@ -104,13 +111,14 @@ impl TextBox {
         bounds: (f32, f32),
     ) -> (f32, f32) {
         if self.texts.is_empty() {
-            return (0., 0.);
+            return (0., self.padding_height);
         }
+
         if let Some(bounds) = glyph_brush.glyph_bounds(&self.glyph_section(screen_position, bounds))
         {
-            (bounds.width(), bounds.height())
+            (bounds.width(), bounds.height() + self.padding_height)
         } else {
-            (0., 0.)
+            (0., self.padding_height)
         }
     }
 
