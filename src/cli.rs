@@ -155,8 +155,11 @@ mod tests {
 
     #[test]
     fn debug_assert() {
-        command("1.5", ThemeType::Dark).debug_assert();
-        command("Window's scale factor", ThemeType::Dark).debug_assert();
+        command(
+            "Factor to scale rendered file by [default: Window's scale factor]",
+            ThemeType::Dark,
+        )
+        .debug_assert();
     }
 
     #[test]
