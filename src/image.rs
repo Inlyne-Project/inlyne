@@ -121,7 +121,7 @@ impl Image {
                     .read_to_end(&mut bytes)?;
                 Ok(bytes)
             }) {
-                data.into()
+                data
             } else {
                 return;
             };

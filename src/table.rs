@@ -6,7 +6,7 @@ use crate::{text::TextBox, utils::Rect};
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Table {
     pub headers: Vec<TextBox>,
     pub rows: Vec<Vec<TextBox>>,
