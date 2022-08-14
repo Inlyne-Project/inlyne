@@ -107,8 +107,18 @@ impl Image {
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
-            } else if let Ok(data) = reqwest::blocking::get(url).and_then(|request| request.bytes())
-            {
+            } else if let Ok(data) = ureq::get(&url).call().and_then(|resp| {
+                // Limit the length to 20 MiB to avoid malicious servers causing OOM
+                const MAX_SIZE: usize = 20 * 1_024 * 1_024;
+
+                let initial_capacity = resp
+                    .header("Content-Length")
+                    .and_then(|len| len.parse().ok())
+                    .unwrap_or(1_024);
+                let mut bytes = Vec::with_capacity(std::cmp::min(initial_capacity, MAX_SIZE));
+                resp.into_reader().take(MAX_SIZE).read_to_end(&mut bytes)?;
+                Ok(bytes)
+            }) {
                 data.into()
             } else {
                 return;
