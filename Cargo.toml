@@ -21,12 +21,15 @@ open = "3.0.2"
 html5ever = "0.26.0"
 image = "0.24.3"
 reqwest = { version = "0.11.11", features = ["blocking"] }
-clap = {version = "3.2.16", features = ["derive"] }
+clap = { version = "3.2.16", features = ["cargo"] }
 copypasta = "0.8.1"
 resvg = { version = "0.23.0", features = ["text", "system-fonts", "memmap-fonts"] }
 usvg = "0.23.0"
 tiny-skia = "0.6.0"
 anyhow = "1.0.61"
+dirs = "4.0.0"
+serde = { version = "1.0.143", features = ["derive"] }
+toml = "0.5.9"
 
 # Uncomment for profiling
 # [profile.release]

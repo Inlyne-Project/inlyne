@@ -10,7 +10,7 @@ pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
     [f(c >> 16), f(c >> 8), f(c), 1.0]
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     pub text_color: [f32; 4],
     pub clear_color: wgpu::Color,

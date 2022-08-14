@@ -1,0 +1,8 @@
+# A different scale factor can be specified
+# Default: The window's scale factor (system dependent)
+# scale = 1.5
+
+# The theme can be set as well
+# Default: "Light"
+# Possible values: ["Light", "Dark"]
+# theme = "Dark"

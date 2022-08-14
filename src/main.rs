@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod color;
 pub mod image;
 pub mod renderer;
@@ -5,6 +6,7 @@ pub mod table;
 pub mod text;
 pub mod utils;
 
+use crate::cli::Args;
 use crate::image::Image;
 use crate::image::ImageSize;
 use crate::table::Table;
@@ -34,7 +36,6 @@ use Token::{CharacterTokens, EOFToken};
 
 use std::collections::VecDeque;
 use std::ops::Deref;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -850,32 +851,9 @@ impl TokenSink for TokenPrinter {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum ThemeOption {
-    Dark,
-    Light,
-}
-
-use clap::Parser;
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(value_parser)]
-    file_path: PathBuf,
-
-    #[clap(short, long, value_parser, default_value = "light")]
-    theme: ThemeOption,
-
-    #[clap(short, long, value_parser)]
-    scale: Option<f32>,
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let theme = match args.theme {
-        ThemeOption::Dark => color::DARK_DEFAULT,
-        ThemeOption::Light => color::LIGHT_DEFAULT,
-    };
+    let theme = args.theme;
     let md_string = std::fs::read_to_string(&args.file_path)
         .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
 
