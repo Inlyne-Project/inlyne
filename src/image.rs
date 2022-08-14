@@ -116,7 +116,9 @@ impl Image {
                     .and_then(|len| len.parse().ok())
                     .unwrap_or(1_024);
                 let mut bytes = Vec::with_capacity(std::cmp::min(initial_capacity, MAX_SIZE));
-                resp.into_reader().take(MAX_SIZE).read_to_end(&mut bytes)?;
+                resp.into_reader()
+                    .take(MAX_SIZE as u64)
+                    .read_to_end(&mut bytes)?;
                 Ok(bytes)
             }) {
                 data.into()
