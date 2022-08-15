@@ -232,8 +232,8 @@ impl Inlyne {
                         }
                         if scrollbar_held
                             || (Rect::new(
-                                (screen_size.0 * (49. / 50.), 0.),
-                                (screen_size.0 * (1. / 50.), screen_size.1),
+                                (screen_size.0 - 25., 0.),
+                                (25., screen_size.1),
                             )
                             .contains(position.into())
                                 && click_scheduled)
