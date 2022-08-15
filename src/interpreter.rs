@@ -146,6 +146,7 @@ impl HtmlInterpreter {
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
         let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);
+        println!("{}", &htmlified);
 
         input.push_back(
             Tendril::from_str(&htmlified)
@@ -502,7 +503,7 @@ impl TokenSink for HtmlInterpreter {
                             self.push_element(self.current_textbox.clone().into());
                             self.current_textbox.texts.clear();
                         } else {
-                            self.push_element(self.current_textbox.clone().with_padding(18.).into())
+                            self.push_element(self.current_textbox.clone().with_padding(12.).into())
                         }
                     } else if !self.current_textbox.texts.is_empty() {
                         self.current_textbox.texts.push(Text::new(
