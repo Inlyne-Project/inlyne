@@ -305,8 +305,16 @@ impl Renderer {
                         fill_tessellator
                             .tessellate_rectangle(
                                 &Box2D::new(
-                                    Point2D::from(point(min.0, min.1, screen_size)),
-                                    Point2D::from(point(max.0, max.1, screen_size)),
+                                    Point2D::from(point(
+                                        min.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                        min.1,
+                                        screen_size,
+                                    )),
+                                    Point2D::from(point(
+                                        max.0.min(screen_size.0 - DEFAULT_MARGIN + 10.),
+                                        max.1,
+                                        screen_size,
+                                    )),
                                 ),
                                 &FillOptions::default(),
                                 &mut BuffersBuilder::new(
@@ -329,8 +337,16 @@ impl Renderer {
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
-                                        Point2D::from(point(min.0, min.1, screen_size)),
-                                        Point2D::from(point(max.0, max.1, screen_size)),
+                                        Point2D::from(point(
+                                            min.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                            min.1,
+                                            screen_size,
+                                        )),
+                                        Point2D::from(point(
+                                            max.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                            max.1,
+                                            screen_size,
+                                        )),
                                     ),
                                     &FillOptions::default(),
                                     &mut BuffersBuilder::new(
@@ -356,8 +372,16 @@ impl Renderer {
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
-                                        Point2D::from(point(min.0, min.1, screen_size)),
-                                        Point2D::from(point(max.0, max.1, screen_size)),
+                                        Point2D::from(point(
+                                            min.0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                                            min.1,
+                                            screen_size,
+                                        )),
+                                        Point2D::from(point(
+                                            max.0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                                            max.1,
+                                            screen_size,
+                                        )),
                                     ),
                                     &FillOptions::default(),
                                     &mut BuffersBuilder::new(
@@ -485,8 +509,18 @@ impl Renderer {
                         fill_tessellator
                             .tessellate_rectangle(
                                 &Box2D::new(
-                                    Point2D::from(point(min.0, min.1, screen_size)),
-                                    Point2D::from(point(max.0, max.1, screen_size)),
+                                    Point2D::from(point(
+                                        min.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                        min.1,
+                                        screen_size,
+                                    )),
+                                    Point2D::from(point(
+                                        max.0
+                                            .max(scrolled_pos.0)
+                                            .min(screen_size.0 - DEFAULT_MARGIN),
+                                        max.1,
+                                        screen_size,
+                                    )),
                                 ),
                                 &FillOptions::default(),
                                 &mut BuffersBuilder::new(
@@ -571,8 +605,18 @@ impl Renderer {
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
-                                        Point2D::from(point(min.0, min.1, screen_size)),
-                                        Point2D::from(point(max.0, max.1, screen_size)),
+                                        Point2D::from(point(
+                                            min.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                            min.1,
+                                            screen_size,
+                                        )),
+                                        Point2D::from(point(
+                                            max.0
+                                                .max(scrolled_pos.0)
+                                                .min(screen_size.0 - DEFAULT_MARGIN),
+                                            max.1,
+                                            screen_size,
+                                        )),
                                     ),
                                     &FillOptions::default(),
                                     &mut BuffersBuilder::new(

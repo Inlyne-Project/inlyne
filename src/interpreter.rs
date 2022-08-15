@@ -62,6 +62,7 @@ mod html {
         pub align: Option<Align>,
     }
 
+    #[derive(Debug)]
     pub enum ListType {
         Ordered(usize),
         Unordered,
@@ -510,7 +511,7 @@ impl TokenSink for HtmlInterpreter {
                             self.theme.text_color,
                         ));
                     }
-                } else {
+                } else if !str.trim().is_empty() || !self.current_textbox.texts.is_empty() {
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;
