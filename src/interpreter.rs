@@ -146,7 +146,6 @@ impl HtmlInterpreter {
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
         let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);
-        println!("{}", &htmlified);
 
         input.push_back(
             Tendril::from_str(&htmlified)
@@ -173,8 +172,8 @@ impl HtmlInterpreter {
             if !empty {
                 self.push_element(self.current_textbox.clone().into());
             }
-            self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale, &self.theme);
         }
+        self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale, &self.theme);
     }
     fn push_spacer(&mut self) {
         self.push_element(Spacer::new(10.).into());
