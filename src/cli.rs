@@ -71,7 +71,7 @@ pub struct Args {
     pub scale: Option<f32>,
 }
 
-fn command<'a>(scale_help: &'a str, default_theme: ThemeType) -> Command<'a> {
+fn command(scale_help: &str, default_theme: ThemeType) -> Command {
     let file_arg = Arg::new("file")
         .required(true)
         .takes_value(true)
