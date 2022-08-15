@@ -33,8 +33,9 @@ impl From<wgpu_glyph::ab_glyph::Rect> for Rect {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Align {
+    #[default]
     Left,
     Center,
     Right,

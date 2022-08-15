@@ -10,11 +10,12 @@ use winit::window::CursorIcon;
 
 pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785, 0.63759696, 0.6938719, 1.0];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TextBox {
     pub indent: f32,
     pub texts: Vec<Text>,
     pub is_code_block: bool,
+    pub is_quote_block: Option<usize>,
     pub align: Align,
     pub hidpi_scale: f32,
     pub default_text_color: [f32; 4],
@@ -24,13 +25,10 @@ pub struct TextBox {
 impl TextBox {
     pub fn new(texts: Vec<Text>, hidpi_scale: f32, theme: &Theme) -> TextBox {
         TextBox {
-            indent: 0.0,
             texts,
-            is_code_block: false,
-            align: Align::Left,
             hidpi_scale,
             default_text_color: theme.text_color,
-            padding_height: 0.,
+            ..Default::default()
         }
     }
 
@@ -40,6 +38,15 @@ impl TextBox {
 
     pub fn make_code_block(mut self, is_code_block: bool) -> Self {
         self.is_code_block = is_code_block;
+        self
+    }
+
+    pub fn set_quote_block(&mut self, nest: Option<usize>) {
+        self.is_quote_block = nest;
+    }
+
+    pub fn make_quote_block(mut self, nest: Option<usize>) -> Self {
+        self.is_quote_block = nest;
         self
     }
 

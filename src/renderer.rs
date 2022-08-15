@@ -290,10 +290,42 @@ impl Renderer {
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds));
                     let mut fill_tessellator = FillTessellator::new();
-                    if text_box.is_code_block {
-                        {
-                            let min = (scrolled_pos.0 - 10., scrolled_pos.1);
-                            let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 5.);
+                    if text_box.is_code_block || text_box.is_quote_block.is_some() {
+                        let color = if text_box.is_code_block {
+                            self.theme.code_block_color
+                        } else {
+                            self.theme.quote_block_color
+                        };
+
+                        let mut min = (scrolled_pos.0 - 10., scrolled_pos.1);
+                        let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 5.);
+                        if let Some(nest) = text_box.is_quote_block {
+                            min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
+                        }
+                        fill_tessellator
+                            .tessellate_rectangle(
+                                &Box2D::new(
+                                    Point2D::from(point(min.0, min.1, screen_size)),
+                                    Point2D::from(point(max.0, max.1, screen_size)),
+                                ),
+                                &FillOptions::default(),
+                                &mut BuffersBuilder::new(
+                                    &mut self.lyon_buffer,
+                                    |vertex: FillVertex| Vertex {
+                                        pos: [vertex.position().x, vertex.position().y, 0.0],
+                                        color,
+                                    },
+                                ),
+                            )
+                            .unwrap();
+                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                    }
+                    if let Some(nest) = text_box.is_quote_block {
+                        for n in 0..nest {
+                            let nest_indent = n as f32 * DEFAULT_MARGIN / 2.;
+                            let min = (scrolled_pos.0 - 20. - nest_indent, scrolled_pos.1);
+                            let max = (scrolled_pos.0 - 10. - nest_indent, min.1 + size.1 + 5.);
                             fill_tessellator
                                 .tessellate_rectangle(
                                     &Box2D::new(
@@ -305,14 +337,15 @@ impl Renderer {
                                         &mut self.lyon_buffer,
                                         |vertex: FillVertex| Vertex {
                                             pos: [vertex.position().x, vertex.position().y, 0.0],
-                                            color: self.theme.code_block_color,
+                                            color: self.theme.select_color,
                                         },
                                     ),
                                 )
                                 .unwrap();
+                            indice_ranges
+                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
+                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
                         }
-                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
                     }
                     if let Some(ref lines) =
                         text_box.render_lines(&mut self.glyph_brush, scrolled_pos, bounds)

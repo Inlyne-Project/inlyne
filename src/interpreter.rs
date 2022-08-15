@@ -81,6 +81,7 @@ mod html {
         pub small: usize,
         pub code: usize,
         pub pre_formatted: usize,
+        pub block_quote: usize,
         pub link: Vec<String>,
     }
 
@@ -191,6 +192,15 @@ impl TokenSink for HtmlInterpreter {
                 let tag_name = tag.name.to_string();
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
+                        "blockquote" => {
+                            // FIXME blockquotes in list have no marker
+                            self.push_current_textbox();
+                            self.state.text_options.block_quote += 1;
+                            self.state.global_indent += DEFAULT_MARGIN / 2.;
+                            self.current_textbox.indent = self.state.global_indent;
+                            self.current_textbox
+                                .set_quote_block(Some(self.state.text_options.block_quote));
+                        }
                         "th" => self.state.text_options.bold += 1,
                         "td" => {}
                         "table" => {
@@ -468,6 +478,16 @@ impl TokenSink for HtmlInterpreter {
                             self.state.text_options.pre_formatted -= 1;
                             self.current_textbox.set_code_block(false);
                         }
+                        "blockquote" => {
+                            self.push_current_textbox();
+                            self.state.text_options.block_quote -= 1;
+                            self.state.global_indent -= DEFAULT_MARGIN / 2.;
+                            self.current_textbox.indent = self.state.global_indent;
+                            self.current_textbox.set_quote_block(None);
+                            if self.state.global_indent == 0. {
+                                self.push_spacer();
+                            }
+                        }
                         "span" => self.state.span_color = self.theme.code_color,
                         _ => {}
                     },
@@ -531,6 +551,10 @@ impl TokenSink for HtmlInterpreter {
                                 )
                             }
                         }
+                    }
+                    if self.state.text_options.block_quote >= 1 {
+                        self.current_textbox
+                            .set_quote_block(Some(self.state.text_options.block_quote));
                     }
                     if self.state.text_options.code >= 1 {
                         text = text
