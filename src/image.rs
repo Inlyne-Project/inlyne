@@ -371,6 +371,7 @@ impl ImageRenderer {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
+            anisotropy_clamp: Some(std::num::NonZeroU8::new(4).expect("4 is not 0")),
             ..Default::default()
         });
         Self {
