@@ -1,9 +1,13 @@
 <h1 align="center">Inlyne - a GPU powered, browserless, markdown + html viewer </h1>
 
+<p align="center">
+<a href="https://crates.io/crates/inlyne" target="_blank"><img height=25 src="https://img.shields.io/crates/v/inlyne.svg" /></a>
+</p>
 
-```
+```bash
 inlyne README.md --theme dark/light
 ```
+
 <p align="center">
 <img src="example.png" width="800"/>
 </p>
@@ -42,9 +46,11 @@ support common use cases is necessary, but don't expect forms and buttons.
 #### Sizable images
 <img src="https://i.redd.it/hwurhp7crzf81.png" width = "300" align="center"></img>
 
-#### Code Blocks
-``` 
-sudo rm -rf / # Unix deep system clean command
+#### Code Blocks (with syntect highlighting)
+```rust
+// Code thats drawing this text
+let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
+self.glyph_brush.queue(&text_box.glyph_section(*pos, bounds));
 ```
 
 #### Lists and Links
@@ -61,9 +67,17 @@ sudo rm -rf / # Unix deep system clean command
 <p align="center">alignment..</p>
 <p align="right">:)</p>
 
+#### Quote Blocks
+
+> “Optimism is an occupational hazard of programming: feedback is the treatment. “ Kent Beck
+
 #### Text Effects
 
 <i><u>Are these text effects ~~to~~ too **much**?</u></i> <small>Theres no such thing</small>
+
+## Configuration
+
+Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS. Checkout `inlyne.toml.sample` for an example configuration.
 
 ## FAQ
 
