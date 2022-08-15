@@ -191,7 +191,7 @@ impl TokenSink for HtmlInterpreter {
                 let tag_name = tag.name.to_string();
                 match tag.kind {
                     TagKind::StartTag => match tag_name.as_str() {
-                        "th" => {}
+                        "th" => self.state.text_options.bold += 1,
                         "td" => {}
                         "table" => {
                             self.push_spacer();
@@ -396,6 +396,7 @@ impl TokenSink for HtmlInterpreter {
                             }
                             table.unwrap().push_header(self.current_textbox.clone());
                             self.current_textbox.texts.clear();
+                            self.state.text_options.bold -= 1;
                         }
                         "td" => {
                             let table_row = self.state.element_stack.last_mut();
