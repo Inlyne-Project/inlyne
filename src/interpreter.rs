@@ -58,10 +58,6 @@ mod html {
         pub align: Option<Align>,
     }
 
-    pub struct Paragraph {
-        pub align: Option<Align>,
-    }
-
     #[derive(Debug)]
     pub enum ListType {
         Ordered(usize),
@@ -92,7 +88,8 @@ mod html {
         Table(Table),
         TableRow(Vec<TextBox>),
         Header(Header),
-        Paragraph(Paragraph),
+        Paragraph(Option<Align>),
+        Div(Option<Align>),
     }
 }
 
@@ -248,11 +245,11 @@ impl TokenSink for HtmlInterpreter {
                             }
                             if align.is_none() {
                                 for element in self.state.element_stack.iter().rev() {
-                                    if let html::Element::Paragraph(p) = element {
-                                        if let Some(ref p_align) = p.align {
-                                            align = Some(p_align.clone());
-                                            break;
-                                        }
+                                    if let html::Element::Div(Some(elem_align))
+                                    | html::Element::Paragraph(Some(elem_align)) = element
+                                    {
+                                        align = Some(*elem_align);
+                                        break;
                                     }
                                 }
                             }
@@ -275,7 +272,7 @@ impl TokenSink for HtmlInterpreter {
                                 }
                             }
                         }
-                        "p" => {
+                        "div" | "p" => {
                             let mut align = None;
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("align")
@@ -289,11 +286,14 @@ impl TokenSink for HtmlInterpreter {
                                     }
                                 }
                             }
-                            self.current_textbox
-                                .set_align(align.clone().unwrap_or(Align::Left));
-                            self.state
-                                .element_stack
-                                .push(html::Element::Paragraph(html::Paragraph { align }));
+                            if let Some(align) = align {
+                                self.current_textbox.set_align(align);
+                            }
+                            self.state.element_stack.push(match tag_name.as_str() {
+                                "div" => html::Element::Div(align),
+                                "p" => html::Element::Paragraph(align),
+                                _ => unreachable!("Arm matches on div and p"),
+                            });
                         }
                         "em" | "i" => self.state.text_options.italic += 1,
                         "bold" | "strong" => self.state.text_options.bold += 1,
@@ -442,9 +442,11 @@ impl TokenSink for HtmlInterpreter {
                             self.state.text_options.link.pop();
                         }
                         "code" => self.state.text_options.code -= 1,
-                        "p" => {
+                        "div" | "p" => {
                             self.push_current_textbox();
-                            self.push_spacer();
+                            if tag_name == "p" {
+                                self.push_spacer();
+                            }
                             self.state.element_stack.pop();
                         }
                         "em" | "i" => self.state.text_options.italic -= 1,
