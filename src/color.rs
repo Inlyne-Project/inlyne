@@ -30,7 +30,7 @@ pub const DARK_DEFAULT: Theme = Theme {
         b: 0.0086,
         a: 1.0,
     },
-    code_color: [1. * 0.7, 0.0578 * 0.7, 0.9331 * 0.7, 1.0],
+    code_color: [0.2542, 0.4508, 0.4621, 1.0],
     code_block_color: [0.0080 * 1.5, 0.0110 * 1.5, 0.0156 * 1.5, 1.0],
     quote_block_color: [0.0080, 0.0110, 0.0156, 1.0],
     link_color: [0.0976, 0.3813, 1.0, 1.0],
@@ -41,7 +41,7 @@ pub const DARK_DEFAULT: Theme = Theme {
 pub const LIGHT_DEFAULT: Theme = Theme {
     text_color: [0., 0., 0., 1.0],
     clear_color: wgpu::Color::WHITE,
-    code_color: [1., 0.0578, 0.9331, 1.0],
+    code_color: [0.3864, 0.0123, 0.1095, 1.0],
     code_block_color: [0.92, 0.92, 0.92, 1.0],
     quote_block_color: [0.5841 * 1.5, 0.6376 * 1.5, 0.6939 * 1.5, 1.0],
     link_color: [0.0975, 0.1813, 1.0, 1.0],
