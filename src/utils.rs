@@ -1,3 +1,5 @@
+use winit::window::CursorIcon;
+
 #[derive(Debug, Clone)]
 pub struct Rect {
     pub pos: (f32, f32),
@@ -39,4 +41,10 @@ pub enum Align {
     Left,
     Center,
     Right,
+}
+
+#[derive(Default)]
+pub struct HoverInfo {
+    pub cursor_icon: CursorIcon,
+    pub jump: Option<f32>,
 }

@@ -451,13 +451,21 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "em" | "i" => self.state.text_options.italic -= 1,
                         "bold" | "strong" => self.state.text_options.bold -= 1,
-                        "h1" => {
-                            self.push_current_textbox();
-                            self.push_spacer();
-                            self.state.text_options.underline -= 1;
-                            self.state.element_stack.pop();
-                        }
-                        "h2" | "h3" | "h4" | "h5" | "h6" => {
+                        "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
+                            if tag_name.as_str() == "h1" {
+                                self.state.text_options.underline -= 1;
+                            }
+                            let mut anchor_name = "#".to_string();
+                            for text in &self.current_textbox.texts {
+                                for char in text.text.chars() {
+                                    if char.is_whitespace() || char == '-' {
+                                        anchor_name.push('-');
+                                    } else if char.is_alphanumeric() {
+                                        anchor_name.push(char.to_ascii_lowercase());
+                                    }
+                                }
+                            }
+                            self.current_textbox.set_anchor(Some(anchor_name));
                             self.push_current_textbox();
                             self.push_spacer();
                             self.state.element_stack.pop();

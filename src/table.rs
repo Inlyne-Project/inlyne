@@ -1,7 +1,11 @@
-use wgpu_glyph::GlyphCruncher;
-use winit::window::CursorIcon;
+use std::collections::HashMap;
 
-use crate::{text::TextBox, utils::Rect};
+use wgpu_glyph::GlyphCruncher;
+
+use crate::{
+    text::TextBox,
+    utils::{HoverInfo, Rect},
+};
 
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
@@ -19,12 +23,13 @@ impl Table {
 
     pub fn hovering_over<T: GlyphCruncher>(
         &self,
+        anchors: &HashMap<String, f32>,
         glyph_brush: &mut T,
         loc: (f32, f32),
         pos: (f32, f32),
         bounds: (f32, f32),
         click: bool,
-    ) -> CursorIcon {
+    ) -> HoverInfo {
         let row_heights = self.row_heights(glyph_brush, pos, bounds);
         let column_widths = self.column_widths(glyph_brush, pos, bounds);
         let mut x = 0.;
@@ -37,6 +42,7 @@ impl Table {
             );
             if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
                 return header.hovering_over(
+                    anchors,
                     glyph_brush,
                     loc,
                     (pos.0 + x, pos.1 + y),
@@ -57,6 +63,7 @@ impl Table {
                 );
                 if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
                     return row_text_box.hovering_over(
+                        anchors,
                         glyph_brush,
                         loc,
                         (pos.0 + x, pos.1 + y),
@@ -68,7 +75,7 @@ impl Table {
             }
             y += row_heights.get(row_num + 1).unwrap() + TABLE_ROW_GAP;
         }
-        CursorIcon::Default
+        HoverInfo::default()
     }
 
     pub fn column_widths<T: GlyphCruncher>(

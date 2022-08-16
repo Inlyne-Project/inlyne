@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     color::Theme,
-    utils::{Align, Rect},
+    utils::{Align, HoverInfo, Rect},
 };
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
@@ -16,6 +18,7 @@ pub struct TextBox {
     pub texts: Vec<Text>,
     pub is_code_block: bool,
     pub is_quote_block: Option<usize>,
+    pub is_anchor: Option<String>,
     pub align: Align,
     pub hidpi_scale: f32,
     pub default_text_color: [f32; 4],
@@ -50,6 +53,10 @@ impl TextBox {
         self
     }
 
+    pub fn set_anchor(&mut self, anchor: Option<String>) {
+        self.is_anchor = anchor;
+    }
+
     pub fn with_indent(mut self, indent: f32) -> Self {
         self.indent = indent;
         self
@@ -68,32 +75,42 @@ impl TextBox {
     pub fn set_align(&mut self, align: Align) {
         self.align = align;
     }
-
     pub fn hovering_over<T: GlyphCruncher>(
         &self,
+        anchors: &HashMap<String, f32>,
         glyph_brush: &mut T,
         loc: (f32, f32),
         screen_position: (f32, f32),
         bounds: (f32, f32),
         click: bool,
-    ) -> CursorIcon {
+    ) -> HoverInfo {
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
         for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
             let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
-                let cursor = if let Some(ref link) = text.link {
+                let cursor_icon = if let Some(ref link) = text.link {
                     if click && open::that(link).is_err() {
-                        eprintln!("Could not open link");
+                        if let Some(anchor_pos) = anchors.get(link) {
+                            return HoverInfo {
+                                jump: Some(*anchor_pos),
+                                ..Default::default()
+                            };
+                        } else {
+                            eprintln!("Error: Could not open link ({})", link);
+                        }
                     }
                     CursorIcon::Hand
                 } else {
                     CursorIcon::Text
                 };
-                return cursor;
+                return HoverInfo {
+                    cursor_icon,
+                    ..Default::default()
+                };
             }
         }
-        CursorIcon::Default
+        HoverInfo::default()
     }
 
     pub fn glyph_bounds<T: GlyphCruncher>(

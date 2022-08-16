@@ -8,6 +8,7 @@ use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::tessellation::*;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -72,6 +73,7 @@ pub struct Renderer {
     pub theme: Theme,
     pub selection: Option<((f32, f32), (f32, f32))>,
     pub selection_text: String,
+    pub anchors: HashMap<String, f32>,
 }
 
 impl Renderer {
@@ -227,6 +229,7 @@ impl Renderer {
             theme,
             selection: None,
             selection_text: String::new(),
+            anchors: HashMap::new(),
         }
     }
 
@@ -790,6 +793,10 @@ impl Renderer {
                     (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
                 );
 
+                if let Some(ref anchor_name) = text_box.is_anchor {
+                    let _ = self.anchors.insert(anchor_name.clone(), pos.1);
+                }
+
                 Rect::new(pos, size)
             }
             Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
@@ -851,6 +858,14 @@ impl Renderer {
         let bounds = self.position(element_index);
         self.reserved_height += DEFAULT_PADDING + bounds.size.1;
         self.elements[element_index].bounds = Some(bounds);
+    }
+
+    pub fn set_scroll_y(&mut self, scroll_y: f32) {
+        if self.reserved_height > self.screen_height() {
+            self.scroll_y = scroll_y
+                .max(0.)
+                .min(self.reserved_height - self.screen_height());
+        }
     }
 }
 

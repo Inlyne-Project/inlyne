@@ -156,23 +156,13 @@ impl Inlyne {
                             }
                         };
 
-                        let screen_height = self.renderer.screen_height();
-                        if self.renderer.reserved_height > screen_height {
-                            self.renderer.scroll_y -= y_pixel_shift;
-
-                            if self.renderer.scroll_y.is_sign_negative() {
-                                self.renderer.scroll_y = 0.;
-                            } else if self.renderer.scroll_y
-                                >= (self.renderer.reserved_height - screen_height)
-                            {
-                                self.renderer.scroll_y =
-                                    self.renderer.reserved_height - screen_height;
-                            }
-                        }
+                        self.renderer
+                            .set_scroll_y(self.renderer.scroll_y - y_pixel_shift);
                         self.window.request_redraw();
                     }
                     WindowEvent::CursorMoved { position, .. } => {
                         let mut over_link = false;
+                        let mut jumped = false;
                         let screen_size = self.renderer.screen_size();
                         let loc = (
                             position.x as f32,
@@ -183,7 +173,8 @@ impl Inlyne {
                                 match element.deref() {
                                     Element::TextBox(ref text_box) => {
                                         let bounds = element.bounds.as_ref().unwrap();
-                                        let cursor = text_box.hovering_over(
+                                        let hover_info = text_box.hovering_over(
+                                            &self.renderer.anchors,
                                             &mut self.renderer.glyph_brush,
                                             loc,
                                             bounds.pos,
@@ -195,13 +186,19 @@ impl Inlyne {
                                             ),
                                             click_scheduled,
                                         );
-                                        self.window.set_cursor_icon(cursor);
+                                        self.window.set_cursor_icon(hover_info.cursor_icon);
+                                        if let Some(jump_pos) = hover_info.jump {
+                                            jumped = true;
+                                            self.renderer.set_scroll_y(jump_pos);
+                                            self.window.request_redraw();
+                                        }
                                         over_link = true;
                                         break;
                                     }
                                     Element::Table(ref table) => {
                                         let bounds = element.bounds.as_ref().unwrap();
-                                        let cursor = table.hovering_over(
+                                        let hover_info = table.hovering_over(
+                                            &self.renderer.anchors,
                                             &mut self.renderer.glyph_brush,
                                             loc,
                                             bounds.pos,
@@ -213,7 +210,12 @@ impl Inlyne {
                                             ),
                                             click_scheduled,
                                         );
-                                        self.window.set_cursor_icon(cursor);
+                                        self.window.set_cursor_icon(hover_info.cursor_icon);
+                                        if let Some(jump_pos) = hover_info.jump {
+                                            jumped = true;
+                                            self.renderer.set_scroll_y(jump_pos);
+                                            self.window.request_redraw();
+                                        }
                                         over_link = true;
                                         break;
                                     }
@@ -238,27 +240,17 @@ impl Inlyne {
                             let target_scroll = ((position.y as f32 / screen_size.1)
                                 * self.renderer.reserved_height)
                                 - (screen_size.1 / self.renderer.reserved_height * screen_size.1);
-                            self.renderer.scroll_y = if target_scroll <= 0. {
-                                0.
-                            } else if target_scroll >= self.renderer.reserved_height - screen_size.1
-                            {
-                                self.renderer.reserved_height - screen_size.1
-                            } else {
-                                target_scroll
-                            };
+                            self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
-                        } else {
-                            if click_scheduled {
-                                self.renderer.selection = Some((loc, loc));
-                            }
-                            if let Some(ref mut selection) = self.renderer.selection {
-                                if mouse_down {
-                                    selection.1 = loc;
-                                    self.window.request_redraw();
-                                }
+                        } else if click_scheduled && !jumped {
+                            self.renderer.selection = Some((loc, loc));
+                        } else if let Some(ref mut selection) = self.renderer.selection {
+                            if mouse_down {
+                                selection.1 = loc;
+                                self.window.request_redraw();
                             }
                         }
 
