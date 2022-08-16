@@ -444,7 +444,9 @@ impl TokenSink for HtmlInterpreter {
                         "code" => self.state.text_options.code -= 1,
                         "div" | "p" => {
                             self.push_current_textbox();
-                            self.push_spacer();
+                            if tag_name == "p" {
+                                self.push_spacer();
+                            }
                             self.state.element_stack.pop();
                         }
                         "em" | "i" => self.state.text_options.italic -= 1,
