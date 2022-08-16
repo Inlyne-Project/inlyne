@@ -511,7 +511,7 @@ impl TokenSink for HtmlInterpreter {
                             self.theme.text_color,
                         ));
                     }
-                } else if !str.trim().is_empty() || !self.current_textbox.texts.is_empty() {
+                } else if !str.trim().is_empty() || self.state.text_options.pre_formatted >= 1 {
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;
