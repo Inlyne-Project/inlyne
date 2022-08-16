@@ -292,7 +292,7 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.push(match tag_name.as_str() {
                                 "div" => html::Element::Div(align),
                                 "p" => html::Element::Paragraph(align),
-                                _ => {},
+                                _ => unreachable!("Arm matches on div and p"),
                             });
                         }
                         "em" | "i" => self.state.text_options.italic += 1,
