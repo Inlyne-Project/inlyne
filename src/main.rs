@@ -149,10 +149,15 @@ impl Inlyne {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::MouseWheel { delta, .. } => {
                         let y_pixel_shift = match delta {
-                            MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+                            MouseScrollDelta::PixelDelta(pos) => {
+                                pos.y as f32 * self.renderer.hidpi_scale * self.renderer.zoom
+                            }
                             // Arbitrarily pick x30 as the number of pixels to shift per line
                             MouseScrollDelta::LineDelta(_, y_delta) => {
-                                y_delta as f32 * 32.0 * self.renderer.hidpi_scale
+                                y_delta as f32
+                                    * 32.0
+                                    * self.renderer.hidpi_scale
+                                    * self.renderer.zoom
                             }
                         };
 
@@ -184,6 +189,7 @@ impl Inlyne {
                                                     - renderer::DEFAULT_MARGIN,
                                                 screen_size.1,
                                             ),
+                                            self.renderer.zoom,
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(hover_info.cursor_icon);
@@ -208,6 +214,7 @@ impl Inlyne {
                                                     - renderer::DEFAULT_MARGIN,
                                                 screen_size.1,
                                             ),
+                                            self.renderer.zoom,
                                             click_scheduled,
                                         );
                                         self.window.set_cursor_icon(hover_info.cursor_icon);
@@ -278,13 +285,42 @@ impl Inlyne {
                     },
                     WindowEvent::ModifiersChanged(modifier_state) => modifiers = modifier_state,
                     WindowEvent::KeyboardInput { input, .. } => {
-                        if input.virtual_keycode == Some(VirtualKeyCode::C) {
-                            let copy = (cfg!(target_os = "macos") && modifiers.logo())
-                                || (!cfg!(target_os = "macos") && modifiers.ctrl());
-                            if copy {
-                                self.clipboard
-                                    .set_contents(self.renderer.selection_text.trim().to_owned())
-                                    .unwrap()
+                        if let ElementState::Pressed = input.state {
+                            match input.virtual_keycode {
+                                Some(VirtualKeyCode::C) => {
+                                    let copy = (cfg!(target_os = "macos") && modifiers.logo())
+                                        || (!cfg!(target_os = "macos") && modifiers.ctrl());
+                                    if copy {
+                                        self.clipboard
+                                            .set_contents(
+                                                self.renderer.selection_text.trim().to_owned(),
+                                            )
+                                            .unwrap()
+                                    }
+                                }
+                                Some(VirtualKeyCode::Equals) => {
+                                    let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                        || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                        && modifiers.shift();
+                                    if zoom {
+                                        self.renderer.zoom *= 1.1;
+                                        self.renderer.reposition();
+                                        self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                        self.window.request_redraw();
+                                    }
+                                }
+                                Some(VirtualKeyCode::Minus) => {
+                                    let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                        || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                        && modifiers.shift();
+                                    if zoom {
+                                        self.renderer.zoom *= 0.9;
+                                        self.renderer.reposition();
+                                        self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                        self.window.request_redraw();
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }

@@ -28,10 +28,11 @@ impl Table {
         loc: (f32, f32),
         pos: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
         click: bool,
     ) -> HoverInfo {
-        let row_heights = self.row_heights(glyph_brush, pos, bounds);
-        let column_widths = self.column_widths(glyph_brush, pos, bounds);
+        let row_heights = self.row_heights(glyph_brush, pos, bounds, zoom);
+        let column_widths = self.column_widths(glyph_brush, pos, bounds, zoom);
         let mut x = 0.;
         let mut y = 0.;
         for (i, header) in self.headers.iter().enumerate() {
@@ -39,6 +40,7 @@ impl Table {
                 glyph_brush,
                 (pos.0 + x, pos.1 + y),
                 (bounds.0 - x, bounds.1),
+                zoom,
             );
             if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
                 return header.hovering_over(
@@ -47,6 +49,7 @@ impl Table {
                     loc,
                     (pos.0 + x, pos.1 + y),
                     (bounds.0 - x, bounds.1),
+                    zoom,
                     click,
                 );
             }
@@ -60,6 +63,7 @@ impl Table {
                     glyph_brush,
                     (pos.0 + x, pos.1 + y),
                     (bounds.0 - x, bounds.1),
+                    zoom,
                 );
                 if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
                     return row_text_box.hovering_over(
@@ -68,6 +72,7 @@ impl Table {
                         loc,
                         (pos.0 + x, pos.1 + y),
                         (bounds.0 - x, bounds.1),
+                        zoom,
                         click,
                     );
                 }
@@ -83,13 +88,16 @@ impl Table {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
     ) -> Vec<f32> {
         let mut widths = Vec::with_capacity(self.headers.len());
         for (i, header_text_box) in self.headers.iter().enumerate() {
-            let mut max_width = header_text_box.size(glyph_brush, screen_position, bounds).0;
+            let mut max_width = header_text_box
+                .size(glyph_brush, screen_position, bounds, zoom)
+                .0;
             for row in &self.rows {
                 if let Some(text_box) = row.get(i) {
-                    let width = text_box.size(glyph_brush, screen_position, bounds).0;
+                    let width = text_box.size(glyph_brush, screen_position, bounds, zoom).0;
                     if width > max_width {
                         max_width = width;
                     }
@@ -105,8 +113,9 @@ impl Table {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
     ) -> Vec<f32> {
-        let widths = self.column_widths(glyph_brush, screen_position, bounds);
+        let widths = self.column_widths(glyph_brush, screen_position, bounds, zoom);
         let mut heights = Vec::with_capacity(self.rows.len() + 1);
         let mut max_height = 0.;
         let mut x = 0.;
@@ -117,6 +126,7 @@ impl Table {
                     glyph_brush,
                     (screen_position.0 + x, screen_position.1 + y),
                     (bounds.0 - x, bounds.1),
+                    zoom,
                 )
                 .1;
             if height > max_height {
@@ -135,6 +145,7 @@ impl Table {
                         glyph_brush,
                         (screen_position.0 + x, screen_position.1 + y),
                         (bounds.0 - x, bounds.1),
+                        zoom,
                     )
                     .1;
                 if height > max_height {

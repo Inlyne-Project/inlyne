@@ -258,7 +258,7 @@ impl TokenSink for HtmlInterpreter {
                                     let align = align.as_ref().unwrap_or(&Align::Left);
                                     let mut image =
                                         Image::from_url(attr.value.to_string(), self.hidpi_scale)
-                                            .with_align(align.clone());
+                                            .with_align(*align);
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }
@@ -358,10 +358,7 @@ impl TokenSink for HtmlInterpreter {
                             }
                             self.state
                                 .element_stack
-                                .push(html::Element::Header(html::Header {
-                                    header_type,
-                                    align: align.clone(),
-                                }));
+                                .push(html::Element::Header(html::Header { header_type, align }));
                             self.current_textbox.set_align(align.unwrap_or(Align::Left));
                         }
                         "pre" => {
@@ -521,7 +518,10 @@ impl TokenSink for HtmlInterpreter {
                             self.theme.text_color,
                         ));
                     }
-                } else if !str.trim().is_empty() || self.state.text_options.pre_formatted >= 1 {
+                } else if !str.trim().is_empty()
+                    || !self.current_textbox.texts.is_empty()
+                    || self.state.text_options.pre_formatted >= 1
+                {
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;

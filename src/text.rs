@@ -82,10 +82,11 @@ impl TextBox {
         loc: (f32, f32),
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
         click: bool,
     ) -> HoverInfo {
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
+        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds, zoom)) {
             let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
             if bounds.contains(loc) {
                 let text = &self.texts[glyph.section_index];
@@ -118,10 +119,11 @@ impl TextBox {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
     ) -> Vec<(Rect, SectionGlyph)> {
         let mut glyph_bounds = Vec::new();
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds)) {
+        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds, zoom)) {
             let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
             glyph_bounds.push((bounds, glyph.clone()));
         }
@@ -133,21 +135,31 @@ impl TextBox {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
     ) -> (f32, f32) {
         if self.texts.is_empty() {
             return (0., self.padding_height);
         }
 
-        if let Some(bounds) = glyph_brush.glyph_bounds(&self.glyph_section(screen_position, bounds))
+        if let Some(bounds) =
+            glyph_brush.glyph_bounds(&self.glyph_section(screen_position, bounds, zoom))
         {
-            (bounds.width(), bounds.height() + self.padding_height)
+            (
+                bounds.width(),
+                bounds.height() + self.padding_height * self.hidpi_scale * zoom,
+            )
         } else {
-            (0., self.padding_height)
+            (0., self.padding_height * self.hidpi_scale * zoom)
         }
     }
 
-    pub fn glyph_section(&self, mut screen_position: (f32, f32), bounds: (f32, f32)) -> Section {
-        let texts = self.texts.iter().map(|t| t.wgpu_text()).collect();
+    pub fn glyph_section(
+        &self,
+        mut screen_position: (f32, f32),
+        bounds: (f32, f32),
+        zoom: f32,
+    ) -> Section {
+        let texts = self.texts.iter().map(|t| t.wgpu_text(zoom)).collect();
 
         let horizontal_align = match self.align {
             Align::Center => {
@@ -174,6 +186,7 @@ impl TextBox {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
     ) -> Option<Vec<((f32, f32), (f32, f32))>> {
         let mut has_lines = false;
         for text in &self.texts {
@@ -186,7 +199,7 @@ impl TextBox {
             return None;
         }
         let mut lines = Vec::new();
-        for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+        for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds, zoom) {
             if self.texts[glyph.section_index].is_underlined {
                 lines.push((
                     (glyph_bounds.pos.0, glyph_bounds.max.1),
@@ -210,6 +223,7 @@ impl TextBox {
         glyph_brush: &mut T,
         screen_position: (f32, f32),
         bounds: (f32, f32),
+        zoom: f32,
         mut selection: ((f32, f32), (f32, f32)),
     ) -> (Vec<Rect>, String) {
         let mut selection_rects = Vec::new();
@@ -222,7 +236,9 @@ impl TextBox {
         }
         let rect = Rect::new(screen_position, bounds);
         if rect.contains(selection.0) {
-            for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+            for (glyph_bounds, glyph) in
+                self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
+            {
                 if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
                     || (glyph_bounds.max.1 <= selection.1 .1
                         && glyph_bounds.max.1 >= selection.0 .1
@@ -254,7 +270,9 @@ impl TextBox {
             selection_text.push('\n');
         }
         if rect.contains(selection.1) {
-            for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds) {
+            for (glyph_bounds, glyph) in
+                self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
+            {
                 if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
                     || (glyph_bounds.pos.1 <= selection.1 .1
                         && glyph_bounds.pos.1 >= selection.0 .1
@@ -366,10 +384,10 @@ impl Text {
         }
     }
 
-    pub fn wgpu_text(&self) -> wgpu_glyph::Text {
+    pub fn wgpu_text(&self, zoom: f32) -> wgpu_glyph::Text {
         wgpu_glyph::Text {
             text: &self.text,
-            scale: PxScale::from(self.size * self.hidpi_scale),
+            scale: PxScale::from(self.size * self.hidpi_scale * zoom),
             font_id: self.font_id(),
             extra: Extra {
                 color: self.color(),

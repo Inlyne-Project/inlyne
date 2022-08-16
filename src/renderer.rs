@@ -74,6 +74,7 @@ pub struct Renderer {
     pub selection: Option<((f32, f32), (f32, f32))>,
     pub selection_text: String,
     pub anchors: HashMap<String, f32>,
+    pub zoom: f32,
 }
 
 impl Renderer {
@@ -222,8 +223,9 @@ impl Renderer {
             elements: Vec::new(),
             scroll_y: 0.,
             lyon_buffer,
-            reserved_height: DEFAULT_PADDING,
+            reserved_height: DEFAULT_PADDING * hidpi_scale,
             hidpi_scale,
+            zoom: 1.,
             image_renderer,
             eventloop_proxy,
             theme,
@@ -291,7 +293,7 @@ impl Renderer {
                 Element::TextBox(text_box) => {
                     let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
                     self.glyph_brush
-                        .queue(&text_box.glyph_section(*pos, bounds));
+                        .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
                     let mut fill_tessellator = FillTessellator::new();
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if text_box.is_code_block {
@@ -300,8 +302,14 @@ impl Renderer {
                             self.theme.quote_block_color
                         };
 
-                        let mut min = (scrolled_pos.0 - 10., scrolled_pos.1);
-                        let max = (min.0 + bounds.0 + 10., min.1 + size.1 + 5.);
+                        let mut min = (
+                            scrolled_pos.0 - 10. * self.hidpi_scale * self.zoom,
+                            scrolled_pos.1,
+                        );
+                        let max = (
+                            min.0 + bounds.0 + 10. * self.hidpi_scale * self.zoom,
+                            min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
+                        );
                         if let Some(nest) = text_box.is_quote_block {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
@@ -366,9 +374,12 @@ impl Renderer {
                             _prev_indice_num = self.lyon_buffer.indices.len() as u32;
                         }
                     }
-                    if let Some(ref lines) =
-                        text_box.render_lines(&mut self.glyph_brush, scrolled_pos, bounds)
-                    {
+                    if let Some(ref lines) = text_box.render_lines(
+                        &mut self.glyph_brush,
+                        scrolled_pos,
+                        bounds,
+                        self.zoom,
+                    ) {
                         for line in lines {
                             let min = line.0;
                             let max = (line.1 .0, line.1 .1 + 2.);
@@ -406,6 +417,7 @@ impl Renderer {
                             &mut self.glyph_brush,
                             *pos,
                             bounds,
+                            self.zoom,
                             selection,
                         );
                         self.selection_text.push_str(&selection_text);
@@ -446,11 +458,13 @@ impl Renderer {
                         &mut self.glyph_brush,
                         *pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.zoom,
                     );
                     let column_widths = table.column_widths(
                         &mut self.glyph_brush,
                         *pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.zoom,
                     );
                     let mut x = 0.;
                     let mut y = 0.;
@@ -459,13 +473,17 @@ impl Renderer {
                     for (col, width) in column_widths.iter().enumerate() {
                         let text_box = table.headers.get(col).unwrap();
                         let bounds = (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
-                        self.glyph_brush
-                            .queue(&text_box.glyph_section((pos.0 + x, pos.1 + y), bounds));
+                        self.glyph_brush.queue(&text_box.glyph_section(
+                            (pos.0 + x, pos.1 + y),
+                            bounds,
+                            self.zoom,
+                        ));
                         if let Some(selection) = self.selection {
                             let (selection_rects, selection_text) = text_box.render_selection(
                                 &mut self.glyph_brush,
                                 (pos.0 + x, pos.1 + y),
                                 bounds,
+                                self.zoom,
                                 selection,
                             );
                             self.selection_text.push_str(&selection_text);
@@ -547,9 +565,11 @@ impl Renderer {
                                 if let Some(text_box) = row.get(col) {
                                     let bounds =
                                         (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
-                                    self.glyph_brush.queue(
-                                        &text_box.glyph_section((pos.0 + x, pos.1 + y), bounds),
-                                    );
+                                    self.glyph_brush.queue(&text_box.glyph_section(
+                                        (pos.0 + x, pos.1 + y),
+                                        bounds,
+                                        self.zoom,
+                                    ));
 
                                     if let Some(selection) = self.selection {
                                         let (selection_rects, selection_text) = text_box
@@ -557,6 +577,7 @@ impl Renderer {
                                                 &mut self.glyph_brush,
                                                 (pos.0 + x, pos.1 + y),
                                                 bounds,
+                                                self.zoom,
                                                 selection,
                                             );
                                         self.selection_text.push_str(&selection_text);
@@ -791,6 +812,7 @@ impl Renderer {
                     &mut self.glyph_brush,
                     pos,
                     (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
+                    self.zoom,
                 );
 
                 if let Some(ref anchor_name) = text_box.is_anchor {
@@ -801,7 +823,7 @@ impl Renderer {
             }
             Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
             Element::Image(image) => {
-                let size = image.size(screen_size);
+                let size = image.size(screen_size, self.zoom);
                 match image.is_aligned {
                     Some(Align::Center) => Rect::new(
                         (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
@@ -817,6 +839,7 @@ impl Renderer {
                         &mut self.glyph_brush,
                         pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.zoom,
                     )
                     .iter()
                     .fold(0., |acc, x| acc + x);
@@ -825,6 +848,7 @@ impl Renderer {
                         &mut self.glyph_brush,
                         pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        self.zoom,
                     )
                     .iter()
                     .fold(0., |acc, x| acc + x);
@@ -840,11 +864,11 @@ impl Renderer {
     }
 
     pub fn reposition(&mut self) {
-        self.reserved_height = DEFAULT_PADDING;
+        self.reserved_height = DEFAULT_PADDING * self.hidpi_scale * self.zoom;
 
         for element_index in 0..self.elements.len() {
             let bounds = self.position(element_index);
-            self.reserved_height += DEFAULT_PADDING + bounds.size.1;
+            self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * self.zoom + bounds.size.1;
             self.elements[element_index].bounds = Some(bounds);
         }
     }
@@ -856,7 +880,7 @@ impl Renderer {
         let element_index = self.elements.len();
         self.elements.push(Positioned::new(element));
         let bounds = self.position(element_index);
-        self.reserved_height += DEFAULT_PADDING + bounds.size.1;
+        self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * self.zoom + bounds.size.1;
         self.elements[element_index].bounds = Some(bounds);
     }
 

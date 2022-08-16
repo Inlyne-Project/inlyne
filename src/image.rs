@@ -216,9 +216,9 @@ impl Image {
             (0, 0)
         }
     }
-    pub fn dimensions(&self, screen_size: (f32, f32)) -> (u32, u32) {
+    pub fn dimensions(&self, screen_size: (f32, f32), zoom: f32) -> (u32, u32) {
         let buffer_size = self.buffer_dimensions();
-        let mut buffer_size = (buffer_size.0 as f32, buffer_size.1 as f32);
+        let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
         if let Ok(Some(image)) = self.image.try_lock().as_deref() {
             if image.scale {
                 buffer_size.0 *= self.hidpi_scale;
@@ -232,8 +232,8 @@ impl Image {
             .map(|image_size| self.dimensions_from_image_size(image_size))
         {
             let target_dimensions = (
-                (dimensions.0 as f32 * self.hidpi_scale) as u32,
-                (dimensions.1 as f32 * self.hidpi_scale) as u32,
+                (dimensions.0 as f32 * self.hidpi_scale * zoom) as u32,
+                (dimensions.1 as f32 * self.hidpi_scale * zoom) as u32,
             );
             if target_dimensions.0 > max_width as u32 {
                 (
@@ -249,12 +249,12 @@ impl Image {
                 ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
             )
         } else {
-            (buffer_size.0 as u32, buffer_size.1 as u32)
+            ((buffer_size.0 * zoom) as u32, (buffer_size.1 * zoom) as u32)
         }
     }
 
-    pub fn size(&self, screen_size: (f32, f32)) -> (f32, f32) {
-        let dimensions = self.dimensions(screen_size);
+    pub fn size(&self, screen_size: (f32, f32), zoom: f32) -> (f32, f32) {
+        let dimensions = self.dimensions(screen_size, zoom);
         (dimensions.0 as f32, dimensions.1 as f32)
     }
 }
