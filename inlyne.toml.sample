@@ -38,3 +38,10 @@
 # # Default: "inspired-github"
 # code-highlighter = "solarized-light"
 # ... # Refer to `[dark-theme]`'s other fields
+
+# # Change the appearance of text with font options
+# [font-options]
+# # Name of font for regular text
+# regular-font = "Chalkduster"
+# # Name of font for monospace text such as code
+# monospace-font = "Monaco"

@@ -9,6 +9,8 @@ use crate::color;
 
 use serde::Deserialize;
 
+pub use self::config::FontOptions;
+
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub enum ThemeType {
     Dark,
@@ -21,6 +23,7 @@ pub struct Opts {
     pub file_path: PathBuf,
     pub theme: color::Theme,
     pub scale: Option<f32>,
+    pub font_opts: FontOptions,
 }
 
 impl Opts {
@@ -52,6 +55,7 @@ impl Opts {
             scale: config_scale,
             light_theme: config_light_theme,
             dark_theme: config_dark_theme,
+            font_options: config_font_options,
         } = config;
 
         let theme = match args_theme.unwrap_or(config_theme) {
@@ -65,10 +69,13 @@ impl Opts {
             },
         };
 
+        let font_opts = config_font_options.unwrap_or_default();
+
         Self {
             file_path,
             theme,
             scale: args_scale.or(config_scale),
+            font_opts,
         }
     }
 }

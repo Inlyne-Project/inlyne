@@ -1,4 +1,5 @@
 pub mod color;
+pub mod fonts;
 pub mod image;
 pub mod interpreter;
 pub mod opts;
@@ -9,6 +10,7 @@ pub mod utils;
 
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
+use crate::opts::FontOptions;
 use crate::opts::Opts;
 use crate::table::Table;
 
@@ -78,7 +80,11 @@ pub struct Inlyne {
 }
 
 impl Inlyne {
-    pub async fn new(theme: Theme, scale: Option<f32>) -> Self {
+    pub async fn new(
+        theme: Theme,
+        scale: Option<f32>,
+        font_opts: FontOptions,
+    ) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
@@ -87,17 +93,18 @@ impl Inlyne {
             event_loop.create_proxy(),
             theme,
             scale.unwrap_or(window.scale_factor() as f32),
+            font_opts,
         )
-        .await;
+        .await?;
         let clipboard = ClipboardContext::new().unwrap();
 
-        Self {
+        Ok(Self {
             window,
             event_loop,
             renderer,
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
             clipboard,
-        }
+        })
     }
 
     pub fn push<T: Into<Element>>(&mut self, element: T) {
@@ -337,7 +344,7 @@ fn main() -> anyhow::Result<()> {
     let theme = args.theme;
     let md_string = std::fs::read_to_string(&args.file_path)
         .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
-    let inlyne = pollster::block_on(Inlyne::new(theme, args.scale));
+    let inlyne = pollster::block_on(Inlyne::new(theme, args.scale, args.font_opts))?;
 
     let hidpi_scale = args.scale.unwrap_or(inlyne.window.scale_factor() as f32);
     let interpreter = HtmlInterpreter::new(

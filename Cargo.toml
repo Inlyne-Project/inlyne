@@ -30,6 +30,7 @@ dirs = "4.0.0"
 serde = { version = "1.0.143", features = ["derive"] }
 toml = "0.5.9"
 ureq = { version = "2.5.0", features = ["native-tls"] }
+font-kit = "0.11.0"
 
 # Uncomment for profiling
 # [profile.release]
