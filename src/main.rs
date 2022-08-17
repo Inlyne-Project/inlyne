@@ -1,15 +1,15 @@
-pub mod cli;
 pub mod color;
 pub mod image;
 pub mod interpreter;
+pub mod opts;
 pub mod renderer;
 pub mod table;
 pub mod text;
 pub mod utils;
 
-use crate::cli::Args;
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
+use crate::opts::Opts;
 use crate::table::Table;
 
 use color::Theme;
@@ -333,7 +333,7 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    let args = Opts::parse_and_load();
     let theme = args.theme;
     let md_string = std::fs::read_to_string(&args.file_path)
         .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
