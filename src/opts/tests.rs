@@ -36,8 +36,8 @@ fn config_overrides_default() {
         Opts::parse_and_load_from(
             gen_args(vec!["file.md"]),
             config::Config {
-                theme: Some(ThemeType::Dark),
-                scale: None,
+                theme: ThemeType::Dark,
+                ..Default::default()
             }
         ),
         Opts {
@@ -50,8 +50,8 @@ fn config_overrides_default() {
         Opts::parse_and_load_from(
             gen_args(vec!["file.md"]),
             config::Config {
-                theme: None,
                 scale: Some(1.5),
+                ..Default::default()
             }
         ),
         Opts {
@@ -81,8 +81,9 @@ fn from_cli() {
         Opts::parse_and_load_from(
             gen_args(vec!["--scale", "1.5", "file.md"]),
             config::Config {
-                theme: Some(ThemeType::Dark),
-                scale: Some(0.1)
+                theme: ThemeType::Dark,
+                scale: Some(0.1),
+                ..Default::default()
             },
         ),
         Opts {

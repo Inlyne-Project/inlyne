@@ -50,11 +50,24 @@ impl Opts {
         let config::Config {
             theme: config_theme,
             scale: config_scale,
+            light_theme: config_light_theme,
+            dark_theme: config_dark_theme,
         } = config;
+
+        let theme = match args_theme.unwrap_or(config_theme) {
+            ThemeType::Dark => match config_dark_theme {
+                Some(config_dark_theme) => config_dark_theme.merge(color::DARK_DEFAULT),
+                None => color::DARK_DEFAULT,
+            },
+            ThemeType::Light => match config_light_theme {
+                Some(config_light_theme) => config_light_theme.merge(color::LIGHT_DEFAULT),
+                None => color::LIGHT_DEFAULT,
+            },
+        };
 
         Self {
             file_path,
-            theme: args_theme.or(config_theme).unwrap_or_default().as_theme(),
+            theme,
             scale: args_scale.or(config_scale),
         }
     }

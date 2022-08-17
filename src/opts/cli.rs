@@ -73,7 +73,7 @@ impl Args {
             }
         );
 
-        let command = command(&scale_help, config.theme.unwrap_or_default());
+        let command = command(&scale_help, config.theme);
         let matches = command.get_matches_from(args);
 
         let file_path = matches.get_one("file").cloned().expect("required");

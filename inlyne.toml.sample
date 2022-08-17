@@ -1,8 +1,40 @@
-# A different scale factor can be specified
-# Default: The window's scale factor (system dependent)
+# # A different scale factor can be specified
+# # Default: The window's scale factor (system dependent)
 # scale = 1.5
 
-# The theme can be set as well
-# Default: "Light"
-# Possible values: ["Light", "Dark"]
+# # The theme can be set as well
+# # Default: "Light"
+# # Possible values: ["Light", "Dark"]
 # theme = "Dark"
+
+# # The light and dark themes can be customized as well
+# # Here is a dark theme inspired by GitHub's dark dimmed theme
+# [dark-theme]
+# # Regular text color
+# text-color = 0xadbac7
+# # Background canvas color
+# clear-color = 0x22272e
+# # Inline code text color
+# code-color = 0x8d97a5
+# # Code block background color
+# code-block-color = 0x2d333b
+# # Quote block background color
+# quote-block-color = 0x262b32
+# # Hyperlink text color
+# link-color = 0x539bf5
+# # Text selection color
+# select-color = 0x438bd5
+# # Syntax highlighting theme. All of `syntect`s default themes are supported
+# # Possible values: [
+# #     "base16-ocean-dark",  "base16-eighties-dark", "base16-mocha-dark",
+# #     "base16-ocean-light", "inspired-github",      "solarized-dark",
+# #     "solarized-light"
+# # ]
+# # Default: "base16-mocha-dark"
+# code-highlighter = "base16-ocean-dark"
+
+# # And the same settings are available for the light theme as well
+# [light-theme]
+# # Default: "inspired-github"
+# code-highlighter = "solarized-light"
+# ... # Refer to `[dark-theme]`'s other fields
