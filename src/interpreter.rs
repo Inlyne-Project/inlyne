@@ -139,7 +139,9 @@ impl HtmlInterpreter {
         options.render.unsafe_ = true;
 
         let mut plugins = comrak::ComrakPlugins::default();
-        let adapter = comrak::plugins::syntect::SyntectAdapter::new(self.theme.code_highlighter);
+        let adapter = comrak::plugins::syntect::SyntectAdapter::new(
+            self.theme.code_highlighter.as_syntect_name(),
+        );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
         let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);

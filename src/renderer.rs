@@ -740,7 +740,7 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.theme.clear_color),
+                        load: wgpu::LoadOp::Clear(self.theme.background_color),
                         store: true,
                     },
                 })],
