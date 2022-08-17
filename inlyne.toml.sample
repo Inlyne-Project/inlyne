@@ -13,7 +13,7 @@
 # # Regular text color
 # text-color = 0xadbac7
 # # Background canvas color
-# clear-color = 0x22272e
+# background-color = 0x22272e
 # # Inline code text color
 # code-color = 0x8d97a5
 # # Code block background color

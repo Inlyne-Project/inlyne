@@ -15,7 +15,7 @@ pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     pub text_color: [f32; 4],
-    pub clear_color: wgpu::Color,
+    pub background_color: wgpu::Color,
     pub code_color: [f32; 4],
     pub code_block_color: [f32; 4],
     pub quote_block_color: [f32; 4],
@@ -26,7 +26,7 @@ pub struct Theme {
 
 pub const DARK_DEFAULT: Theme = Theme {
     text_color: [0.5841, 0.6376, 0.6939, 1.0],
-    clear_color: wgpu::Color {
+    background_color: wgpu::Color {
         r: 0.0040,
         g: 0.0056,
         b: 0.0086,
@@ -42,7 +42,7 @@ pub const DARK_DEFAULT: Theme = Theme {
 
 pub const LIGHT_DEFAULT: Theme = Theme {
     text_color: [0., 0., 0., 1.0],
-    clear_color: wgpu::Color::WHITE,
+    background_color: wgpu::Color::WHITE,
     code_color: [0.3864, 0.0123, 0.1095, 1.0],
     code_block_color: [0.92, 0.92, 0.92, 1.0],
     quote_block_color: [0.5841 * 1.5, 0.6376 * 1.5, 0.6939 * 1.5, 1.0],
