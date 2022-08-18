@@ -16,7 +16,6 @@ use std::borrow::Cow;
 pub enum ImageSize {
     PxWidth(u32),
     PxHeight(u32),
-    FullSize((u32, u32)),
 }
 
 struct ImageData {
@@ -205,7 +204,6 @@ impl Image {
                     as u32,
                 *px_height,
             ),
-            ImageSize::FullSize((px_width, px_height)) => (*px_width, *px_height),
         }
     }
 
@@ -358,7 +356,7 @@ impl ImageRenderer {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
-        const INDICES: &[u16] = &[0, 1, 2, 2, 3, 4];
+        const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(INDICES),
@@ -388,18 +386,22 @@ impl ImageRenderer {
         screen_size: (f32, f32),
     ) -> wgpu::Buffer {
         let vertices: &[ImageVertex] = &[
+            // TOP LEFT
             ImageVertex {
                 pos: point(-1.0, 1.0, pos, size, screen_size),
                 tex_coords: [0.0, 0.0],
             },
+            // BOTTOM LEFT
             ImageVertex {
                 pos: point(-1.0, -1.0, pos, size, screen_size),
                 tex_coords: [0.0, 1.0],
             },
+            // BOTTOM RIGHT
             ImageVertex {
                 pos: point(1.0, -1.0, pos, size, screen_size),
                 tex_coords: [1.0, 1.0],
             },
+            // TOP RIGHT
             ImageVertex {
                 pos: point(1.0, 1.0, pos, size, screen_size),
                 tex_coords: [1.0, 0.0],

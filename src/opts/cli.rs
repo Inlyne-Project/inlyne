@@ -1,13 +1,14 @@
 use std::{env, ffi::OsString, path::PathBuf};
 
+use crate::color::{self, Theme};
+
 use super::{config::Config, ThemeType};
-use crate::color;
 
 use clap::{command, value_parser, Arg, Command, PossibleValue, ValueEnum};
 
 impl ThemeType {
-    pub fn as_theme(&self) -> color::Theme {
-        match self {
+    pub fn as_theme(&self) -> Theme {
+        match &self {
             Self::Dark => color::DARK_DEFAULT,
             Self::Light => color::LIGHT_DEFAULT,
         }

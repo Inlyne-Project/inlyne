@@ -1,16 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{
-    color::Theme,
-    utils::{Align, HoverInfo, Rect},
-};
+use crate::utils::{Align, HoverInfo, Rect};
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
 };
 use winit::window::CursorIcon;
-
-pub const DEFAULT_TEXT_COLOR: [f32; 4] = [0.5840785, 0.63759696, 0.6938719, 1.0];
 
 #[derive(Clone, Debug, Default)]
 pub struct TextBox {
@@ -21,16 +16,14 @@ pub struct TextBox {
     pub is_anchor: Option<String>,
     pub align: Align,
     pub hidpi_scale: f32,
-    pub default_text_color: [f32; 4],
     pub padding_height: f32,
 }
 
 impl TextBox {
-    pub fn new(texts: Vec<Text>, hidpi_scale: f32, theme: &Theme) -> TextBox {
+    pub fn new(texts: Vec<Text>, hidpi_scale: f32) -> TextBox {
         TextBox {
             texts,
             hidpi_scale,
-            default_text_color: theme.text_color,
             ..Default::default()
         }
     }
@@ -39,36 +32,16 @@ impl TextBox {
         self.is_code_block = is_code_block;
     }
 
-    pub fn make_code_block(mut self, is_code_block: bool) -> Self {
-        self.is_code_block = is_code_block;
-        self
-    }
-
     pub fn set_quote_block(&mut self, nest: Option<usize>) {
         self.is_quote_block = nest;
-    }
-
-    pub fn make_quote_block(mut self, nest: Option<usize>) -> Self {
-        self.is_quote_block = nest;
-        self
     }
 
     pub fn set_anchor(&mut self, anchor: Option<String>) {
         self.is_anchor = anchor;
     }
 
-    pub fn with_indent(mut self, indent: f32) -> Self {
-        self.indent = indent;
-        self
-    }
-
     pub fn with_padding(mut self, padding_height: f32) -> Self {
         self.padding_height = padding_height;
-        self
-    }
-
-    pub fn with_align(mut self, align: Align) -> Self {
-        self.align = align;
         self
     }
 

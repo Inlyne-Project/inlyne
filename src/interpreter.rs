@@ -120,7 +120,7 @@ impl HtmlInterpreter {
         Self {
             window,
             element_queue,
-            current_textbox: TextBox::new(Vec::new(), hidpi_scale, &theme),
+            current_textbox: TextBox::new(Vec::new(), hidpi_scale),
             hidpi_scale,
             state: State {
                 span_color: theme.code_color,
@@ -159,6 +159,22 @@ impl HtmlInterpreter {
         tok.end();
     }
 
+    // Searches the currently nested elements for align attribute
+    fn find_current_align(&self) -> Option<Align> {
+        for element in self.state.element_stack.iter().rev() {
+            if let html::Element::Div(Some(elem_align))
+            | html::Element::Paragraph(Some(elem_align))
+            | html::Element::Header(html::Header {
+                align: Some(elem_align),
+                ..
+            }) = element
+            {
+                return Some(*elem_align);
+            }
+        }
+        None
+    }
+
     fn push_current_textbox(&mut self) {
         if !self.current_textbox.texts.is_empty() {
             let mut empty = true;
@@ -172,7 +188,7 @@ impl HtmlInterpreter {
                 self.push_element(self.current_textbox.clone().into());
             }
         }
-        self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale, &self.theme);
+        self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale);
     }
     fn push_spacer(&mut self) {
         self.push_element(Spacer::new(10.).into());
@@ -245,16 +261,7 @@ impl TokenSink for HtmlInterpreter {
                                     _ => {}
                                 }
                             }
-                            if align.is_none() {
-                                for element in self.state.element_stack.iter().rev() {
-                                    if let html::Element::Div(Some(elem_align))
-                                    | html::Element::Paragraph(Some(elem_align)) = element
-                                    {
-                                        align = Some(*elem_align);
-                                        break;
-                                    }
-                                }
-                            }
+                            align = align.or_else(|| self.find_current_align());
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("src") {
                                     let align = align.as_ref().unwrap_or(&Align::Left);
@@ -275,6 +282,7 @@ impl TokenSink for HtmlInterpreter {
                             }
                         }
                         "div" | "p" => {
+                            self.push_current_textbox();
                             let mut align = None;
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("align")
@@ -288,7 +296,7 @@ impl TokenSink for HtmlInterpreter {
                                     }
                                 }
                             }
-                            if let Some(align) = align {
+                            if let Some(align) = align.or_else(|| self.find_current_align()) {
                                 self.current_textbox.set_align(align);
                             }
                             self.state.element_stack.push(match tag_name.as_str() {
@@ -575,10 +583,13 @@ impl TokenSink for HtmlInterpreter {
                             .with_font(1)
                             .with_size(18.)
                     }
-                    if let Some(html::Element::Header(header)) = self.state.element_stack.last() {
-                        text = text
-                            .with_size(header.header_type.text_size())
-                            .make_bold(true);
+                    for elem in self.state.element_stack.iter().rev() {
+                        if let html::Element::Header(header) = elem {
+                            text = text
+                                .with_size(header.header_type.text_size())
+                                .make_bold(true);
+                            break;
+                        }
                     }
                     if let Some(link) = self.state.text_options.link.last() {
                         text = text.with_link((*link).clone());

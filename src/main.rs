@@ -107,11 +107,6 @@ impl Inlyne {
         })
     }
 
-    pub fn push<T: Into<Element>>(&mut self, element: T) {
-        let element = element.into();
-        self.renderer.push(element);
-    }
-
     pub fn run(mut self) {
         let mut click_scheduled = false;
         let mut scrollbar_held = false;

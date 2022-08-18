@@ -15,7 +15,7 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
-use wgpu::{BindGroup, Buffer};
+use wgpu::{BindGroup, Buffer, IndexFormat};
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
@@ -80,10 +80,6 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub const fn screen_width(&self) -> f32 {
-        self.config.width as f32
-    }
-
     pub const fn screen_height(&self) -> f32 {
         self.config.height as f32
     }
@@ -730,6 +726,7 @@ impl Renderer {
 
             // Draw images
             rpass.set_pipeline(&self.image_renderer.render_pipeline);
+            rpass.set_index_buffer(self.image_renderer.index_buf.slice(..), IndexFormat::Uint16);
             for (bindgroup, vertex_buf) in image_bindgroups.iter() {
                 rpass.set_bind_group(0, bindgroup, &[]);
                 rpass.set_vertex_buffer(0, vertex_buf.slice(..));
