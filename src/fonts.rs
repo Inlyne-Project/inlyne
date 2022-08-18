@@ -5,25 +5,7 @@ use font_kit::properties::{Properties, Style, Weight};
 use font_kit::source::SystemSource;
 use wgpu_glyph::ab_glyph::{FontArc, FontVec};
 
-use std::error::Error;
-use std::fmt;
-
 use crate::opts::FontOptions;
-
-#[derive(Debug)]
-pub enum FontError {
-    CopyingFontData,
-}
-
-impl fmt::Display for FontError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self {
-            FontError::CopyingFontData => write!(f, "Error copying font data"),
-        }
-    }
-}
-
-impl Error for FontError {}
 
 pub fn get_fonts(font_opts: FontOptions) -> anyhow::Result<Vec<FontArc>> {
     let regular = font_opts
