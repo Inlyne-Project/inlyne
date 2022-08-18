@@ -6,6 +6,15 @@ use crate::color;
 use anyhow::Context;
 use serde::{Deserialize, Deserializer};
 
+#[derive(Deserialize, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct FontOptions {
+    #[serde(default)]
+    pub regular_font: Option<String>,
+    #[serde(default)]
+    pub monospace_font: Option<String>,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct OptionalTheme {
@@ -32,10 +41,7 @@ where
     D: Deserializer<'de>,
 {
     let maybe_hex = <Option<u32>>::deserialize(deserializer)?;
-    Ok(match maybe_hex {
-        Some(i) => Some(color::hex_to_linear_rgba(i)),
-        None => None,
-    })
+    Ok(maybe_hex.map(color::hex_to_linear_rgba))
 }
 
 impl OptionalTheme {
@@ -69,6 +75,7 @@ pub struct Config {
     pub scale: Option<f32>,
     pub light_theme: Option<OptionalTheme>,
     pub dark_theme: Option<OptionalTheme>,
+    pub font_options: Option<FontOptions>,
 }
 
 impl Config {

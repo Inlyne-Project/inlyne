@@ -1,5 +1,7 @@
 use crate::color::Theme;
+use crate::fonts;
 use crate::image::ImageRenderer;
+use crate::opts::FontOptions;
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::utils::{Align, Rect};
 use crate::{Element, InlyneEvent};
@@ -14,7 +16,7 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
 use wgpu::{BindGroup, Buffer};
-use wgpu_glyph::{ab_glyph, GlyphBrush, GlyphBrushBuilder};
+use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
@@ -95,7 +97,8 @@ impl Renderer {
         eventloop_proxy: EventLoopProxy<InlyneEvent>,
         theme: Theme,
         hidpi_scale: f32,
-    ) -> Self {
+        font_opts: FontOptions,
+    ) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
@@ -177,42 +180,12 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &swapchain_format);
 
-        let roboto_reg =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Regular.ttf"))
-                .unwrap();
-        let roboto_reg_italic =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Italic.ttf"))
-                .unwrap();
-        let roboto_bold =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-Bold.ttf"))
-                .unwrap();
-        let roboto_bold_italic =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/RobotoMono-BoldItalic.ttf"))
-                .unwrap();
-        let sf_reg =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Regular.otf"))
-                .unwrap();
-        let sf_reg_italic =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Italic.otf"))
-                .unwrap();
-        let sf_bold =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-Bold.otf")).unwrap();
-        let sf_bold_italic =
-            ab_glyph::FontArc::try_from_slice(include_bytes!("./fonts/SFUIText-BoldItalicG1.otf"))
-                .unwrap();
+        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(font_opts)?)
+            .build(&device, swapchain_format);
 
-        let mut glyph_brush =
-            GlyphBrushBuilder::using_font(sf_reg).build(&device, swapchain_format);
-        glyph_brush.add_font(sf_reg_italic);
-        glyph_brush.add_font(sf_bold);
-        glyph_brush.add_font(sf_bold_italic);
-        glyph_brush.add_font(roboto_reg);
-        glyph_brush.add_font(roboto_reg_italic);
-        glyph_brush.add_font(roboto_bold);
-        glyph_brush.add_font(roboto_bold_italic);
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 
-        Self {
+        Ok(Self {
             config,
             surface,
             device,
@@ -232,7 +205,7 @@ impl Renderer {
             selection: None,
             selection_text: String::new(),
             anchors: HashMap::new(),
-        }
+        })
     }
 
     fn draw_scrollbar(&mut self, reserved_height: f32) -> u32 {

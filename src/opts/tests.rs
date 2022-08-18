@@ -1,5 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
+use crate::opts::config::FontOptions;
+
 use super::{cli, config, Opts, ThemeType};
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
@@ -26,6 +28,7 @@ fn defaults() {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::default().as_theme(),
             scale: None,
+            font_opts: FontOptions::default(),
         }
     );
 }
@@ -44,6 +47,7 @@ fn config_overrides_default() {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
             scale: None,
+            font_opts: FontOptions::default(),
         }
     );
     assert_eq!(
@@ -58,6 +62,7 @@ fn config_overrides_default() {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::default().as_theme(),
             scale: Some(1.5),
+            font_opts: FontOptions::default(),
         }
     );
 }
@@ -73,6 +78,7 @@ fn from_cli() {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
             scale: None,
+            font_opts: FontOptions::default(),
         }
     );
 
@@ -90,6 +96,7 @@ fn from_cli() {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
             scale: Some(1.5),
+            font_opts: FontOptions::default(),
         }
     );
 }
