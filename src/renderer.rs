@@ -2,16 +2,17 @@ use crate::color::Theme;
 use crate::fonts;
 use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
+use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
-use crate::utils::{Align, Rect};
+use crate::utils::Rect;
 use crate::{Element, InlyneEvent};
+use anyhow::Ok;
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::tessellation::*;
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::ops::{Deref, Range};
+use std::ops::Range;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
@@ -20,41 +21,11 @@ use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
-pub const DEFAULT_PADDING: f32 = 5.;
-pub const DEFAULT_MARGIN: f32 = 100.;
-
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct Vertex {
     pub pos: [f32; 3],
     pub color: [f32; 4],
-}
-
-pub struct Positioned<T> {
-    inner: T,
-    pub bounds: Option<Rect>,
-}
-
-impl<T> Deref for Positioned<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> Positioned<T> {
-    pub fn contains(&self, loc: (f32, f32)) -> bool {
-        self.bounds.as_ref().unwrap().contains(loc)
-    }
-}
-
-impl<T> Positioned<T> {
-    pub fn new(item: T) -> Positioned<T> {
-        Positioned {
-            inner: item,
-            bounds: None,
-        }
-    }
 }
 
 pub struct Renderer {
@@ -65,27 +36,25 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     pub glyph_brush: GlyphBrush<()>,
     pub staging_belt: StagingBelt,
-    pub elements: Vec<Positioned<Element>>,
     pub scroll_y: f32,
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
-    pub reserved_height: f32,
     pub hidpi_scale: f32,
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
     pub selection: Option<((f32, f32), (f32, f32))>,
     pub selection_text: String,
-    pub anchors: HashMap<String, f32>,
     pub zoom: f32,
+    pub positioner: Positioner,
 }
 
 impl Renderer {
     pub const fn screen_height(&self) -> f32 {
-        self.config.height as f32
+        self.positioner.screen_size.1
     }
 
     pub const fn screen_size(&self) -> (f32, f32) {
-        (self.config.width as f32, self.config.height as f32)
+        self.positioner.screen_size
     }
 
     pub async fn new(
@@ -181,6 +150,7 @@ impl Renderer {
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 
+        let positioner = Positioner::new(window.inner_size().into(), hidpi_scale);
         Ok(Self {
             config,
             surface,
@@ -189,10 +159,8 @@ impl Renderer {
             queue,
             glyph_brush,
             staging_belt,
-            elements: Vec::new(),
             scroll_y: 0.,
             lyon_buffer,
-            reserved_height: DEFAULT_PADDING * hidpi_scale,
             hidpi_scale,
             zoom: 1.,
             image_renderer,
@@ -200,22 +168,22 @@ impl Renderer {
             theme,
             selection: None,
             selection_text: String::new(),
-            anchors: HashMap::new(),
+            positioner,
         })
     }
 
-    fn draw_scrollbar(&mut self, reserved_height: f32) -> u32 {
+    fn draw_scrollbar(&mut self) -> u32 {
         let screen_height = self.screen_height();
         let screen_width = self.config.width as f32;
-        let top = if screen_height < reserved_height {
-            1. - (self.scroll_y / (reserved_height - screen_height)
-                * (1. - (screen_height / reserved_height)))
+        let top = if screen_height < self.positioner.reserved_height {
+            1. - (self.scroll_y / (self.positioner.reserved_height - screen_height)
+                * (1. - (screen_height / self.positioner.reserved_height)))
                 * 2.
         } else {
             1.
         };
-        let bottom = if screen_height < reserved_height {
-            top - ((screen_height / reserved_height) * 2.)
+        let bottom = if screen_height < self.positioner.reserved_height {
+            top - ((screen_height / self.positioner.reserved_height) * 2.)
         } else {
             top - 2.
         };
@@ -240,11 +208,14 @@ impl Renderer {
         self.lyon_buffer.indices.len() as u32
     }
 
-    fn render_elements(&mut self, reserved_height: f32) -> Vec<Range<u32>> {
+    fn render_elements(
+        &mut self,
+        elements: &[Positioned<Element>],
+    ) -> anyhow::Result<Vec<Range<u32>>> {
         let mut indice_ranges = Vec::new();
         let mut _prev_indice_num = 0;
         let screen_size = self.screen_size();
-        for element in &mut self.elements {
+        for element in elements.iter() {
             let Rect { pos, size, max: _ } =
                 element.bounds.as_ref().expect("Element not positioned");
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
@@ -258,12 +229,11 @@ impl Renderer {
                 }
             }
 
-            match &mut element.inner {
+            match &element.inner {
                 Element::TextBox(text_box) => {
                     let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
-                    let mut fill_tessellator = FillTessellator::new();
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if text_box.is_code_block {
                             self.theme.code_block_color
@@ -272,75 +242,38 @@ impl Renderer {
                         };
 
                         let mut min = (
-                            scrolled_pos.0 - 10. * self.hidpi_scale * self.zoom,
+                            (scrolled_pos.0 - 10. * self.hidpi_scale * self.zoom)
+                                .min(screen_size.0 - DEFAULT_MARGIN),
                             scrolled_pos.1,
                         );
                         let max = (
-                            min.0 + bounds.0 + 10. * self.hidpi_scale * self.zoom,
+                            (min.0 + bounds.0 + 10. * self.hidpi_scale * self.zoom)
+                                .min(screen_size.0 - DEFAULT_MARGIN + 10.),
                             min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
-                        fill_tessellator
-                            .tessellate_rectangle(
-                                &Box2D::new(
-                                    Point2D::from(point(
-                                        min.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                        min.1,
-                                        screen_size,
-                                    )),
-                                    Point2D::from(point(
-                                        max.0.min(screen_size.0 - DEFAULT_MARGIN + 10.),
-                                        max.1,
-                                        screen_size,
-                                    )),
-                                ),
-                                &FillOptions::default(),
-                                &mut BuffersBuilder::new(
-                                    &mut self.lyon_buffer,
-                                    |vertex: FillVertex| Vertex {
-                                        pos: [vertex.position().x, vertex.position().y, 0.0],
-                                        color,
-                                    },
-                                ),
-                            )
-                            .unwrap();
-                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                        indice_ranges
+                            .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
                     }
                     if let Some(nest) = text_box.is_quote_block {
                         for n in 0..nest {
                             let nest_indent = n as f32 * DEFAULT_MARGIN / 2.;
-                            let min = (scrolled_pos.0 - 20. - nest_indent, scrolled_pos.1);
-                            let max = (scrolled_pos.0 - 10. - nest_indent, min.1 + size.1 + 5.);
-                            fill_tessellator
-                                .tessellate_rectangle(
-                                    &Box2D::new(
-                                        Point2D::from(point(
-                                            min.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                            min.1,
-                                            screen_size,
-                                        )),
-                                        Point2D::from(point(
-                                            max.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                            max.1,
-                                            screen_size,
-                                        )),
-                                    ),
-                                    &FillOptions::default(),
-                                    &mut BuffersBuilder::new(
-                                        &mut self.lyon_buffer,
-                                        |vertex: FillVertex| Vertex {
-                                            pos: [vertex.position().x, vertex.position().y, 0.0],
-                                            color: self.theme.select_color,
-                                        },
-                                    ),
-                                )
-                                .unwrap();
-                            indice_ranges
-                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                            let min = (
+                                (scrolled_pos.0 - 20. - nest_indent)
+                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                scrolled_pos.1,
+                            );
+                            let max = (
+                                (scrolled_pos.0 - 10. - nest_indent)
+                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                min.1 + size.1 + 5.,
+                            );
+                            indice_ranges.push(self.draw_rectangle(
+                                Rect::from_min_max(min, max),
+                                self.theme.select_color,
+                            )?);
                         }
                     }
                     if let Some(ref lines) = text_box.render_lines(
@@ -350,35 +283,18 @@ impl Renderer {
                         self.zoom,
                     ) {
                         for line in lines {
-                            let min = line.0;
-                            let max = (line.1 .0, line.1 .1 + 2.);
-                            fill_tessellator
-                                .tessellate_rectangle(
-                                    &Box2D::new(
-                                        Point2D::from(point(
-                                            min.0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
-                                            min.1,
-                                            screen_size,
-                                        )),
-                                        Point2D::from(point(
-                                            max.0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
-                                            max.1,
-                                            screen_size,
-                                        )),
-                                    ),
-                                    &FillOptions::default(),
-                                    &mut BuffersBuilder::new(
-                                        &mut self.lyon_buffer,
-                                        |vertex: FillVertex| Vertex {
-                                            pos: [vertex.position().x, vertex.position().y, 0.0],
-                                            color: self.theme.text_color,
-                                        },
-                                    ),
-                                )
-                                .unwrap();
-                            indice_ranges
-                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                            let min = (
+                                line.0 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                                line.0 .1,
+                            );
+                            let max = (
+                                line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                                line.1 .1 + 2.,
+                            );
+                            indice_ranges.push(self.draw_rectangle(
+                                Rect::from_min_max(min, max),
+                                self.theme.text_color,
+                            )?);
                         }
                     }
                     if let Some(selection) = self.selection {
@@ -391,38 +307,17 @@ impl Renderer {
                         );
                         self.selection_text.push_str(&selection_text);
                         for rect in selection_rects {
-                            fill_tessellator
-                                .tessellate_rectangle(
-                                    &Box2D::new(
-                                        Point2D::from(point(
-                                            rect.pos.0,
-                                            rect.pos.1 - self.scroll_y,
-                                            screen_size,
-                                        )),
-                                        Point2D::from(point(
-                                            rect.max.0,
-                                            rect.max.1 - self.scroll_y,
-                                            screen_size,
-                                        )),
-                                    ),
-                                    &FillOptions::default(),
-                                    &mut BuffersBuilder::new(
-                                        &mut self.lyon_buffer,
-                                        |vertex: FillVertex| Vertex {
-                                            pos: [vertex.position().x, vertex.position().y, 0.0],
-                                            color: self.theme.select_color,
-                                        },
-                                    ),
-                                )
-                                .unwrap();
-                            indice_ranges
-                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                            indice_ranges.push(self.draw_rectangle(
+                                Rect::from_min_max(
+                                    (rect.pos.0, rect.pos.1 - self.scroll_y),
+                                    (rect.max.0, rect.max.1 - self.scroll_y),
+                                ),
+                                self.theme.select_color,
+                            )?);
                         }
                     }
                 }
                 Element::Table(table) => {
-                    let mut fill_tessellator = FillTessellator::new();
                     let row_heights = table.row_heights(
                         &mut self.glyph_brush,
                         *pos,
@@ -457,73 +352,34 @@ impl Renderer {
                             );
                             self.selection_text.push_str(&selection_text);
                             for rect in selection_rects {
-                                fill_tessellator
-                                    .tessellate_rectangle(
-                                        &Box2D::new(
-                                            Point2D::from(point(
-                                                rect.pos.0,
-                                                rect.pos.1 - self.scroll_y,
-                                                screen_size,
-                                            )),
-                                            Point2D::from(point(
-                                                rect.max.0,
-                                                rect.max.1 - self.scroll_y,
-                                                screen_size,
-                                            )),
-                                        ),
-                                        &FillOptions::default(),
-                                        &mut BuffersBuilder::new(
-                                            &mut self.lyon_buffer,
-                                            |vertex: FillVertex| Vertex {
-                                                pos: [
-                                                    vertex.position().x,
-                                                    vertex.position().y,
-                                                    0.0,
-                                                ],
-                                                color: self.theme.select_color,
-                                            },
-                                        ),
-                                    )
-                                    .unwrap();
-                                indice_ranges
-                                    .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                                _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                                indice_ranges.push(self.draw_rectangle(
+                                    Rect::from_min_max(
+                                        (rect.pos.0, rect.pos.1 - self.scroll_y),
+                                        (rect.max.0, rect.max.1 - self.scroll_y),
+                                    ),
+                                    self.theme.select_color,
+                                )?);
                             }
                         }
                         x += width + TABLE_COL_GAP;
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
                     {
-                        let min = (scrolled_pos.0, scrolled_pos.1 + y);
-                        let max = (scrolled_pos.0 + x, scrolled_pos.1 + y + 3.);
-                        fill_tessellator
-                            .tessellate_rectangle(
-                                &Box2D::new(
-                                    Point2D::from(point(
-                                        min.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                        min.1,
-                                        screen_size,
-                                    )),
-                                    Point2D::from(point(
-                                        max.0
-                                            .max(scrolled_pos.0)
-                                            .min(screen_size.0 - DEFAULT_MARGIN),
-                                        max.1,
-                                        screen_size,
-                                    )),
-                                ),
-                                &FillOptions::default(),
-                                &mut BuffersBuilder::new(
-                                    &mut self.lyon_buffer,
-                                    |vertex: FillVertex| Vertex {
-                                        pos: [vertex.position().x, vertex.position().y, 0.0],
-                                        color: self.theme.text_color,
-                                    },
-                                ),
-                            )
-                            .unwrap();
-                        indice_ranges.push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                        _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                        let min = (
+                            scrolled_pos.0.min(screen_size.0 - DEFAULT_MARGIN),
+                            scrolled_pos.1 + y,
+                        );
+                        let max = (
+                            scrolled_pos.0
+                                + x.max(scrolled_pos.0).min(screen_size.0 - DEFAULT_MARGIN),
+                            scrolled_pos.1 + y + 3.,
+                        );
+                        indice_ranges.push(
+                            self.draw_rectangle(
+                                Rect::from_min_max(min, max),
+                                self.theme.text_color,
+                            )?,
+                        );
                     }
 
                     y += TABLE_ROW_GAP / 2.;
@@ -551,40 +407,13 @@ impl Renderer {
                                             );
                                         self.selection_text.push_str(&selection_text);
                                         for rect in selection_rects {
-                                            fill_tessellator
-                                                .tessellate_rectangle(
-                                                    &Box2D::new(
-                                                        Point2D::from(point(
-                                                            rect.pos.0,
-                                                            rect.pos.1 - self.scroll_y,
-                                                            screen_size,
-                                                        )),
-                                                        Point2D::from(point(
-                                                            rect.max.0,
-                                                            rect.max.1 - self.scroll_y,
-                                                            screen_size,
-                                                        )),
-                                                    ),
-                                                    &FillOptions::default(),
-                                                    &mut BuffersBuilder::new(
-                                                        &mut self.lyon_buffer,
-                                                        |vertex: FillVertex| Vertex {
-                                                            pos: [
-                                                                vertex.position().x,
-                                                                vertex.position().y,
-                                                                0.0,
-                                                            ],
-                                                            color: self.theme.select_color,
-                                                        },
-                                                    ),
-                                                )
-                                                .unwrap();
-                                            indice_ranges.push(
-                                                _prev_indice_num
-                                                    ..self.lyon_buffer.indices.len() as u32,
-                                            );
-                                            _prev_indice_num =
-                                                self.lyon_buffer.indices.len() as u32;
+                                            indice_ranges.push(self.draw_rectangle(
+                                                Rect::from_min_max(
+                                                    (rect.pos.0, rect.pos.1 - self.scroll_y),
+                                                    (rect.max.0, rect.max.1 - self.scroll_y),
+                                                ),
+                                                self.theme.select_color,
+                                            )?);
                                         }
                                     }
                                 }
@@ -593,37 +422,19 @@ impl Renderer {
                         }
                         y += height + (TABLE_COL_GAP / 2.);
                         {
-                            let min = (scrolled_pos.0, scrolled_pos.1 + y);
-                            let max = (scrolled_pos.0 + x, scrolled_pos.1 + y + 3.);
-                            fill_tessellator
-                                .tessellate_rectangle(
-                                    &Box2D::new(
-                                        Point2D::from(point(
-                                            min.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                            min.1,
-                                            screen_size,
-                                        )),
-                                        Point2D::from(point(
-                                            max.0
-                                                .max(scrolled_pos.0)
-                                                .min(screen_size.0 - DEFAULT_MARGIN),
-                                            max.1,
-                                            screen_size,
-                                        )),
-                                    ),
-                                    &FillOptions::default(),
-                                    &mut BuffersBuilder::new(
-                                        &mut self.lyon_buffer,
-                                        |vertex: FillVertex| Vertex {
-                                            pos: [vertex.position().x, vertex.position().y, 0.0],
-                                            color: self.theme.code_block_color,
-                                        },
-                                    ),
-                                )
-                                .unwrap();
+                            let min = (
+                                scrolled_pos.0.min(screen_size.0 - DEFAULT_MARGIN),
+                                scrolled_pos.1 + y,
+                            );
+                            let max = (
+                                (scrolled_pos.0 + x)
+                                    .max(scrolled_pos.0)
+                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                scrolled_pos.1 + y + 3.,
+                            );
+                            let color = self.theme.code_block_color;
                             indice_ranges
-                                .push(_prev_indice_num..self.lyon_buffer.indices.len() as u32);
-                            _prev_indice_num = self.lyon_buffer.indices.len() as u32;
+                                .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
                         }
                         y += TABLE_ROW_GAP / 2.;
                     }
@@ -633,14 +444,33 @@ impl Renderer {
             }
         }
 
-        indice_ranges.push(_prev_indice_num..self.draw_scrollbar(reserved_height));
-        indice_ranges
+        indice_ranges.push(_prev_indice_num..self.draw_scrollbar());
+        Ok(indice_ranges)
     }
 
-    fn image_bindgroups(&mut self) -> Vec<(Arc<BindGroup>, Buffer)> {
+    fn draw_rectangle(&mut self, rect: Rect, color: [f32; 4]) -> anyhow::Result<Range<u32>> {
+        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+        let min = point(rect.pos.0, rect.pos.1, self.screen_size());
+        let max = point(rect.max.0, rect.max.1, self.screen_size());
+        let mut fill_tessellator = FillTessellator::new();
+        fill_tessellator.tessellate_rectangle(
+            &Box2D::new(Point2D::from(min), Point2D::from(max)),
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
+                pos: [vertex.position().x, vertex.position().y, 0.0],
+                color,
+            }),
+        )?;
+        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+    }
+
+    fn image_bindgroups(
+        &mut self,
+        elements: &mut [Positioned<Element>],
+    ) -> Vec<(Arc<BindGroup>, Buffer)> {
         let screen_size = self.screen_size();
         let mut bind_groups = Vec::new();
-        for element in &mut self.elements {
+        for element in elements.iter_mut() {
             let Rect { pos, size, max } = element.bounds.as_ref().unwrap();
             let pos = (pos.0, pos.1 - self.scroll_y);
             if max.1 <= 0. {
@@ -648,7 +478,7 @@ impl Renderer {
             } else if pos.1 >= screen_size.1 {
                 break;
             }
-            if let Element::Image(ref mut image) = element.inner {
+            if let Element::Image(ref mut image) = &mut element.inner {
                 if image.bind_group.is_none() {
                     image.create_bind_group(
                         &self.device,
@@ -667,7 +497,7 @@ impl Renderer {
         bind_groups
     }
 
-    pub fn redraw(&mut self) {
+    pub fn redraw(&mut self, elements: &mut [Positioned<Element>]) -> anyhow::Result<()> {
         let frame = self
             .surface
             .get_current_texture()
@@ -683,7 +513,7 @@ impl Renderer {
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         self.selection_text = String::new();
-        let indice_ranges = self.render_elements(self.reserved_height);
+        let indice_ranges = self.render_elements(elements)?;
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -700,7 +530,7 @@ impl Renderer {
             });
 
         // Prepare image bind groups for drawing
-        let image_bindgroups = self.image_bindgroups();
+        let image_bindgroups = self.image_bindgroups(elements);
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -769,108 +599,20 @@ impl Renderer {
         frame.present();
 
         self.staging_belt.recall();
+        Ok(())
     }
 
-    fn position(&mut self, element_index: usize) -> Rect {
-        let screen_size = self.screen_size();
-        match &self.elements[element_index].inner {
-            Element::TextBox(text_box) => {
-                let indent = text_box.indent;
-                let pos = (DEFAULT_MARGIN + indent, self.reserved_height);
-
-                let size = text_box.size(
-                    &mut self.glyph_brush,
-                    pos,
-                    (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1),
-                    self.zoom,
-                );
-
-                if let Some(ref anchor_name) = text_box.is_anchor {
-                    let _ = self.anchors.insert(anchor_name.clone(), pos.1);
-                }
-
-                Rect::new(pos, size)
-            }
-            Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
-            Element::Image(image) => {
-                let size = image.size(screen_size, self.zoom);
-                match image.is_aligned {
-                    Some(Align::Center) => Rect::new(
-                        (screen_size.0 / 2. - size.0 / 2., self.reserved_height),
-                        size,
-                    ),
-                    _ => Rect::new((DEFAULT_MARGIN, self.reserved_height), size),
-                }
-            }
-            Element::Table(table) => {
-                let pos = (DEFAULT_MARGIN, self.reserved_height);
-                let width = table
-                    .column_widths(
-                        &mut self.glyph_brush,
-                        pos,
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                let height = table
-                    .row_heights(
-                        &mut self.glyph_brush,
-                        pos,
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
-                        self.zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                Rect::new(
-                    pos,
-                    (
-                        width * (TABLE_COL_GAP * table.headers.len() as f32),
-                        height + (TABLE_ROW_GAP * (table.rows.len() + 1) as f32),
-                    ),
-                )
-            }
-        }
-    }
-
-    pub fn reposition(&mut self) {
-        self.reserved_height = DEFAULT_PADDING * self.hidpi_scale * self.zoom;
-
-        for element_index in 0..self.elements.len() {
-            let bounds = self.position(element_index);
-            self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * self.zoom + bounds.size.1;
-            self.elements[element_index].bounds = Some(bounds);
-        }
-    }
-
-    pub fn push(&mut self, mut element: Element) {
-        if let Element::Image(ref mut image) = element {
-            image.add_callback(self.eventloop_proxy.clone());
-        }
-        let element_index = self.elements.len();
-        self.elements.push(Positioned::new(element));
-        let bounds = self.position(element_index);
-        self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * self.zoom + bounds.size.1;
-        self.elements[element_index].bounds = Some(bounds);
+    pub fn reposition(&mut self, elements: &mut [Positioned<Element>]) {
+        self.positioner
+            .reposition(&mut self.glyph_brush, elements, self.zoom);
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {
-        if self.reserved_height > self.screen_height() {
+        if self.positioner.reserved_height > self.screen_height() {
             self.scroll_y = scroll_y
                 .max(0.)
-                .min(self.reserved_height - self.screen_height());
+                .min(self.positioner.reserved_height - self.screen_height());
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct Spacer {
-    space: f32,
-}
-
-impl Spacer {
-    pub fn new(space: f32) -> Spacer {
-        Spacer { space }
     }
 }
 

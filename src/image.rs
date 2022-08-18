@@ -1,4 +1,4 @@
-use crate::renderer::DEFAULT_MARGIN;
+use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::Align;
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
