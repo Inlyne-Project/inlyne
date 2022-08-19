@@ -3,6 +3,7 @@ pub mod fonts;
 pub mod image;
 pub mod interpreter;
 pub mod opts;
+pub mod positioner;
 pub mod renderer;
 pub mod table;
 pub mod text;
@@ -16,8 +17,11 @@ use crate::table::Table;
 use crate::text::Text;
 
 use color::Theme;
-use renderer::Positioned;
-use renderer::{Renderer, Spacer};
+use positioner::Positioned;
+use positioner::Spacer;
+use positioner::DEFAULT_MARGIN;
+use positioner::DEFAULT_PADDING;
+use renderer::Renderer;
 use utils::Rect;
 
 use anyhow::Context;
@@ -33,7 +37,6 @@ use winit::{
 };
 
 use std::collections::VecDeque;
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -84,6 +87,7 @@ pub struct Inlyne {
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
+    elements: Vec<Positioned<Element>>,
 }
 
 impl Inlyne {
@@ -111,6 +115,7 @@ impl Inlyne {
             renderer,
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
             clipboard,
+            elements: Vec::new(),
         })
     }
 
@@ -119,12 +124,13 @@ impl Inlyne {
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
+        let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
-                        self.renderer.reposition();
+                        self.renderer.reposition(&mut self.elements);
                         self.window.request_redraw()
                     }
                 },
@@ -134,25 +140,47 @@ impl Inlyne {
                 } => {
                     self.renderer.config.width = size.width;
                     self.renderer.config.height = size.height;
+                    self.renderer.positioner.screen_size = size.into();
                     self.renderer
                         .surface
                         .configure(&self.renderer.device, &self.renderer.config);
-                    self.renderer.reposition();
+                    self.renderer.reposition(&mut self.elements);
                     self.window.request_redraw();
                 }
                 Event::RedrawRequested(_) => {
-                    let queued_elements =
-                        if let Ok(mut element_queue) = self.element_queue.try_lock() {
-                            Some(element_queue.drain(0..).collect::<Vec<Element>>())
-                        } else {
-                            None
-                        };
-                    if let Some(queue) = queued_elements {
-                        for element in queue {
-                            self.renderer.push(element);
+                    let queue = {
+                        self.element_queue
+                            .try_lock()
+                            .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
+                    };
+                    if let Ok(queue) = queue {
+                        for mut element in queue {
+                            // Adds callback for when image is loaded to reposition and redraw
+                            if let Element::Image(ref mut image) = element {
+                                image.add_callback(event_loop_proxy.clone());
+                            }
+                            // Position element and add it to elements
+                            let mut positioned_element = Positioned::new(element);
+                            self.renderer.positioner.position(
+                                &mut self.renderer.glyph_brush,
+                                &mut positioned_element,
+                                self.renderer.zoom,
+                            );
+                            self.renderer.positioner.reserved_height +=
+                                DEFAULT_PADDING * self.renderer.hidpi_scale * self.renderer.zoom
+                                    + positioned_element
+                                        .bounds
+                                        .as_ref()
+                                        .expect("already positioned")
+                                        .size
+                                        .1;
+                            self.elements.push(positioned_element);
                         }
                     }
-                    self.renderer.redraw();
+                    self.renderer
+                        .redraw(&mut self.elements)
+                        .with_context(|| "Renderer failed to redraw the screen")
+                        .unwrap();
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -183,7 +211,7 @@ impl Inlyne {
                         last_loc = loc;
 
                         let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
-                            &self.renderer.elements,
+                            &self.elements,
                             &mut self.renderer.glyph_brush,
                             loc,
                             screen_size,
@@ -207,8 +235,9 @@ impl Inlyne {
                                 && mouse_down)
                         {
                             let target_scroll = ((position.y as f32 / screen_size.1)
-                                * self.renderer.reserved_height)
-                                - (screen_size.1 / self.renderer.reserved_height * screen_size.1);
+                                * self.renderer.positioner.reserved_height)
+                                - (screen_size.1 / self.renderer.positioner.reserved_height
+                                    * screen_size.1);
                             self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
                             if !scrollbar_held {
@@ -232,7 +261,7 @@ impl Inlyne {
                             // Try to click a link
                             let screen_size = self.renderer.screen_size();
                             if let Some(hoverable) = Self::find_hoverable(
-                                &self.renderer.elements,
+                                &self.elements,
                                 &mut self.renderer.glyph_brush,
                                 last_loc,
                                 screen_size,
@@ -245,7 +274,9 @@ impl Inlyne {
 
                                 if let Some(link) = maybe_link {
                                     if open::that(link).is_err() {
-                                        if let Some(anchor_pos) = self.renderer.anchors.get(link) {
+                                        if let Some(anchor_pos) =
+                                            self.renderer.positioner.anchors.get(link)
+                                        {
                                             self.renderer.set_scroll_y(*anchor_pos);
                                             self.window.request_redraw();
                                             self.window.set_cursor_icon(CursorIcon::Default);
@@ -254,7 +285,10 @@ impl Inlyne {
                                 }
                             }
 
-                            self.renderer.selection = None;
+                            if self.renderer.selection.is_some() {
+                                self.renderer.selection = None;
+                                self.window.request_redraw();
+                            }
                             mouse_down = true;
                             self.window.request_redraw();
                         }
@@ -284,7 +318,7 @@ impl Inlyne {
                                         && modifiers.shift();
                                     if zoom {
                                         self.renderer.zoom *= 1.1;
-                                        self.renderer.reposition();
+                                        self.renderer.reposition(&mut self.elements);
                                         self.renderer.set_scroll_y(self.renderer.scroll_y);
                                         self.window.request_redraw();
                                     }
@@ -295,7 +329,7 @@ impl Inlyne {
                                         && modifiers.shift();
                                     if zoom {
                                         self.renderer.zoom *= 0.9;
-                                        self.renderer.reposition();
+                                        self.renderer.reposition(&mut self.elements);
                                         self.renderer.set_scroll_y(self.renderer.scroll_y);
                                         self.window.request_redraw();
                                     }
@@ -320,15 +354,15 @@ impl Inlyne {
     ) -> Option<Hoverable<'a>> {
         let screen_pos = |screen_size: (f32, f32), bounds_offset: f32| {
             (
-                screen_size.0 - bounds_offset - renderer::DEFAULT_MARGIN,
+                screen_size.0 - bounds_offset - DEFAULT_MARGIN,
                 screen_size.1,
             )
         };
 
         elements
             .iter()
-            .find(|&e| e.contains(loc) && !matches!(e.deref(), Element::Spacer(_)))
-            .and_then(|element| match element.deref() {
+            .find(|&e| e.contains(loc) && !matches!(e.inner, Element::Spacer(_)))
+            .and_then(|element| match &element.inner {
                 Element::TextBox(text_box) => {
                     let bounds = element.bounds.as_ref().unwrap();
                     text_box

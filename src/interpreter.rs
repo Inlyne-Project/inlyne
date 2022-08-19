@@ -1,10 +1,11 @@
 use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
 use crate::image::ImageSize;
+use crate::positioner::Spacer;
+use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
 
 use crate::color::Theme;
-use crate::renderer::Spacer;
 use crate::text::{Text, TextBox};
 use crate::utils::Align;
 use crate::Element;
@@ -25,8 +26,6 @@ use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
-
-use crate::renderer::DEFAULT_MARGIN;
 
 mod html {
     use crate::{table::Table, text::TextBox, utils::Align};
