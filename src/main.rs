@@ -243,8 +243,6 @@ impl Inlyne {
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
-                        } else if self.renderer.selection.is_none() {
-                            self.renderer.selection = Some((loc, loc));
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
@@ -258,6 +256,12 @@ impl Inlyne {
                         ..
                     } => match state {
                         ElementState::Pressed => {
+                            // Reset selection
+                            if self.renderer.selection.is_some() {
+                                self.renderer.selection = None;
+                                self.window.request_redraw();
+                            }
+
                             // Try to click a link
                             let screen_size = self.renderer.screen_size();
                             if let Some(hoverable) = Self::find_hoverable(
@@ -282,15 +286,15 @@ impl Inlyne {
                                             self.window.set_cursor_icon(CursorIcon::Default);
                                         }
                                     }
+                                } else if self.renderer.selection.is_none() {
+                                    // Only set selection when not over link
+                                    self.renderer.selection = Some((last_loc, last_loc));
                                 }
+                            } else if self.renderer.selection.is_none() {
+                                self.renderer.selection = Some((last_loc, last_loc));
                             }
 
-                            if self.renderer.selection.is_some() {
-                                self.renderer.selection = None;
-                                self.window.request_redraw();
-                            }
                             mouse_down = true;
-                            self.window.request_redraw();
                         }
                         ElementState::Released => {
                             scrollbar_held = false;
