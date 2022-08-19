@@ -18,7 +18,6 @@ use crate::text::Text;
 use color::Theme;
 use renderer::Positioned;
 use renderer::{Renderer, Spacer};
-use utils::HoverInfo;
 use utils::Rect;
 
 use anyhow::Context;
@@ -116,10 +115,10 @@ impl Inlyne {
     }
 
     pub fn run(mut self) {
-        let mut click_scheduled = false;
         let mut scrollbar_held = false;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
+        let mut last_loc = (0.0, 0.0);
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
             match event {
@@ -181,56 +180,26 @@ impl Inlyne {
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        let jumped = if let Some(hoverable) = Self::find_hoverable(
+                        last_loc = loc;
+
+                        let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
                             &self.renderer.elements,
                             &mut self.renderer.glyph_brush,
                             loc,
                             screen_size,
                             self.renderer.zoom,
                         ) {
-                            let hover_info = match hoverable {
-                                Hoverable::Image(image) => {
-                                    HoverInfo::from(if let Some(link) = &image.is_link {
-                                        if click_scheduled && open::that(link).is_err() {
-                                            eprintln!("Error: Could not open link ({})", link);
-                                        }
-                                        CursorIcon::Hand
-                                    } else {
-                                        CursorIcon::Default
-                                    })
+                            match hoverable {
+                                Hoverable::Image(Image { is_link: None, .. }) => {
+                                    CursorIcon::Default
                                 }
-                                Hoverable::Text(text) => HoverInfo::from(match &text.link {
-                                    Some(link) => {
-                                        if click_scheduled && open::that(link).is_err() {
-                                            if let Some(anchor_pos) =
-                                                self.renderer.anchors.get(link)
-                                            {
-                                                HoverInfo {
-                                                    jump: Some(*anchor_pos),
-                                                    ..Default::default()
-                                                }
-                                            } else {
-                                                HoverInfo::from(CursorIcon::Hand)
-                                            }
-                                        } else {
-                                            HoverInfo::from(CursorIcon::Hand)
-                                        }
-                                    }
-                                    None => HoverInfo::from(CursorIcon::Text),
-                                }),
-                            };
-
-                            self.window.set_cursor_icon(hover_info.cursor_icon);
-                            if let Some(jump_pos) = hover_info.jump {
-                                self.renderer.set_scroll_y(jump_pos);
-                                self.window.request_redraw();
+                                Hoverable::Text(Text { link: None, .. }) => CursorIcon::Text,
+                                _some_link => CursorIcon::Hand,
                             }
-
-                            hover_info.jump.is_some()
                         } else {
-                            self.window.set_cursor_icon(CursorIcon::Default);
-                            false
+                            CursorIcon::Default
                         };
+                        self.window.set_cursor_icon(cursor_icon);
 
                         if scrollbar_held
                             || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
@@ -245,7 +214,7 @@ impl Inlyne {
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
-                        } else if self.renderer.selection.is_none() && !jumped {
+                        } else if self.renderer.selection.is_none() {
                             self.renderer.selection = Some((loc, loc));
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
@@ -253,7 +222,6 @@ impl Inlyne {
                                 self.window.request_redraw();
                             }
                         }
-                        click_scheduled = false;
                     }
                     WindowEvent::MouseInput {
                         state,
@@ -261,13 +229,36 @@ impl Inlyne {
                         ..
                     } => match state {
                         ElementState::Pressed => {
+                            // Try to click a link
+                            let screen_size = self.renderer.screen_size();
+                            if let Some(hoverable) = Self::find_hoverable(
+                                &self.renderer.elements,
+                                &mut self.renderer.glyph_brush,
+                                last_loc,
+                                screen_size,
+                                self.renderer.zoom,
+                            ) {
+                                let maybe_link = match hoverable {
+                                    Hoverable::Image(Image { is_link, .. }) => is_link,
+                                    Hoverable::Text(Text { link, .. }) => link,
+                                };
+
+                                if let Some(link) = maybe_link {
+                                    if open::that(link).is_err() {
+                                        if let Some(anchor_pos) = self.renderer.anchors.get(link) {
+                                            self.renderer.set_scroll_y(*anchor_pos);
+                                            self.window.request_redraw();
+                                            self.window.set_cursor_icon(CursorIcon::Default);
+                                        }
+                                    }
+                                }
+                            }
+
                             self.renderer.selection = None;
                             mouse_down = true;
-                            click_scheduled = true;
                             self.window.request_redraw();
                         }
                         ElementState::Released => {
-                            click_scheduled = false;
                             scrollbar_held = false;
                             mouse_down = false;
                         }
