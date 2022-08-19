@@ -17,6 +17,7 @@ pub struct TextBox {
     pub align: Align,
     pub hidpi_scale: f32,
     pub padding_height: f32,
+    pub background_color: Option<[f32; 4]>,
 }
 
 impl TextBox {
@@ -38,6 +39,10 @@ impl TextBox {
 
     pub fn set_anchor(&mut self, anchor: Option<String>) {
         self.is_anchor = anchor;
+    }
+
+    pub fn set_background_color(&mut self, color: Option<[f32; 4]>) {
+        self.background_color = color;
     }
 
     pub fn with_padding(mut self, padding_height: f32) -> Self {

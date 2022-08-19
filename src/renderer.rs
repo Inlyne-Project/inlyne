@@ -235,7 +235,9 @@ impl Renderer {
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
-                        let color = if text_box.is_code_block {
+                        let color = if let Some(bg_color) = text_box.background_color {
+                            bg_color
+                        } else if text_box.is_code_block {
                             self.theme.code_block_color
                         } else {
                             self.theme.quote_block_color

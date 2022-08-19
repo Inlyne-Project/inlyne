@@ -372,6 +372,21 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "pre" => {
                             self.push_current_textbox();
+                            for Attribute { name, value } in &tag.attrs {
+                                if &name.local == "style" {
+                                    let style = value.to_string();
+                                    if let Some(hex_str) = style
+                                        .split(';')
+                                        .find_map(|style| style.strip_prefix("background-color:#"))
+                                    {
+                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
+                                            let bg_color = hex_to_linear_rgba(hex);
+                                            self.current_textbox
+                                                .set_background_color(Some(bg_color));
+                                        }
+                                    }
+                                }
+                            }
                             self.state.text_options.pre_formatted += 1;
                             self.current_textbox.set_code_block(true);
                         }
@@ -383,7 +398,7 @@ impl TokenSink for HtmlInterpreter {
                         // HACK: spans are only supported enough to get syntax highlighting in code
                         // blocks working
                         "span" => {
-                            if let Some(Attribute { name, value }) = tag.attrs.get(0) {
+                            for Attribute { name, value } in &tag.attrs {
                                 if &name.local == "style" {
                                     let styles = value.to_string();
                                     if let Some(hex_str) = styles
