@@ -53,3 +53,12 @@ pub struct HoverInfo {
     pub cursor_icon: CursorIcon,
     pub jump: Option<f32>,
 }
+
+impl From<CursorIcon> for HoverInfo {
+    fn from(cursor_icon: CursorIcon) -> Self {
+        Self {
+            cursor_icon,
+            ..Default::default()
+        }
+    }
+}

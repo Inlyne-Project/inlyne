@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-
-use crate::utils::{Align, HoverInfo, Rect};
+use crate::utils::{Align, Rect};
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
 };
-use winit::window::CursorIcon;
 
 #[derive(Clone, Debug, Default)]
 pub struct TextBox {
@@ -53,43 +50,23 @@ impl TextBox {
     pub fn set_align(&mut self, align: Align) {
         self.align = align;
     }
-    pub fn hovering_over<T: GlyphCruncher>(
-        &self,
-        anchors: &HashMap<String, f32>,
-        glyph_brush: &mut T,
+
+    pub fn find_hoverable<'a, T: GlyphCruncher>(
+        &'a self,
+        glyph_brush: &'a mut T,
         loc: (f32, f32),
         screen_position: (f32, f32),
         bounds: (f32, f32),
         zoom: f32,
-        click: bool,
-    ) -> HoverInfo {
+    ) -> Option<&'a Text> {
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds, zoom)) {
-            let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
-            if bounds.contains(loc) {
-                let text = &self.texts[glyph.section_index];
-                let cursor_icon = if let Some(ref link) = text.link {
-                    if click && open::that(link).is_err() {
-                        if let Some(anchor_pos) = anchors.get(link) {
-                            return HoverInfo {
-                                jump: Some(*anchor_pos),
-                                ..Default::default()
-                            };
-                        } else {
-                            eprintln!("Error: Could not open link ({})", link);
-                        }
-                    }
-                    CursorIcon::Hand
-                } else {
-                    CursorIcon::Text
-                };
-                return HoverInfo {
-                    cursor_icon,
-                    ..Default::default()
-                };
-            }
-        }
-        HoverInfo::default()
+        glyph_brush
+            .glyphs(&self.glyph_section(screen_position, bounds, zoom))
+            .find(|glyph| {
+                let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
+                bounds.contains(loc)
+            })
+            .map(|glyph| &self.texts[glyph.section_index])
     }
 
     pub fn glyph_bounds<T: GlyphCruncher>(

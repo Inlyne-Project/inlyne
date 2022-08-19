@@ -14,6 +14,7 @@ use crate::interpreter::HtmlInterpreter;
 use crate::opts::FontOptions;
 use crate::opts::Opts;
 use crate::table::Table;
+use crate::text::Text;
 
 use color::Theme;
 use positioner::Positioned;
@@ -42,6 +43,11 @@ use std::sync::Mutex;
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
+}
+
+pub enum Hoverable<'a> {
+    Image(&'a Image),
+    Text(&'a Text),
 }
 
 pub enum Element {
@@ -114,10 +120,10 @@ impl Inlyne {
     }
 
     pub fn run(mut self) {
-        let mut click_scheduled = false;
         let mut scrollbar_held = false;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
+        let mut last_loc = (0.0, 0.0);
         let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -197,79 +203,36 @@ impl Inlyne {
                         self.window.request_redraw();
                     }
                     WindowEvent::CursorMoved { position, .. } => {
-                        let mut over_link = false;
-                        let mut jumped = false;
                         let screen_size = self.renderer.screen_size();
                         let loc = (
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        for element in self.elements.iter() {
-                            if element.contains(loc) {
-                                match &element.inner {
-                                    Element::TextBox(ref text_box) => {
-                                        let bounds = element.bounds.as_ref().unwrap();
-                                        let hover_info = text_box.hovering_over(
-                                            &self.renderer.positioner.anchors,
-                                            &mut self.renderer.glyph_brush,
-                                            loc,
-                                            bounds.pos,
-                                            (
-                                                screen_size.0 - bounds.pos.0 - DEFAULT_MARGIN,
-                                                screen_size.1,
-                                            ),
-                                            self.renderer.zoom,
-                                            click_scheduled,
-                                        );
-                                        self.window.set_cursor_icon(hover_info.cursor_icon);
-                                        if let Some(jump_pos) = hover_info.jump {
-                                            jumped = true;
-                                            self.renderer.set_scroll_y(jump_pos);
-                                            self.window.request_redraw();
-                                        }
-                                        over_link = true;
-                                        break;
-                                    }
-                                    Element::Table(ref table) => {
-                                        let bounds = element.bounds.as_ref().unwrap();
-                                        let hover_info = table.hovering_over(
-                                            &self.renderer.positioner.anchors,
-                                            &mut self.renderer.glyph_brush,
-                                            loc,
-                                            bounds.pos,
-                                            (
-                                                screen_size.0 - bounds.pos.0 - DEFAULT_MARGIN,
-                                                screen_size.1,
-                                            ),
-                                            self.renderer.zoom,
-                                            click_scheduled,
-                                        );
-                                        self.window.set_cursor_icon(hover_info.cursor_icon);
-                                        if let Some(jump_pos) = hover_info.jump {
-                                            jumped = true;
-                                            self.renderer.set_scroll_y(jump_pos);
-                                            self.window.request_redraw();
-                                        }
-                                        over_link = true;
-                                        break;
-                                    }
-                                    Element::Image(image) => {
-                                        if let Some(ref link) = image.is_link {
-                                            if click_scheduled && open::that(link).is_err() {
-                                                eprintln!("Could not open link");
-                                            }
-                                            self.window.set_cursor_icon(CursorIcon::Hand);
-                                            over_link = true;
-                                        }
-                                    }
-                                    _ => {}
+                        last_loc = loc;
+
+                        let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
+                            &self.elements,
+                            &mut self.renderer.glyph_brush,
+                            loc,
+                            screen_size,
+                            self.renderer.zoom,
+                        ) {
+                            match hoverable {
+                                Hoverable::Image(Image { is_link: None, .. }) => {
+                                    CursorIcon::Default
                                 }
+                                Hoverable::Text(Text { link: None, .. }) => CursorIcon::Text,
+                                _some_link => CursorIcon::Hand,
                             }
-                        }
+                        } else {
+                            CursorIcon::Default
+                        };
+                        self.window.set_cursor_icon(cursor_icon);
+
                         if scrollbar_held
                             || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
                                 .contains(position.into())
-                                && click_scheduled)
+                                && mouse_down)
                         {
                             let target_scroll = ((position.y as f32 / screen_size.1)
                                 * self.renderer.positioner.reserved_height)
@@ -280,19 +243,12 @@ impl Inlyne {
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
-                        } else if click_scheduled && !jumped {
-                            self.renderer.selection = Some((loc, loc));
-                        } else if let Some(ref mut selection) = self.renderer.selection {
+                        } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
                                 self.window.request_redraw();
                             }
                         }
-
-                        if !over_link {
-                            self.window.set_cursor_icon(CursorIcon::Default);
-                        }
-                        click_scheduled = false;
                     }
                     WindowEvent::MouseInput {
                         state,
@@ -300,15 +256,47 @@ impl Inlyne {
                         ..
                     } => match state {
                         ElementState::Pressed => {
+                            // Reset selection
                             if self.renderer.selection.is_some() {
                                 self.renderer.selection = None;
                                 self.window.request_redraw();
                             }
+
+                            // Try to click a link
+                            let screen_size = self.renderer.screen_size();
+                            if let Some(hoverable) = Self::find_hoverable(
+                                &self.elements,
+                                &mut self.renderer.glyph_brush,
+                                last_loc,
+                                screen_size,
+                                self.renderer.zoom,
+                            ) {
+                                let maybe_link = match hoverable {
+                                    Hoverable::Image(Image { is_link, .. }) => is_link,
+                                    Hoverable::Text(Text { link, .. }) => link,
+                                };
+
+                                if let Some(link) = maybe_link {
+                                    if open::that(link).is_err() {
+                                        if let Some(anchor_pos) =
+                                            self.renderer.positioner.anchors.get(link)
+                                        {
+                                            self.renderer.set_scroll_y(*anchor_pos);
+                                            self.window.request_redraw();
+                                            self.window.set_cursor_icon(CursorIcon::Default);
+                                        }
+                                    }
+                                } else if self.renderer.selection.is_none() {
+                                    // Only set selection when not over link
+                                    self.renderer.selection = Some((last_loc, last_loc));
+                                }
+                            } else if self.renderer.selection.is_none() {
+                                self.renderer.selection = Some((last_loc, last_loc));
+                            }
+
                             mouse_down = true;
-                            click_scheduled = true;
                         }
                         ElementState::Released => {
-                            click_scheduled = false;
                             scrollbar_held = false;
                             mouse_down = false;
                         }
@@ -359,6 +347,53 @@ impl Inlyne {
                 _ => {}
             }
         });
+    }
+
+    fn find_hoverable<'a, T: wgpu_glyph::GlyphCruncher>(
+        elements: &'a [Positioned<Element>],
+        glyph_brush: &'a mut T,
+        loc: (f32, f32),
+        screen_size: (f32, f32),
+        zoom: f32,
+    ) -> Option<Hoverable<'a>> {
+        let screen_pos = |screen_size: (f32, f32), bounds_offset: f32| {
+            (
+                screen_size.0 - bounds_offset - DEFAULT_MARGIN,
+                screen_size.1,
+            )
+        };
+
+        elements
+            .iter()
+            .find(|&e| e.contains(loc) && !matches!(e.inner, Element::Spacer(_)))
+            .and_then(|element| match &element.inner {
+                Element::TextBox(text_box) => {
+                    let bounds = element.bounds.as_ref().unwrap();
+                    text_box
+                        .find_hoverable(
+                            glyph_brush,
+                            loc,
+                            bounds.pos,
+                            screen_pos(screen_size, bounds.pos.0),
+                            zoom,
+                        )
+                        .map(Hoverable::Text)
+                }
+                Element::Table(table) => {
+                    let bounds = element.bounds.as_ref().unwrap();
+                    table
+                        .find_hoverable(
+                            glyph_brush,
+                            loc,
+                            bounds.pos,
+                            screen_pos(screen_size, bounds.pos.0),
+                            zoom,
+                        )
+                        .map(Hoverable::Text)
+                }
+                Element::Image(image) => Some(Hoverable::Image(image)),
+                Element::Spacer(_) => unreachable!("Spacers are filtered"),
+            })
     }
 }
 
