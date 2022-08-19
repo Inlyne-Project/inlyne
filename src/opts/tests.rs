@@ -1,6 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
 use crate::opts::config::FontOptions;
+use crate::opts::Args;
 
 use super::{cli, config, Opts, ThemeType};
 
@@ -29,6 +30,7 @@ fn defaults() {
             theme: ThemeType::default().as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            args: Args::default(),
         }
     );
 }
@@ -48,6 +50,7 @@ fn config_overrides_default() {
             theme: ThemeType::Dark.as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            args: Args::default(),
         }
     );
     assert_eq!(
@@ -63,6 +66,7 @@ fn config_overrides_default() {
             theme: ThemeType::default().as_theme(),
             scale: Some(1.5),
             font_opts: FontOptions::default(),
+            args: Args::default(),
         }
     );
 }
@@ -79,6 +83,7 @@ fn from_cli() {
             theme: ThemeType::Dark.as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            args: Args::default(),
         }
     );
 
@@ -97,6 +102,7 @@ fn from_cli() {
             theme: ThemeType::Dark.as_theme(),
             scale: Some(1.5),
             font_opts: FontOptions::default(),
+            args: Args::default(),
         }
     );
 }

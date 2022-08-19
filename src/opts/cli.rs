@@ -32,7 +32,7 @@ impl ValueEnum for ThemeType {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Args {
     pub file_path: PathBuf,
     pub theme: Option<ThemeType>,
