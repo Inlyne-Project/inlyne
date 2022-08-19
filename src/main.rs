@@ -328,7 +328,7 @@ impl Inlyne {
         elements
             .iter()
             .find(|&e| e.contains(loc) && !matches!(e.deref(), Element::Spacer(_)))
-            .map(|element| match element.deref() {
+            .and_then(|element| match element.deref() {
                 Element::TextBox(text_box) => {
                     let bounds = element.bounds.as_ref().unwrap();
                     text_box
@@ -339,7 +339,7 @@ impl Inlyne {
                             screen_pos(screen_size, bounds.pos.0),
                             zoom,
                         )
-                        .map(|text| Hoverable::Text(text))
+                        .map(Hoverable::Text)
                 }
                 Element::Table(table) => {
                     let bounds = element.bounds.as_ref().unwrap();
@@ -351,12 +351,11 @@ impl Inlyne {
                             screen_pos(screen_size, bounds.pos.0),
                             zoom,
                         )
-                        .map(|text| Hoverable::Text(text))
+                        .map(Hoverable::Text)
                 }
                 Element::Image(image) => Some(Hoverable::Image(image)),
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
             })
-            .flatten()
     }
 }
 
