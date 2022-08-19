@@ -65,7 +65,12 @@ pub fn command(scale_help: &str, default_theme: ThemeType) -> Command {
 }
 
 impl Args {
-    pub fn args(&self) -> Vec<String> {
+    pub fn new(config: &Config) -> Self {
+        let program_args = std::env::args_os().collect();
+        Self::parse_from(program_args, config)
+    }
+
+    pub fn program_args(&self) -> Vec<String> {
         let mut args = Vec::new();
         args.push(self.file_path.as_os_str().to_str().unwrap().to_string());
         if let Some(theme) = self.theme {

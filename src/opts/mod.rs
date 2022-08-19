@@ -3,13 +3,14 @@ mod config;
 #[cfg(test)]
 mod tests;
 
-use std::{env, ffi::OsString, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::color;
 
 use serde::Deserialize;
 
 pub use self::cli::Args;
+pub use self::config::Config;
 pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -25,29 +26,10 @@ pub struct Opts {
     pub theme: color::Theme,
     pub scale: Option<f32>,
     pub font_opts: FontOptions,
-    pub args: Args,
 }
 
 impl Opts {
-    pub fn parse_and_load() -> Self {
-        let args = env::args_os().collect();
-        let config = match config::Config::load() {
-            Ok(config) => config,
-            Err(err) => {
-                // TODO: switch to logging
-                eprintln!(
-                    "WARN: Failed reading config file. Falling back to defaults. Error: {}",
-                    err
-                );
-                config::Config::default()
-            }
-        };
-
-        Self::parse_and_load_from(args, config)
-    }
-
-    fn parse_and_load_from(args: Vec<OsString>, config: config::Config) -> Self {
-        let args = cli::Args::parse_from(args, &config);
+    pub fn parse_and_load_from(args: &Args, config: config::Config) -> Self {
         let config::Config {
             theme: config_theme,
             scale: config_scale,
@@ -70,8 +52,7 @@ impl Opts {
         let font_opts = config_font_options.unwrap_or_default();
 
         Self {
-            args: args.clone(),
-            file_path: args.file_path,
+            file_path: args.file_path.clone(),
             theme,
             scale: args.scale.or(config_scale),
             font_opts,
