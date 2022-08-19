@@ -59,32 +59,32 @@ impl TextBox {
         click: bool,
     ) -> HoverInfo {
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds, zoom)) {
-            let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
-            if bounds.contains(loc) {
-                let text = &self.texts[glyph.section_index];
-                let cursor_icon = if let Some(ref link) = text.link {
-                    if click && open::that(link).is_err() {
-                        if let Some(anchor_pos) = anchors.get(link) {
-                            return HoverInfo {
-                                jump: Some(*anchor_pos),
-                                ..Default::default()
-                            };
-                        } else {
-                            eprintln!("Error: Could not open link ({})", link);
-                        }
+        if let Some(glyph) = glyph_brush
+            .glyphs(&self.glyph_section(screen_position, bounds, zoom))
+            .find(|glyph| {
+                let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
+                bounds.contains(loc)
+            })
+        {
+            let text = &self.texts[glyph.section_index];
+            HoverInfo::from(if let Some(link) = &text.link {
+                if click && open::that(link).is_err() {
+                    if let Some(anchor_pos) = anchors.get(link) {
+                        return HoverInfo {
+                            jump: Some(*anchor_pos),
+                            ..Default::default()
+                        };
+                    } else {
+                        eprintln!("Error: Could not open link ({})", link);
                     }
-                    CursorIcon::Hand
-                } else {
-                    CursorIcon::Text
-                };
-                return HoverInfo {
-                    cursor_icon,
-                    ..Default::default()
-                };
-            }
+                }
+                CursorIcon::Hand
+            } else {
+                CursorIcon::Text
+            })
+        } else {
+            HoverInfo::default()
         }
-        HoverInfo::default()
     }
 
     pub fn glyph_bounds<T: GlyphCruncher>(

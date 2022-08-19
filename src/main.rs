@@ -16,6 +16,7 @@ use crate::table::Table;
 
 use color::Theme;
 use renderer::{Renderer, Spacer};
+use utils::HoverInfo;
 use utils::Rect;
 
 use anyhow::Context;
@@ -168,79 +169,71 @@ impl Inlyne {
                         self.window.request_redraw();
                     }
                     WindowEvent::CursorMoved { position, .. } => {
-                        let mut over_link = false;
-                        let mut jumped = false;
                         let screen_size = self.renderer.screen_size();
                         let loc = (
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        for element in self.renderer.elements.iter() {
-                            if element.contains(loc) {
-                                match element.deref() {
-                                    Element::TextBox(ref text_box) => {
-                                        let bounds = element.bounds.as_ref().unwrap();
-                                        let hover_info = text_box.hovering_over(
-                                            &self.renderer.anchors,
-                                            &mut self.renderer.glyph_brush,
-                                            loc,
-                                            bounds.pos,
-                                            (
-                                                screen_size.0
-                                                    - bounds.pos.0
-                                                    - renderer::DEFAULT_MARGIN,
-                                                screen_size.1,
-                                            ),
-                                            self.renderer.zoom,
-                                            click_scheduled,
-                                        );
-                                        self.window.set_cursor_icon(hover_info.cursor_icon);
-                                        if let Some(jump_pos) = hover_info.jump {
-                                            jumped = true;
-                                            self.renderer.set_scroll_y(jump_pos);
-                                            self.window.request_redraw();
-                                        }
-                                        over_link = true;
-                                        break;
-                                    }
-                                    Element::Table(ref table) => {
-                                        let bounds = element.bounds.as_ref().unwrap();
-                                        let hover_info = table.hovering_over(
-                                            &self.renderer.anchors,
-                                            &mut self.renderer.glyph_brush,
-                                            loc,
-                                            bounds.pos,
-                                            (
-                                                screen_size.0
-                                                    - bounds.pos.0
-                                                    - renderer::DEFAULT_MARGIN,
-                                                screen_size.1,
-                                            ),
-                                            self.renderer.zoom,
-                                            click_scheduled,
-                                        );
-                                        self.window.set_cursor_icon(hover_info.cursor_icon);
-                                        if let Some(jump_pos) = hover_info.jump {
-                                            jumped = true;
-                                            self.renderer.set_scroll_y(jump_pos);
-                                            self.window.request_redraw();
-                                        }
-                                        over_link = true;
-                                        break;
-                                    }
-                                    Element::Image(image) => {
-                                        if let Some(ref link) = image.is_link {
-                                            if click_scheduled && open::that(link).is_err() {
-                                                eprintln!("Could not open link");
-                                            }
-                                            self.window.set_cursor_icon(CursorIcon::Hand);
-                                            over_link = true;
-                                        }
-                                    }
-                                    _ => {}
+                        let jumped = if let Some(element) =
+                            self.renderer.elements.iter().find(|&e| {
+                                e.contains(loc) && !matches!(e.deref(), Element::Spacer(_))
+                            }) {
+                            let hover_info = match element.deref() {
+                                Element::TextBox(text_box) => {
+                                    let bounds = element.bounds.as_ref().unwrap();
+                                    text_box.hovering_over(
+                                        &self.renderer.anchors,
+                                        &mut self.renderer.glyph_brush,
+                                        loc,
+                                        bounds.pos,
+                                        (
+                                            screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
+                                            screen_size.1,
+                                        ),
+                                        self.renderer.zoom,
+                                        click_scheduled,
+                                    )
                                 }
+                                Element::Table(table) => {
+                                    let bounds = element.bounds.as_ref().unwrap();
+                                    table.hovering_over(
+                                        &self.renderer.anchors,
+                                        &mut self.renderer.glyph_brush,
+                                        loc,
+                                        bounds.pos,
+                                        (
+                                            screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
+                                            screen_size.1,
+                                        ),
+                                        self.renderer.zoom,
+                                        click_scheduled,
+                                    )
+                                }
+                                Element::Image(image) => {
+                                    HoverInfo::from(if let Some(link) = &image.is_link {
+                                        if click_scheduled && open::that(link).is_err() {
+                                            eprintln!("Error: Could not open link ({})", link);
+                                        }
+                                        CursorIcon::Hand
+                                    } else {
+                                        CursorIcon::Default
+                                    })
+                                }
+                                Element::Spacer(_) => unreachable!("Spacers are filtered"),
+                            };
+
+                            self.window.set_cursor_icon(hover_info.cursor_icon);
+                            if let Some(jump_pos) = hover_info.jump {
+                                self.renderer.set_scroll_y(jump_pos);
+                                self.window.request_redraw();
                             }
-                        }
+
+                            hover_info.jump.is_some()
+                        } else {
+                            self.window.set_cursor_icon(CursorIcon::Default);
+                            false
+                        };
+
                         if scrollbar_held
                             || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
                                 .contains(position.into())
@@ -256,15 +249,11 @@ impl Inlyne {
                             }
                         } else if click_scheduled && !jumped {
                             self.renderer.selection = Some((loc, loc));
-                        } else if let Some(ref mut selection) = self.renderer.selection {
+                        } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
                                 self.window.request_redraw();
                             }
-                        }
-
-                        if !over_link {
-                            self.window.set_cursor_icon(CursorIcon::Default);
                         }
                         click_scheduled = false;
                     }
