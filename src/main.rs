@@ -37,6 +37,9 @@ use winit::{
 };
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -88,6 +91,7 @@ pub struct Inlyne {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
+    args: crate::opts::Args,
 }
 
 impl Inlyne {
@@ -95,6 +99,7 @@ impl Inlyne {
         theme: Theme,
         scale: Option<f32>,
         font_opts: FontOptions,
+        args: crate::opts::Args,
     ) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
@@ -116,6 +121,7 @@ impl Inlyne {
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
             clipboard,
             elements: Vec::new(),
+            args,
         })
     }
 
@@ -277,7 +283,23 @@ impl Inlyne {
                                 };
 
                                 if let Some(link) = maybe_link {
-                                    if open::that(link).is_err() {
+                                    let maybe_path = PathBuf::from_str(link).ok();
+                                    let is_md = maybe_path.as_ref().map_or(false, |p| {
+                                        p.extension().map_or(false, |ext| ext == "md")
+                                    });
+                                    if is_md {
+                                        // Open markdown files ourselves
+                                        let mut args = self.args.clone();
+                                        args.file_path =
+                                            maybe_path.expect("Already checked path extension");
+                                        Command::new(
+                                            std::env::current_exe()
+                                                .unwrap_or_else(|_| "inlyne".into()),
+                                        )
+                                        .args(args.args())
+                                        .spawn()
+                                        .expect("Could not spawn new inlyne instance");
+                                    } else if open::that(link).is_err() {
                                         if let Some(anchor_pos) =
                                             self.renderer.positioner.anchors.get(link)
                                         {
@@ -398,13 +420,13 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Opts::parse_and_load();
-    let theme = args.theme;
-    let md_string = std::fs::read_to_string(&args.file_path)
-        .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
-    let inlyne = pollster::block_on(Inlyne::new(theme, args.scale, args.font_opts))?;
+    let opts = Opts::parse_and_load();
+    let theme = opts.theme;
+    let md_string = std::fs::read_to_string(&opts.file_path)
+        .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+    let inlyne = pollster::block_on(Inlyne::new(theme, opts.scale, opts.font_opts, opts.args))?;
 
-    let hidpi_scale = args.scale.unwrap_or(inlyne.window.scale_factor() as f32);
+    let hidpi_scale = opts.scale.unwrap_or(inlyne.window.scale_factor() as f32);
     let interpreter = HtmlInterpreter::new(
         inlyne.window.clone(),
         inlyne.element_queue.clone(),

@@ -9,6 +9,7 @@ use crate::color;
 
 use serde::Deserialize;
 
+pub use self::cli::Args;
 pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -24,6 +25,7 @@ pub struct Opts {
     pub theme: color::Theme,
     pub scale: Option<f32>,
     pub font_opts: FontOptions,
+    pub args: Args,
 }
 
 impl Opts {
@@ -45,11 +47,7 @@ impl Opts {
     }
 
     fn parse_and_load_from(args: Vec<OsString>, config: config::Config) -> Self {
-        let cli::Args {
-            file_path,
-            theme: args_theme,
-            scale: args_scale,
-        } = cli::Args::parse_from(args, &config);
+        let args = cli::Args::parse_from(args, &config);
         let config::Config {
             theme: config_theme,
             scale: config_scale,
@@ -58,7 +56,7 @@ impl Opts {
             font_options: config_font_options,
         } = config;
 
-        let theme = match args_theme.unwrap_or(config_theme) {
+        let theme = match args.theme.unwrap_or(config_theme) {
             ThemeType::Dark => match config_dark_theme {
                 Some(config_dark_theme) => config_dark_theme.merge(color::DARK_DEFAULT),
                 None => color::DARK_DEFAULT,
@@ -72,9 +70,10 @@ impl Opts {
         let font_opts = config_font_options.unwrap_or_default();
 
         Self {
-            file_path,
+            args: args.clone(),
+            file_path: args.file_path,
             theme,
-            scale: args_scale.or(config_scale),
+            scale: args.scale.or(config_scale),
             font_opts,
         }
     }
