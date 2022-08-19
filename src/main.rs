@@ -91,11 +91,11 @@ pub struct Inlyne {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
-    args: crate::opts::Args,
+    args: Args,
 }
 
 impl Inlyne {
-    pub async fn new(opts: Opts, args: crate::opts::Args) -> anyhow::Result<Self> {
+    pub async fn new(opts: Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
