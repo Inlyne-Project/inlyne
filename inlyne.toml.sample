@@ -30,12 +30,12 @@
 # #     "base16-ocean-light", "inspired-github",      "solarized-dark",
 # #     "solarized-light"
 # # ]
-# # Default: "base16-mocha-dark"
-# code-highlighter = "base16-ocean-dark"
+# # Default: "base16-ocean-dark"
+# code-highlighter = "base16-mocha-dark"
 
 # # And the same settings are available for the light theme as well
 # [light-theme]
-# # Default: "inspired-github"
+# # Default: "base16-ocean-light"
 # code-highlighter = "solarized-light"
 # ... # Refer to `[dark-theme]`'s other fields
 
