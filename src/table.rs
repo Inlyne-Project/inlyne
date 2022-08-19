@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use wgpu_glyph::GlyphCruncher;
 
 use crate::{
-    text::TextBox,
-    utils::{HoverInfo, Rect},
+    text::{Text, TextBox},
+    utils::Rect,
 };
 
 pub const TABLE_ROW_GAP: f32 = 20.;
@@ -21,16 +19,14 @@ impl Table {
         Table::default()
     }
 
-    pub fn hovering_over<T: GlyphCruncher>(
-        &self,
-        anchors: &HashMap<String, f32>,
-        glyph_brush: &mut T,
+    pub fn find_hoverable<'a, T: GlyphCruncher>(
+        &'a self,
+        glyph_brush: &'a mut T,
         loc: (f32, f32),
         pos: (f32, f32),
         bounds: (f32, f32),
         zoom: f32,
-        click: bool,
-    ) -> HoverInfo {
+    ) -> Option<&'a Text> {
         let row_heights = self.row_heights(glyph_brush, pos, bounds, zoom);
         let column_widths = self.column_widths(glyph_brush, pos, bounds, zoom);
         let mut x = 0.;
@@ -43,14 +39,12 @@ impl Table {
                 zoom,
             );
             if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
-                return header.hovering_over(
-                    anchors,
+                return header.find_hoverable(
                     glyph_brush,
                     loc,
                     (pos.0 + x, pos.1 + y),
                     (bounds.0 - x, bounds.1),
                     zoom,
-                    click,
                 );
             }
             x += column_widths.get(i).unwrap() + TABLE_COL_GAP;
@@ -66,21 +60,19 @@ impl Table {
                     zoom,
                 );
                 if Rect::new((pos.0 + x, pos.1 + y), size).contains(loc) {
-                    return row_text_box.hovering_over(
-                        anchors,
+                    return row_text_box.find_hoverable(
                         glyph_brush,
                         loc,
                         (pos.0 + x, pos.1 + y),
                         (bounds.0 - x, bounds.1),
                         zoom,
-                        click,
                     );
                 }
                 x += column_widths[i] + TABLE_COL_GAP;
             }
             y += row_heights.get(row_num + 1).unwrap() + TABLE_ROW_GAP;
         }
-        HoverInfo::default()
+        None
     }
 
     pub fn column_widths<T: GlyphCruncher>(

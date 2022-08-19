@@ -13,8 +13,10 @@ use crate::interpreter::HtmlInterpreter;
 use crate::opts::FontOptions;
 use crate::opts::Opts;
 use crate::table::Table;
+use crate::text::Text;
 
 use color::Theme;
+use renderer::Positioned;
 use renderer::{Renderer, Spacer};
 use utils::HoverInfo;
 use utils::Rect;
@@ -39,6 +41,11 @@ use std::sync::Mutex;
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
+}
+
+pub enum Hoverable<'a> {
+    Image(&'a Image),
+    Text(&'a Text),
 }
 
 pub enum Element {
@@ -174,42 +181,15 @@ impl Inlyne {
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        let jumped = if let Some(element) =
-                            self.renderer.elements.iter().find(|&e| {
-                                e.contains(loc) && !matches!(e.deref(), Element::Spacer(_))
-                            }) {
-                            let hover_info = match element.deref() {
-                                Element::TextBox(text_box) => {
-                                    let bounds = element.bounds.as_ref().unwrap();
-                                    text_box.hovering_over(
-                                        &self.renderer.anchors,
-                                        &mut self.renderer.glyph_brush,
-                                        loc,
-                                        bounds.pos,
-                                        (
-                                            screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
-                                            screen_size.1,
-                                        ),
-                                        self.renderer.zoom,
-                                        click_scheduled,
-                                    )
-                                }
-                                Element::Table(table) => {
-                                    let bounds = element.bounds.as_ref().unwrap();
-                                    table.hovering_over(
-                                        &self.renderer.anchors,
-                                        &mut self.renderer.glyph_brush,
-                                        loc,
-                                        bounds.pos,
-                                        (
-                                            screen_size.0 - bounds.pos.0 - renderer::DEFAULT_MARGIN,
-                                            screen_size.1,
-                                        ),
-                                        self.renderer.zoom,
-                                        click_scheduled,
-                                    )
-                                }
-                                Element::Image(image) => {
+                        let jumped = if let Some(hoverable) = Self::find_hoverable(
+                            &self.renderer.elements,
+                            &mut self.renderer.glyph_brush,
+                            loc,
+                            screen_size,
+                            self.renderer.zoom,
+                        ) {
+                            let hover_info = match hoverable {
+                                Hoverable::Image(image) => {
                                     HoverInfo::from(if let Some(link) = &image.is_link {
                                         if click_scheduled && open::that(link).is_err() {
                                             eprintln!("Error: Could not open link ({})", link);
@@ -219,7 +199,25 @@ impl Inlyne {
                                         CursorIcon::Default
                                     })
                                 }
-                                Element::Spacer(_) => unreachable!("Spacers are filtered"),
+                                Hoverable::Text(text) => HoverInfo::from(match &text.link {
+                                    Some(link) => {
+                                        if click_scheduled && open::that(link).is_err() {
+                                            if let Some(anchor_pos) =
+                                                self.renderer.anchors.get(link)
+                                            {
+                                                HoverInfo {
+                                                    jump: Some(*anchor_pos),
+                                                    ..Default::default()
+                                                }
+                                            } else {
+                                                HoverInfo::from(CursorIcon::Hand)
+                                            }
+                                        } else {
+                                            HoverInfo::from(CursorIcon::Hand)
+                                        }
+                                    }
+                                    None => HoverInfo::from(CursorIcon::Text),
+                                }),
                             };
 
                             self.window.set_cursor_icon(hover_info.cursor_icon);
@@ -237,7 +235,7 @@ impl Inlyne {
                         if scrollbar_held
                             || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
                                 .contains(position.into())
-                                && click_scheduled)
+                                && mouse_down)
                         {
                             let target_scroll = ((position.y as f32 / screen_size.1)
                                 * self.renderer.reserved_height)
@@ -247,7 +245,7 @@ impl Inlyne {
                             if !scrollbar_held {
                                 scrollbar_held = true;
                             }
-                        } else if click_scheduled && !jumped {
+                        } else if self.renderer.selection.is_none() && !jumped {
                             self.renderer.selection = Some((loc, loc));
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
@@ -320,6 +318,54 @@ impl Inlyne {
                 _ => {}
             }
         });
+    }
+
+    fn find_hoverable<'a, T: wgpu_glyph::GlyphCruncher>(
+        elements: &'a [Positioned<Element>],
+        glyph_brush: &'a mut T,
+        loc: (f32, f32),
+        screen_size: (f32, f32),
+        zoom: f32,
+    ) -> Option<Hoverable<'a>> {
+        let screen_pos = |screen_size: (f32, f32), bounds_offset: f32| {
+            (
+                screen_size.0 - bounds_offset - renderer::DEFAULT_MARGIN,
+                screen_size.1,
+            )
+        };
+
+        elements
+            .iter()
+            .find(|&e| e.contains(loc) && !matches!(e.deref(), Element::Spacer(_)))
+            .map(|element| match element.deref() {
+                Element::TextBox(text_box) => {
+                    let bounds = element.bounds.as_ref().unwrap();
+                    text_box
+                        .find_hoverable(
+                            glyph_brush,
+                            loc,
+                            bounds.pos,
+                            screen_pos(screen_size, bounds.pos.0),
+                            zoom,
+                        )
+                        .map(|text| Hoverable::Text(text))
+                }
+                Element::Table(table) => {
+                    let bounds = element.bounds.as_ref().unwrap();
+                    table
+                        .find_hoverable(
+                            glyph_brush,
+                            loc,
+                            bounds.pos,
+                            screen_pos(screen_size, bounds.pos.0),
+                            zoom,
+                        )
+                        .map(|text| Hoverable::Text(text))
+                }
+                Element::Image(image) => Some(Hoverable::Image(image)),
+                Element::Spacer(_) => unreachable!("Spacers are filtered"),
+            })
+            .flatten()
     }
 }
 
