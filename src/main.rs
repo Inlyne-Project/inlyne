@@ -59,6 +59,7 @@ enum RelevantEvent {
     LmbReleased,
     ModifiersChanged(ModifiersState),
     KeyPressed(VirtualKeyCode),
+    MainEventsCleared,
 }
 
 impl RelevantEvent {
@@ -94,6 +95,7 @@ impl RelevantEvent {
                 } => Some(Self::KeyPressed(keycode)),
                 _ => None,
             },
+            Event::MainEventsCleared => Some(Self::MainEventsCleared),
             _ => None,
         }
     }
@@ -174,11 +176,39 @@ impl Inlyne {
     }
 
     pub fn run(mut self) {
+        // Why do we handle resizes lazily like this?
+        //
+        // For a bit of background. `winit`'s event loop has separate tiers of events. It won't move
+        // on to the next tier until all of the events from the current tier have been processed and
+        // (here's the kicker) events can keep coming in while all of this is happening. Here are
+        // the tiers for reference
+        //
+        // 1. Window events, User events, Device events
+        // --- `MainEventsCleared` sent ---
+        // 2. Redraw windows (goes back to 1. after this)
+        //
+        // The obvious issue here is that expensive events from one tier continually coming in will
+        // block us from moving on to the next tier
+        //
+        // How does this matter in practice?
+        //
+        // Dragging to resize a window is represented as a mix of window events (`WindowResized` and
+        // `CursorMoved`) followed by a final `MainEventsCleared`. With large READMEs a window
+        // resize will be expensive because it has to reposition many elements. This means that
+        // dragging a window will queue up a lot of window resizes before we can even redraw a
+        // window, but it's pointless to calculate a window resize if there is already another size
+        // pending
+        //
+        // Instead we lazily store the size and only reposition elements and request a redraw when
+        // we recieve a `MainEventsCleared` indicating that we've finished recieveing the first tier
+        // of events. This prevents us from clogging up the queue with a bunch of costly resizes.
+        // For more information take a look at
+        // https://github.com/trimental/inlyne/issues/25
+        let mut pending_resize = None;
         let mut scrollbar_held = false;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
-        let mut pending_resize = None;
         let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |winit_event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -188,51 +218,7 @@ impl Inlyne {
                 None => return,
             };
 
-            // Why do we handle resizes lazily like this?
-            //
-            // For a bit of background. `winit`'s event loop has separate tiers of events. It won't
-            // move on to the next tier until all of the events from the current tier have been
-            // processed and (here's the kicker) events can keep coming in while all of this is
-            // happening. Here are the tiers for reference
-            //
-            // 1. Window events, User events, Device events
-            // 2. Redraw windows (goes back to 1. after this)
-            //
-            // The obvious issue here is that expensive events from one tier continually coming in
-            // will block us from moving on to the next tier
-            //
-            // How does this matter in practice?
-            //
-            // Dragging to resize a window is represented as a mix of window events
-            // (`WindowResized` and `CursorMoved`) followed by a final `RedrawRequested`. With large
-            // README's a window resize will be expensive because it has to reposition many
-            // elements. This means that dragging a window will queue up a lot of window resizes
-            // before we can even redraw a window, but it's pointless to calculate a window resize
-            // if there is already another size pending
-            //
-            // Instead we lazily store the size and only reposition elements if we get an event
-            // other than `WindowResized` or `CursorMoved`. This prevents us from clogging up the
-            // queue with a bunch of costly resizes. For more information take a look at
-            // https://github.com/trimental/inlyne/issues/25
-            match (&event, pending_resize) {
-                (&RelevantEvent::WindowResized(size), _) => {
-                    pending_resize = Some(size);
-                    return;
-                }
-                // Cursor will be moving when window is resizing so ignore it
-                (RelevantEvent::CursorMoved(_), _) => {}
-                (_, Some(size)) => {
-                    self.renderer.config.width = size.width;
-                    self.renderer.config.height = size.height;
-                    self.renderer.positioner.screen_size = size.into();
-                    self.renderer
-                        .surface
-                        .configure(&self.renderer.device, &self.renderer.config);
-                    self.renderer.reposition(&mut self.elements);
-                    pending_resize = None;
-                }
-                _ => {}
-            }
+            println!("{event:?}");
 
             match event {
                 RelevantEvent::UserEvent(inlyne_event) => match inlyne_event {
@@ -241,8 +227,8 @@ impl Inlyne {
                         self.window.request_redraw()
                     }
                 },
-                RelevantEvent::WindowResized(_) => {
-                    unreachable!("Resizing is done lazily")
+                RelevantEvent::WindowResized(size) => {
+                    pending_resize = Some(size);
                 }
                 RelevantEvent::RedrawRequested => {
                     let queue = {
@@ -420,6 +406,19 @@ impl Inlyne {
                     }
                     _ => {}
                 },
+                RelevantEvent::MainEventsCleared => {
+                    if let Some(size) = pending_resize {
+                        self.renderer.config.width = size.width;
+                        self.renderer.config.height = size.height;
+                        self.renderer.positioner.screen_size = size.into();
+                        self.renderer
+                            .surface
+                            .configure(&self.renderer.device, &self.renderer.config);
+                        self.renderer.reposition(&mut self.elements);
+                        pending_resize = None;
+                        self.window.request_redraw();
+                    }
+                }
             }
         });
     }
