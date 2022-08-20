@@ -31,7 +31,6 @@ use winit::event::ModifiersState;
 use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, KeyboardInput, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{CursorIcon, Window},
@@ -47,61 +46,6 @@ use std::sync::Mutex;
 #[derive(Debug)]
 pub enum InlyneEvent {
     Reposition,
-}
-
-/// All the `winit::event::Event`s that we care about
-#[derive(Debug)]
-enum RelevantEvent {
-    UserEvent(InlyneEvent),
-    WindowResized(PhysicalSize<u32>),
-    RedrawRequested,
-    CloseRequested,
-    MouseWheel(MouseScrollDelta),
-    CursorMoved(PhysicalPosition<f64>),
-    LmbPressed,
-    LmbReleased,
-    ModifiersChanged(ModifiersState),
-    KeyPressed(VirtualKeyCode),
-    MainEventsCleared,
-}
-
-impl RelevantEvent {
-    fn new(event: Event<'_, InlyneEvent>) -> Option<RelevantEvent> {
-        match event {
-            Event::UserEvent(inlyne_event) => Some(Self::UserEvent(inlyne_event)),
-            Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => Some(Self::WindowResized(size)),
-            Event::RedrawRequested(_) => Some(Self::RedrawRequested),
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => Some(Self::CloseRequested),
-                WindowEvent::MouseWheel { delta, .. } => Some(Self::MouseWheel(delta)),
-                WindowEvent::CursorMoved { position, .. } => Some(Self::CursorMoved(position)),
-                WindowEvent::MouseInput {
-                    state,
-                    button: MouseButton::Left,
-                    ..
-                } => match state {
-                    ElementState::Pressed => Some(Self::LmbPressed),
-                    ElementState::Released => Some(Self::LmbReleased),
-                },
-                WindowEvent::ModifiersChanged(state) => Some(Self::ModifiersChanged(state)),
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(keycode),
-                            ..
-                        },
-                    ..
-                } => Some(Self::KeyPressed(keycode)),
-                _ => None,
-            },
-            Event::MainEventsCleared => Some(Self::MainEventsCleared),
-            _ => None,
-        }
-    }
 }
 
 pub enum Hoverable<'a> {
@@ -193,12 +137,12 @@ impl Inlyne {
         //
         // How does this matter in practice?
         //
-        // Dragging to resize a window is represented as a mix of window events (`WindowResized` and
-        // `CursorMoved`) followed by a final `MainEventsCleared`. With large READMEs a window
-        // resize will be expensive because it has to reposition many elements. This means that
-        // dragging a window will queue up a lot of window resizes before we can even redraw a
-        // window, but it's pointless to calculate a window resize if there is already another size
-        // pending
+        // Dragging to resize a window is represented as a mix of window events
+        // (`WindowEvent::Resized` and `WindowEvent::CursorMoved`) followed by a final
+        // `MainEventsCleared`. With large READMEs a window resize will be expensive because it has
+        // to reposition many elements. This means that dragging a window will queue up a lot of
+        // window resizes before we can even redraw a window, but it's pointless to calculate a
+        // window resize if there is already another size pending
         //
         // Instead we lazily store the size and only reposition elements and request a redraw when
         // we recieve a `MainEventsCleared` indicating that we've finished recieveing the first tier
@@ -211,25 +155,17 @@ impl Inlyne {
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
         let event_loop_proxy = self.event_loop.create_proxy();
-        self.event_loop.run(move |winit_event, _, control_flow| {
+        self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
-            let event = match RelevantEvent::new(winit_event) {
-                Some(event) => event,
-                None => return,
-            };
-
             match event {
-                RelevantEvent::UserEvent(inlyne_event) => match inlyne_event {
+                Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
                         self.renderer.reposition(&mut self.elements);
                         self.window.request_redraw()
                     }
                 },
-                RelevantEvent::WindowResized(size) => {
-                    pending_resize = Some(size);
-                }
-                RelevantEvent::RedrawRequested => {
+                Event::RedrawRequested(_) => {
                     let queue = {
                         self.element_queue
                             .try_lock()
@@ -264,163 +200,188 @@ impl Inlyne {
                         .with_context(|| "Renderer failed to redraw the screen")
                         .unwrap();
                 }
-                RelevantEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                RelevantEvent::MouseWheel(delta) => {
-                    let y_pixel_shift = match delta {
-                        MouseScrollDelta::PixelDelta(pos) => {
-                            pos.y as f32 * self.renderer.hidpi_scale * self.renderer.zoom
-                        }
-                        // Arbitrarily pick x30 as the number of pixels to shift per line
-                        MouseScrollDelta::LineDelta(_, y_delta) => {
-                            y_delta as f32 * 32.0 * self.renderer.hidpi_scale * self.renderer.zoom
-                        }
-                    };
-
-                    self.renderer
-                        .set_scroll_y(self.renderer.scroll_y - y_pixel_shift);
-                    self.window.request_redraw();
-                }
-                RelevantEvent::CursorMoved(position) => {
-                    let screen_size = self.renderer.screen_size();
-                    let loc = (
-                        position.x as f32,
-                        position.y as f32 + self.renderer.scroll_y,
-                    );
-                    last_loc = loc;
-
-                    let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
-                        &self.elements,
-                        &mut self.renderer.glyph_brush,
-                        loc,
-                        screen_size,
-                        self.renderer.zoom,
-                    ) {
-                        match hoverable {
-                            Hoverable::Image(Image { is_link: None, .. }) => CursorIcon::Default,
-                            Hoverable::Text(Text { link: None, .. }) => CursorIcon::Text,
-                            _some_link => CursorIcon::Hand,
-                        }
-                    } else {
-                        CursorIcon::Default
-                    };
-                    self.window.set_cursor_icon(cursor_icon);
-
-                    if scrollbar_held
-                        || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
-                            .contains(position.into())
-                            && mouse_down)
-                    {
-                        let target_scroll = ((position.y as f32 / screen_size.1)
-                            * self.renderer.positioner.reserved_height)
-                            - (screen_size.1 / self.renderer.positioner.reserved_height
-                                * screen_size.1);
-                        self.renderer.set_scroll_y(target_scroll);
-                        self.window.request_redraw();
-                        if !scrollbar_held {
-                            scrollbar_held = true;
-                        }
-                    } else if let Some(selection) = &mut self.renderer.selection {
-                        if mouse_down {
-                            selection.1 = loc;
-                            self.window.request_redraw();
-                        }
-                    }
-                }
-                RelevantEvent::LmbPressed => {
-                    // Reset selection
-                    if self.renderer.selection.is_some() {
-                        self.renderer.selection = None;
-                        self.window.request_redraw();
-                    }
-
-                    // Try to click a link
-                    let screen_size = self.renderer.screen_size();
-                    if let Some(hoverable) = Self::find_hoverable(
-                        &self.elements,
-                        &mut self.renderer.glyph_brush,
-                        last_loc,
-                        screen_size,
-                        self.renderer.zoom,
-                    ) {
-                        let maybe_link = match hoverable {
-                            Hoverable::Image(Image { is_link, .. }) => is_link,
-                            Hoverable::Text(Text { link, .. }) => link,
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(size) => pending_resize = Some(size),
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        let y_pixel_shift = match delta {
+                            MouseScrollDelta::PixelDelta(pos) => {
+                                pos.y as f32 * self.renderer.hidpi_scale * self.renderer.zoom
+                            }
+                            // Arbitrarily pick x30 as the number of pixels to shift per line
+                            MouseScrollDelta::LineDelta(_, y_delta) => {
+                                y_delta as f32
+                                    * 32.0
+                                    * self.renderer.hidpi_scale
+                                    * self.renderer.zoom
+                            }
                         };
 
-                        if let Some(link) = maybe_link {
-                            let maybe_path = PathBuf::from_str(link).ok();
-                            let is_md = maybe_path
-                                .as_ref()
-                                .map_or(false, |p| p.extension().map_or(false, |ext| ext == "md"));
-                            if is_md {
-                                // Open markdown files ourselves
-                                let mut args = self.args.clone();
-                                args.file_path =
-                                    maybe_path.expect("Already checked path extension");
-                                Command::new(
-                                    std::env::current_exe().unwrap_or_else(|_| "inlyne".into()),
-                                )
-                                .args(args.program_args())
-                                .spawn()
-                                .expect("Could not spawn new inlyne instance");
-                            } else if open::that(link).is_err() {
-                                if let Some(anchor_pos) = self.renderer.positioner.anchors.get(link)
-                                {
-                                    self.renderer.set_scroll_y(*anchor_pos);
-                                    self.window.request_redraw();
-                                    self.window.set_cursor_icon(CursorIcon::Default);
-                                }
-                            }
-                        } else if self.renderer.selection.is_none() {
-                            // Only set selection when not over link
-                            self.renderer.selection = Some((last_loc, last_loc));
-                        }
-                    } else if self.renderer.selection.is_none() {
-                        self.renderer.selection = Some((last_loc, last_loc));
+                        self.renderer
+                            .set_scroll_y(self.renderer.scroll_y - y_pixel_shift);
+                        self.window.request_redraw();
                     }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        let screen_size = self.renderer.screen_size();
+                        let loc = (
+                            position.x as f32,
+                            position.y as f32 + self.renderer.scroll_y,
+                        );
+                        last_loc = loc;
 
-                    mouse_down = true;
-                }
-                RelevantEvent::LmbReleased => {
-                    scrollbar_held = false;
-                    mouse_down = false;
-                }
-                RelevantEvent::ModifiersChanged(new_state) => modifiers = new_state,
-                RelevantEvent::KeyPressed(keycode) => match keycode {
-                    VirtualKeyCode::C => {
-                        let copy = (cfg!(target_os = "macos") && modifiers.logo())
-                            || (!cfg!(target_os = "macos") && modifiers.ctrl());
-                        if copy {
-                            self.clipboard
-                                .set_contents(self.renderer.selection_text.trim().to_owned())
-                                .unwrap()
-                        }
-                    }
-                    VirtualKeyCode::Equals => {
-                        let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                            || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                            && modifiers.shift();
-                        if zoom {
-                            self.renderer.zoom *= 1.1;
-                            self.renderer.reposition(&mut self.elements);
-                            self.renderer.set_scroll_y(self.renderer.scroll_y);
+                        let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
+                            &self.elements,
+                            &mut self.renderer.glyph_brush,
+                            loc,
+                            screen_size,
+                            self.renderer.zoom,
+                        ) {
+                            match hoverable {
+                                Hoverable::Image(Image { is_link: None, .. }) => {
+                                    CursorIcon::Default
+                                }
+                                Hoverable::Text(Text { link: None, .. }) => CursorIcon::Text,
+                                _some_link => CursorIcon::Hand,
+                            }
+                        } else {
+                            CursorIcon::Default
+                        };
+                        self.window.set_cursor_icon(cursor_icon);
+
+                        if scrollbar_held
+                            || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
+                                .contains(position.into())
+                                && mouse_down)
+                        {
+                            let target_scroll = ((position.y as f32 / screen_size.1)
+                                * self.renderer.positioner.reserved_height)
+                                - (screen_size.1 / self.renderer.positioner.reserved_height
+                                    * screen_size.1);
+                            self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
+                            if !scrollbar_held {
+                                scrollbar_held = true;
+                            }
+                        } else if let Some(selection) = &mut self.renderer.selection {
+                            if mouse_down {
+                                selection.1 = loc;
+                                self.window.request_redraw();
+                            }
                         }
                     }
-                    VirtualKeyCode::Minus => {
-                        let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                            || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                            && modifiers.shift();
-                        if zoom {
-                            self.renderer.zoom *= 0.9;
-                            self.renderer.reposition(&mut self.elements);
-                            self.renderer.set_scroll_y(self.renderer.scroll_y);
-                            self.window.request_redraw();
+                    WindowEvent::MouseInput {
+                        state,
+                        button: MouseButton::Left,
+                        ..
+                    } => match state {
+                        ElementState::Pressed => {
+                            // Reset selection
+                            if self.renderer.selection.is_some() {
+                                self.renderer.selection = None;
+                                self.window.request_redraw();
+                            }
+
+                            // Try to click a link
+                            let screen_size = self.renderer.screen_size();
+                            if let Some(hoverable) = Self::find_hoverable(
+                                &self.elements,
+                                &mut self.renderer.glyph_brush,
+                                last_loc,
+                                screen_size,
+                                self.renderer.zoom,
+                            ) {
+                                let maybe_link = match hoverable {
+                                    Hoverable::Image(Image { is_link, .. }) => is_link,
+                                    Hoverable::Text(Text { link, .. }) => link,
+                                };
+
+                                if let Some(link) = maybe_link {
+                                    let maybe_path = PathBuf::from_str(link).ok();
+                                    let is_md = maybe_path.as_ref().map_or(false, |p| {
+                                        p.extension().map_or(false, |ext| ext == "md")
+                                    });
+                                    if is_md {
+                                        // Open markdown files ourselves
+                                        let mut args = self.args.clone();
+                                        args.file_path =
+                                            maybe_path.expect("Already checked path extension");
+                                        Command::new(
+                                            std::env::current_exe()
+                                                .unwrap_or_else(|_| "inlyne".into()),
+                                        )
+                                        .args(args.program_args())
+                                        .spawn()
+                                        .expect("Could not spawn new inlyne instance");
+                                    } else if open::that(link).is_err() {
+                                        if let Some(anchor_pos) =
+                                            self.renderer.positioner.anchors.get(link)
+                                        {
+                                            self.renderer.set_scroll_y(*anchor_pos);
+                                            self.window.request_redraw();
+                                            self.window.set_cursor_icon(CursorIcon::Default);
+                                        }
+                                    }
+                                } else if self.renderer.selection.is_none() {
+                                    // Only set selection when not over link
+                                    self.renderer.selection = Some((last_loc, last_loc));
+                                }
+                            } else if self.renderer.selection.is_none() {
+                                self.renderer.selection = Some((last_loc, last_loc));
+                            }
+
+                            mouse_down = true;
                         }
-                    }
+                        ElementState::Released => {
+                            scrollbar_held = false;
+                            mouse_down = false;
+                        }
+                    },
+                    WindowEvent::ModifiersChanged(new_state) => modifiers = new_state,
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    } => match keycode {
+                        VirtualKeyCode::C => {
+                            let copy = (cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl());
+                            if copy {
+                                self.clipboard
+                                    .set_contents(self.renderer.selection_text.trim().to_owned())
+                                    .unwrap()
+                            }
+                        }
+                        VirtualKeyCode::Equals => {
+                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                && modifiers.shift();
+                            if zoom {
+                                self.renderer.zoom *= 1.1;
+                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                self.window.request_redraw();
+                            }
+                        }
+                        VirtualKeyCode::Minus => {
+                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                && modifiers.shift();
+                            if zoom {
+                                self.renderer.zoom *= 0.9;
+                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                self.window.request_redraw();
+                            }
+                        }
+                        _ => {}
+                    },
                     _ => {}
                 },
-                RelevantEvent::MainEventsCleared => {
+                Event::MainEventsCleared => {
                     if let Some(size) = pending_resize {
                         self.renderer.config.width = size.width;
                         self.renderer.config.height = size.height;
@@ -433,6 +394,7 @@ impl Inlyne {
                         self.window.request_redraw();
                     }
                 }
+                _ => {}
             }
         });
     }
