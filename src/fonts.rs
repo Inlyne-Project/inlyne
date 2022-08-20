@@ -10,7 +10,7 @@ use font_kit::properties::{Properties, Style, Weight};
 use font_kit::source::SystemSource;
 use font_kit::sources::fontconfig::FontconfigSource;
 use serde::{Deserialize, Serialize};
-use wgpu_glyph::ab_glyph::{FontArc, FontVec};
+use wgpu_glyph::ab_glyph::{FontArc, FontRef, FontVec};
 
 use crate::opts::FontOptions;
 
@@ -98,8 +98,8 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
     };
 
     handles
-        .iter()
-        .map(|font| load_handle(font).map(|font_vec| font_vec.into()))
+        .into_iter()
+        .map(load_handle)
         .collect::<anyhow::Result<Vec<FontArc>>>()
 }
 
@@ -133,13 +133,13 @@ fn load_best_handles() -> anyhow::Result<Vec<Handle>> {
 fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<Handle>> {
     let source = SystemSource::new();
     let name = &[family_name];
-    let base = select_best_font(&source, name, &Properties::new().style(Style::Normal))?;
-    let italic = select_best_font(&source, name, &Properties::new().style(Style::Italic))?;
-    let bold = select_best_font(&source, name, &Properties::new().weight(Weight::BOLD))?;
+    let base = select_best_font(&source, name, Properties::new().style(Style::Normal))?;
+    let italic = select_best_font(&source, name, Properties::new().style(Style::Italic))?;
+    let bold = select_best_font(&source, name, Properties::new().weight(Weight::BOLD))?;
     let bold_italic = select_best_font(
         &source,
         name,
-        &Properties::new().weight(Weight::BOLD).style(Style::Italic),
+        Properties::new().weight(Weight::BOLD).style(Style::Italic),
     )?;
 
     Ok(vec![base, italic, bold, bold_italic])
@@ -179,15 +179,24 @@ fn select_best_font(
     })
 }
 
-pub fn load_handle(handle: &Handle) -> anyhow::Result<FontVec> {
+pub fn load_handle(handle: Handle) -> anyhow::Result<FontArc> {
     match handle {
         Handle::Path { path, font_index } => {
-            let buffer = fs::read(path)?;
-            Ok(FontVec::try_from_vec_and_index(buffer, *font_index)?)
+            let file = fs::File::open(path)?;
+            // Font files can be big. Memmap and leak the font file to avoid keeping it in memory.
+            // Because we load 8 font files this will leak exactly 8 * 16 = 128 bytes
+            // SAFETY: This is safe as long as nothing (either in or outside of this program)
+            // modifies the file while it's memmapped. Unfortunately there is nothing we can do to
+            // guarantee this won't happen, but memmapping font files is a common practice
+            let mmap = unsafe { memmap2::Mmap::map(&file)? };
+            let leaked = Box::leak(Box::new(mmap));
+            Ok(FontArc::from(FontRef::try_from_slice_and_index(
+                leaked, font_index,
+            )?))
         }
-        Handle::Memory { bytes, font_index } => Ok(FontVec::try_from_vec_and_index(
+        Handle::Memory { bytes, font_index } => Ok(FontArc::from(FontVec::try_from_vec_and_index(
             bytes.to_vec(),
-            *font_index,
-        )?),
+            font_index,
+        )?)),
     }
 }
