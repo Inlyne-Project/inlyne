@@ -93,7 +93,7 @@ impl TextBox {
         zoom: f32,
     ) -> (f32, f32) {
         if self.texts.is_empty() {
-            return (0., self.padding_height);
+            return (0., self.padding_height * self.hidpi_scale * zoom);
         }
 
         if let Some(bounds) =

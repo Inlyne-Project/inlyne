@@ -190,7 +190,7 @@ impl HtmlInterpreter {
         self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale);
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(10.).into());
+        self.push_element(Spacer::new(5.).into());
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);

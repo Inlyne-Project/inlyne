@@ -77,7 +77,10 @@ impl Positioner {
 
                 Rect::new(pos, size)
             }
-            Element::Spacer(spacer) => Rect::new((0., self.reserved_height), (0., spacer.space)),
+            Element::Spacer(spacer) => Rect::new(
+                (0., self.reserved_height),
+                (0., spacer.space * self.hidpi_scale * zoom),
+            ),
             Element::Image(image) => {
                 let size = image.size(self.screen_size, zoom);
                 match image.is_aligned {

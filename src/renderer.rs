@@ -245,13 +245,11 @@ impl Renderer {
                         };
 
                         let mut min = (
-                            (scrolled_pos.0 - 10. * self.hidpi_scale * self.zoom)
-                                .min(screen_size.0 - DEFAULT_MARGIN),
+                            (scrolled_pos.0 - 10.).max(DEFAULT_MARGIN - 10.),
                             scrolled_pos.1,
                         );
                         let max = (
-                            (min.0 + bounds.0 + 10. * self.hidpi_scale * self.zoom)
-                                .min(screen_size.0 - DEFAULT_MARGIN + 10.),
+                            (min.0 + bounds.0 + 10.).max(DEFAULT_MARGIN - 10.),
                             min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
@@ -271,7 +269,7 @@ impl Renderer {
                             let max = (
                                 (scrolled_pos.0 - 10. - nest_indent)
                                     .min(screen_size.0 - DEFAULT_MARGIN),
-                                min.1 + size.1 + 5.,
+                                min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                             );
                             indice_ranges.push(self.draw_rectangle(
                                 Rect::from_min_max(min, max),
@@ -292,7 +290,7 @@ impl Renderer {
                             );
                             let max = (
                                 line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
-                                line.1 .1 + 2.,
+                                line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                             );
                             indice_ranges.push(self.draw_rectangle(
                                 Rect::from_min_max(min, max),
@@ -339,7 +337,11 @@ impl Renderer {
                     let header_height = row_heights.first().unwrap();
                     for (col, width) in column_widths.iter().enumerate() {
                         let text_box = table.headers.get(col).unwrap();
-                        let bounds = (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
+                        let bounds = (
+                            (screen_size.0 - pos.0 - x - DEFAULT_MARGIN)
+                                .min(screen_size.0 - DEFAULT_MARGIN),
+                            f32::INFINITY,
+                        );
                         self.glyph_brush.queue(&text_box.glyph_section(
                             (pos.0 + x, pos.1 + y),
                             bounds,
@@ -373,9 +375,10 @@ impl Renderer {
                             scrolled_pos.1 + y,
                         );
                         let max = (
-                            scrolled_pos.0
-                                + x.max(scrolled_pos.0).min(screen_size.0 - DEFAULT_MARGIN),
-                            scrolled_pos.1 + y + 3.,
+                            (scrolled_pos.0 + x)
+                                .max(scrolled_pos.0)
+                                .min(screen_size.0 - DEFAULT_MARGIN),
+                            scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                         );
                         indice_ranges.push(
                             self.draw_rectangle(
@@ -433,7 +436,7 @@ impl Renderer {
                                 (scrolled_pos.0 + x)
                                     .max(scrolled_pos.0)
                                     .min(screen_size.0 - DEFAULT_MARGIN),
-                                scrolled_pos.1 + y + 3.,
+                                scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                             );
                             let color = self.theme.code_block_color;
                             indice_ranges
