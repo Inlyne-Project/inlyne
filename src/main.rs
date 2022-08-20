@@ -382,7 +382,7 @@ impl Inlyne {
                     _ => {}
                 },
                 Event::MainEventsCleared => {
-                    if let Some(size) = pending_resize {
+                    if let Some(size) = pending_resize.take() {
                         self.renderer.config.width = size.width;
                         self.renderer.config.height = size.height;
                         self.renderer.positioner.screen_size = size.into();
@@ -390,7 +390,7 @@ impl Inlyne {
                             .surface
                             .configure(&self.renderer.device, &self.renderer.config);
                         self.renderer.reposition(&mut self.elements);
-                        pending_resize = None;
+                        self.renderer.set_scroll_y(self.renderer.scroll_y);
                         self.window.request_redraw();
                     }
                 }
