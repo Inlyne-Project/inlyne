@@ -1,79 +1,188 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use anyhow::Context;
 use font_kit::family_name::FamilyName;
 use font_kit::handle::Handle;
 use font_kit::properties::{Properties, Style, Weight};
 use font_kit::source::SystemSource;
+use font_kit::sources::fontconfig::FontconfigSource;
+use serde::{Deserialize, Serialize};
 use wgpu_glyph::ab_glyph::{FontArc, FontVec};
 
 use crate::opts::FontOptions;
 
-pub fn get_fonts(font_opts: FontOptions) -> anyhow::Result<Vec<FontArc>> {
-    let regular = font_opts
-        .regular_font
-        .map(|font| [FamilyName::Title(font)])
-        .unwrap_or([FamilyName::SansSerif]);
-    let monospace = font_opts
-        .monospace_font
-        .map(|font| [FamilyName::Title(font)])
-        .unwrap_or([FamilyName::Monospace]);
-    get_family_fonts(&regular, &monospace)
+#[derive(Deserialize, Serialize)]
+struct FontCache {
+    name: String,
+    base: HandleCache,
+    italic: HandleCache,
+    bold: HandleCache,
+    bold_italic: HandleCache,
 }
 
-pub fn get_family_fonts(
-    regular: &[FamilyName],
-    monospace: &[FamilyName],
-) -> anyhow::Result<Vec<FontArc>> {
-    let font_source = SystemSource::new();
-    let default_text_reg = font_source
-        .select_best_match(regular, Properties::new().style(Style::Normal))
-        .with_context(|| "No font found for regular font")?;
-    let default_text_reg_italic = font_source
-        .select_best_match(regular, Properties::new().style(Style::Italic))
-        .with_context(|| "No font found for regular font with italics")?;
-    let default_text_bold = font_source
-        .select_best_match(regular, Properties::new().weight(Weight::BOLD))
-        .with_context(|| "No font found for regular font in bold")?;
-    let default_text_bold_italic = font_source
-        .select_best_match(
-            regular,
-            Properties::new().weight(Weight::BOLD).style(Style::Italic),
-        )
-        .with_context(|| "No font found for regular font in bold with italics")?;
-    let monospace_text_reg = font_source
-        .select_best_match(monospace, Properties::new().style(Style::Normal))
-        .with_context(|| "No font found for monospace font")?;
-    let monospace_text_reg_italic = font_source
-        .select_best_match(monospace, Properties::new().style(Style::Italic))
-        .with_context(|| "No font found for monospace font with italics")?;
-    let monospace_text_bold = font_source
-        .select_best_match(monospace, Properties::new().weight(Weight::BOLD))
-        .with_context(|| "No font found for monospace font in bold")?;
-    let monospace_text_bold_italic = font_source
-        .select_best_match(
-            monospace,
-            Properties::new().weight(Weight::BOLD).style(Style::Italic),
-        )
-        .with_context(|| "No font found for monospace font in bold with italics")?;
-    let fonts = [
-        default_text_reg,
-        default_text_reg_italic,
-        default_text_bold,
-        default_text_bold_italic,
-        monospace_text_reg,
-        monospace_text_reg_italic,
-        monospace_text_bold,
-        monospace_text_bold_italic,
-    ];
-    fonts
+impl FontCache {
+    fn new(name: &str, handles: &[Handle]) -> Option<Self> {
+        let mut it = handles.iter().map(HandleCache::new);
+        let cache = Self {
+            name: name.to_owned(),
+            base: it.next().flatten()?,
+            italic: it.next().flatten()?,
+            bold: it.next().flatten()?,
+            bold_italic: it.next().flatten()?,
+        };
+        Some(cache)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct HandleCache {
+    path: PathBuf,
+    font_index: u32,
+}
+
+impl HandleCache {
+    fn new(handle: &Handle) -> Option<Self> {
+        if let Handle::Path { path, font_index } = handle {
+            Some(Self {
+                path: path.to_owned(),
+                font_index: *font_index,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl From<HandleCache> for Handle {
+    fn from(HandleCache { path, font_index }: HandleCache) -> Self {
+        Self::Path { path, font_index }
+    }
+}
+
+pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
+    let regular_name = &font_opts.regular_font;
+    let monospace_name = &font_opts.monospace_font;
+
+    let handles = if regular_name.is_none() && monospace_name.is_none() {
+        load_best_handles()?
+    } else {
+        match dirs::cache_dir() {
+            Some(cache_dir) => {
+                let inlyne_cache = cache_dir.join("inlyne");
+                if !inlyne_cache.exists() {
+                    let _ = fs::create_dir_all(&inlyne_cache);
+                }
+
+                let reg_cache_path = inlyne_cache.join("font_regular.toml");
+                let mut handles = load_maybe_cached_handles_by_name(
+                    regular_name.as_deref(),
+                    FamilyName::SansSerif,
+                    &reg_cache_path,
+                )?;
+
+                let mono_cache_path = inlyne_cache.join("font_mono.toml");
+                let mono_handles = load_maybe_cached_handles_by_name(
+                    monospace_name.as_deref(),
+                    FamilyName::Monospace,
+                    &mono_cache_path,
+                )?;
+
+                handles.extend(mono_handles.into_iter());
+                handles
+            }
+            None => load_best_handles()?,
+        }
+    };
+
+    handles
         .iter()
         .map(|font| load_handle(font).map(|font_vec| font_vec.into()))
         .collect::<anyhow::Result<Vec<FontArc>>>()
 }
 
+fn load_maybe_cached_handles_by_name(
+    name: Option<&str>,
+    fallback_family: FamilyName,
+    path: &Path,
+) -> anyhow::Result<Vec<Handle>> {
+    let handles = match name {
+        Some(name) => match load_cached_handles_by_name(name, path) {
+            Some(handles) => handles,
+            None => {
+                let handles = load_best_handles_by_name(FamilyName::Title(name.to_owned()))?;
+                if let Some(font_cache) = FontCache::new(name, &handles) {
+                    fs::write(path, toml::to_string(&font_cache)?)?;
+                }
+                handles
+            }
+        },
+        None => load_best_handles_by_name(fallback_family)?,
+    };
+    Ok(handles)
+}
+
+fn load_best_handles() -> anyhow::Result<Vec<Handle>> {
+    let mut handles = load_best_handles_by_name(FamilyName::SansSerif)?;
+    handles.extend(load_best_handles_by_name(FamilyName::Monospace)?.into_iter());
+    Ok(handles)
+}
+
+fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<Handle>> {
+    let source = SystemSource::new();
+    let name = &[family_name];
+    let base = select_best_font(&source, name, &Properties::new().style(Style::Normal))?;
+    let italic = select_best_font(&source, name, &Properties::new().style(Style::Italic))?;
+    let bold = select_best_font(&source, name, &Properties::new().weight(Weight::BOLD))?;
+    let bold_italic = select_best_font(
+        &source,
+        name,
+        &Properties::new().weight(Weight::BOLD).style(Style::Italic),
+    )?;
+
+    Ok(vec![base, italic, bold, bold_italic])
+}
+
+fn load_cached_handles_by_name(desired_name: &str, path: &Path) -> Option<Vec<Handle>> {
+    let contents = fs::read_to_string(path).ok()?;
+    let FontCache {
+        name,
+        base,
+        italic,
+        bold,
+        bold_italic,
+    } = toml::from_str(&contents).ok()?;
+
+    if desired_name == name {
+        let handles = [base, italic, bold, bold_italic]
+            .into_iter()
+            .map(Handle::from)
+            .collect();
+        Some(handles)
+    } else {
+        None
+    }
+}
+
+fn select_best_font(
+    source: &FontconfigSource,
+    name: &[FamilyName],
+    props: &Properties,
+) -> anyhow::Result<Handle> {
+    source.select_best_match(name, props).with_context(|| {
+        format!(
+            "No font found for name: {:?} properties: {:#?}",
+            name, props
+        )
+    })
+}
+
 pub fn load_handle(handle: &Handle) -> anyhow::Result<FontVec> {
     match handle {
         Handle::Path { path, font_index } => {
-            let buffer = std::fs::read(path)?;
+            let buffer = fs::read(path)?;
             Ok(FontVec::try_from_vec_and_index(buffer, *font_index)?)
         }
         Handle::Memory { bytes, font_index } => Ok(FontVec::try_from_vec_and_index(

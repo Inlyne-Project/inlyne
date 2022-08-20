@@ -145,7 +145,7 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &swapchain_format);
 
-        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(font_opts)?)
+        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(&font_opts)?)
             .build(&device, swapchain_format);
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
