@@ -66,7 +66,7 @@ impl Positioner {
                     pos,
                     (
                         self.screen_size.0 - pos.0 - DEFAULT_MARGIN,
-                        self.screen_size.1,
+                        f32::INFINITY,
                     ),
                     zoom,
                 );

@@ -232,7 +232,7 @@ impl Renderer {
 
             match &element.inner {
                 Element::TextBox(text_box) => {
-                    let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, screen_size.1);
+                    let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY);
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {

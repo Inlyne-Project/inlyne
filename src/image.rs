@@ -18,11 +18,13 @@ pub enum ImageSize {
     PxHeight(u32),
 }
 
+#[derive(Debug)]
 struct ImageData {
     rgba_image: RgbaImage,
     scale: bool,
 }
 
+#[derive(Debug)]
 pub struct Image {
     image: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,

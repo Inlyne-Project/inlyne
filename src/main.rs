@@ -53,6 +53,7 @@ pub enum Hoverable<'a> {
     Text(&'a Text),
 }
 
+#[derive(Debug)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),

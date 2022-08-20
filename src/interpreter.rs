@@ -628,7 +628,7 @@ impl TokenSink for HtmlInterpreter {
                 }
             }
             EOFToken => {
-                self.push_element(self.current_textbox.clone().into());
+                self.push_current_textbox();
                 self.window.request_redraw();
             }
             _ => {}
