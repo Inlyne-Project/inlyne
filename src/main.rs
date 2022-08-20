@@ -219,8 +219,6 @@ impl Inlyne {
                 None => return,
             };
 
-            println!("{event:?}");
-
             match event {
                 RelevantEvent::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
