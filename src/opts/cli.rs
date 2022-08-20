@@ -32,7 +32,7 @@ impl ValueEnum for ThemeType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Args {
     pub file_path: PathBuf,
     pub theme: Option<ThemeType>,
@@ -65,6 +65,25 @@ pub fn command(scale_help: &str, default_theme: ThemeType) -> Command {
 }
 
 impl Args {
+    pub fn new(config: &Config) -> Self {
+        let program_args = std::env::args_os().collect();
+        Self::parse_from(program_args, config)
+    }
+
+    pub fn program_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        args.push(self.file_path.as_os_str().to_str().unwrap().to_string());
+        if let Some(theme) = self.theme {
+            args.push("--theme".to_owned());
+            args.push(theme.as_str().to_owned());
+        }
+        if let Some(scale) = self.scale {
+            args.push("--scale".to_owned());
+            args.push(scale.to_string());
+        }
+        args
+    }
+
     pub fn parse_from(args: Vec<OsString>, config: &Config) -> Self {
         let scale_help = format!(
             "Factor to scale rendered file by [default: {}]",

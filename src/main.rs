@@ -11,12 +11,12 @@ pub mod utils;
 
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
-use crate::opts::FontOptions;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
 
-use color::Theme;
+use opts::Args;
+use opts::Config;
 use positioner::Positioned;
 use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
@@ -37,6 +37,9 @@ use winit::{
 };
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -88,23 +91,20 @@ pub struct Inlyne {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
+    args: Args,
 }
 
 impl Inlyne {
-    pub async fn new(
-        theme: Theme,
-        scale: Option<f32>,
-        font_opts: FontOptions,
-    ) -> anyhow::Result<Self> {
+    pub async fn new(opts: Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         window.set_title("Inlyne");
         let renderer = Renderer::new(
             &window,
             event_loop.create_proxy(),
-            theme,
-            scale.unwrap_or(window.scale_factor() as f32),
-            font_opts,
+            opts.theme,
+            opts.scale.unwrap_or(window.scale_factor() as f32),
+            opts.font_opts,
         )
         .await?;
         let clipboard = ClipboardContext::new().unwrap();
@@ -116,6 +116,7 @@ impl Inlyne {
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
             clipboard,
             elements: Vec::new(),
+            args,
         })
     }
 
@@ -277,7 +278,23 @@ impl Inlyne {
                                 };
 
                                 if let Some(link) = maybe_link {
-                                    if open::that(link).is_err() {
+                                    let maybe_path = PathBuf::from_str(link).ok();
+                                    let is_md = maybe_path.as_ref().map_or(false, |p| {
+                                        p.extension().map_or(false, |ext| ext == "md")
+                                    });
+                                    if is_md {
+                                        // Open markdown files ourselves
+                                        let mut args = self.args.clone();
+                                        args.file_path =
+                                            maybe_path.expect("Already checked path extension");
+                                        Command::new(
+                                            std::env::current_exe()
+                                                .unwrap_or_else(|_| "inlyne".into()),
+                                        )
+                                        .args(args.program_args())
+                                        .spawn()
+                                        .expect("Could not spawn new inlyne instance");
+                                    } else if open::that(link).is_err() {
                                         if let Some(anchor_pos) =
                                             self.renderer.positioner.anchors.get(link)
                                         {
@@ -398,18 +415,29 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Opts::parse_and_load();
-    let theme = args.theme;
-    let md_string = std::fs::read_to_string(&args.file_path)
-        .with_context(|| format!("Could not read file at {:?}", args.file_path))?;
-    let inlyne = pollster::block_on(Inlyne::new(theme, args.scale, args.font_opts))?;
+    let config = match Config::load() {
+        Ok(config) => config,
+        Err(err) => {
+            // TODO: switch to logging
+            eprintln!(
+                "WARN: Failed reading config file. Falling back to defaults. Error: {}",
+                err
+            );
+            Config::default()
+        }
+    };
+    let args = Args::new(&config);
+    let opts = Opts::parse_and_load_from(&args, config);
 
-    let hidpi_scale = args.scale.unwrap_or(inlyne.window.scale_factor() as f32);
+    let md_string = std::fs::read_to_string(&opts.file_path)
+        .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+    let inlyne = pollster::block_on(Inlyne::new(opts, args))?;
+
     let interpreter = HtmlInterpreter::new(
         inlyne.window.clone(),
         inlyne.element_queue.clone(),
         inlyne.renderer.theme.clone(),
-        hidpi_scale,
+        inlyne.renderer.hidpi_scale,
     );
 
     std::thread::spawn(move || interpreter.intepret_md(md_string.as_str()));
