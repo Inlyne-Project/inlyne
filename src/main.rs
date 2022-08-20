@@ -31,7 +31,7 @@ use winit::event::ModifiersState;
 use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
 use winit::{
-    event::{Event, MouseScrollDelta, WindowEvent},
+    event::{Event, KeyboardInput, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{CursorIcon, Window},
 };
@@ -53,6 +53,7 @@ pub enum Hoverable<'a> {
     Text(&'a Text),
 }
 
+#[derive(Debug)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
@@ -121,6 +122,35 @@ impl Inlyne {
     }
 
     pub fn run(mut self) {
+        // Why do we handle resizes lazily like this?
+        //
+        // For a bit of background. `winit`'s event loop has separate tiers of events. It won't move
+        // on to the next tier until all of the events from the current tier have been processed and
+        // (here's the kicker) events can keep coming in while all of this is happening. Here are
+        // the tiers for reference
+        //
+        // 1. Window events, User events, Device events
+        // --- `MainEventsCleared` sent ---
+        // 2. Redraw windows (goes back to 1. after this)
+        //
+        // The obvious issue here is that expensive events from one tier continually coming in will
+        // block us from moving on to the next tier
+        //
+        // How does this matter in practice?
+        //
+        // Dragging to resize a window is represented as a mix of window events
+        // (`WindowEvent::Resized` and `WindowEvent::CursorMoved`) followed by a final
+        // `MainEventsCleared`. With large READMEs a window resize will be expensive because it has
+        // to reposition many elements. This means that dragging a window will queue up a lot of
+        // window resizes before we can even redraw a window, but it's pointless to calculate a
+        // window resize if there is already another size pending
+        //
+        // Instead we lazily store the size and only reposition elements and request a redraw when
+        // we recieve a `MainEventsCleared` indicating that we've finished recieveing the first tier
+        // of events. This prevents us from clogging up the queue with a bunch of costly resizes.
+        // For more information take a look at
+        // https://github.com/trimental/inlyne/issues/25
+        let mut pending_resize = None;
         let mut scrollbar_held = false;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
@@ -128,6 +158,7 @@ impl Inlyne {
         let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
+
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
@@ -135,19 +166,6 @@ impl Inlyne {
                         self.window.request_redraw()
                     }
                 },
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(size),
-                    ..
-                } => {
-                    self.renderer.config.width = size.width;
-                    self.renderer.config.height = size.height;
-                    self.renderer.positioner.screen_size = size.into();
-                    self.renderer
-                        .surface
-                        .configure(&self.renderer.device, &self.renderer.config);
-                    self.renderer.reposition(&mut self.elements);
-                    self.window.request_redraw();
-                }
                 Event::RedrawRequested(_) => {
                     let queue = {
                         self.element_queue
@@ -184,6 +202,7 @@ impl Inlyne {
                         .unwrap();
                 }
                 Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(size) => pending_resize = Some(size),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::MouseWheel { delta, .. } => {
                         let y_pixel_shift = match delta {
@@ -318,49 +337,64 @@ impl Inlyne {
                             mouse_down = false;
                         }
                     },
-                    WindowEvent::ModifiersChanged(modifier_state) => modifiers = modifier_state,
-                    WindowEvent::KeyboardInput { input, .. } => {
-                        if let ElementState::Pressed = input.state {
-                            match input.virtual_keycode {
-                                Some(VirtualKeyCode::C) => {
-                                    let copy = (cfg!(target_os = "macos") && modifiers.logo())
-                                        || (!cfg!(target_os = "macos") && modifiers.ctrl());
-                                    if copy {
-                                        self.clipboard
-                                            .set_contents(
-                                                self.renderer.selection_text.trim().to_owned(),
-                                            )
-                                            .unwrap()
-                                    }
-                                }
-                                Some(VirtualKeyCode::Equals) => {
-                                    let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                                        || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                                        && modifiers.shift();
-                                    if zoom {
-                                        self.renderer.zoom *= 1.1;
-                                        self.renderer.reposition(&mut self.elements);
-                                        self.renderer.set_scroll_y(self.renderer.scroll_y);
-                                        self.window.request_redraw();
-                                    }
-                                }
-                                Some(VirtualKeyCode::Minus) => {
-                                    let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                                        || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                                        && modifiers.shift();
-                                    if zoom {
-                                        self.renderer.zoom *= 0.9;
-                                        self.renderer.reposition(&mut self.elements);
-                                        self.renderer.set_scroll_y(self.renderer.scroll_y);
-                                        self.window.request_redraw();
-                                    }
-                                }
-                                _ => {}
+                    WindowEvent::ModifiersChanged(new_state) => modifiers = new_state,
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    } => match keycode {
+                        VirtualKeyCode::C => {
+                            let copy = (cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl());
+                            if copy {
+                                self.clipboard
+                                    .set_contents(self.renderer.selection_text.trim().to_owned())
+                                    .unwrap()
                             }
                         }
-                    }
+                        VirtualKeyCode::Equals => {
+                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                && modifiers.shift();
+                            if zoom {
+                                self.renderer.zoom *= 1.1;
+                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                self.window.request_redraw();
+                            }
+                        }
+                        VirtualKeyCode::Minus => {
+                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
+                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
+                                && modifiers.shift();
+                            if zoom {
+                                self.renderer.zoom *= 0.9;
+                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                self.window.request_redraw();
+                            }
+                        }
+                        _ => {}
+                    },
                     _ => {}
                 },
+                Event::MainEventsCleared => {
+                    if let Some(size) = pending_resize.take() {
+                        self.renderer.config.width = size.width;
+                        self.renderer.config.height = size.height;
+                        self.renderer.positioner.screen_size = size.into();
+                        self.renderer
+                            .surface
+                            .configure(&self.renderer.device, &self.renderer.config);
+                        self.renderer.reposition(&mut self.elements);
+                        self.renderer.set_scroll_y(self.renderer.scroll_y);
+                        self.window.request_redraw();
+                    }
+                }
                 _ => {}
             }
         });

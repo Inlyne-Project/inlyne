@@ -190,7 +190,7 @@ impl HtmlInterpreter {
         self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale);
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(10.).into());
+        self.push_element(Spacer::new(5.).into());
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);
@@ -628,7 +628,7 @@ impl TokenSink for HtmlInterpreter {
                 }
             }
             EOFToken => {
-                self.push_element(self.current_textbox.clone().into());
+                self.push_current_textbox();
                 self.window.request_redraw();
             }
             _ => {}
