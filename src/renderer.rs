@@ -262,7 +262,7 @@ impl Renderer {
                         for n in 0..nest {
                             let nest_indent = n as f32 * DEFAULT_MARGIN / 2.;
                             let min = (
-                                (scrolled_pos.0 - 20. - nest_indent)
+                                (scrolled_pos.0 - 10. - 5. * self.hidpi_scale * self.zoom - nest_indent)
                                     .min(screen_size.0 - DEFAULT_MARGIN),
                                 scrolled_pos.1,
                             );
