@@ -146,6 +146,7 @@ impl Renderer {
         let image_renderer = ImageRenderer::new(&device, &swapchain_format);
 
         let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(font_opts)?)
+            .draw_cache_position_tolerance(0.5)
             .build(&device, swapchain_format);
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
