@@ -5,28 +5,26 @@ use winit::window::CursorIcon;
 pub struct Rect {
     pub pos: (f32, f32),
     pub size: (f32, f32),
-    pub max: (f32, f32),
 }
 
 impl Rect {
     pub fn new(pos: (f32, f32), size: (f32, f32)) -> Rect {
-        Rect {
-            pos,
-            size,
-            max: (pos.0 + size.0, pos.1 + size.1),
-        }
+        Rect { pos, size }
     }
 
     pub fn from_min_max(min: (f32, f32), max: (f32, f32)) -> Rect {
         Rect {
             pos: min,
             size: (max.0 - min.0, max.1 - min.1),
-            max,
         }
     }
 
+    pub fn max(&self) -> (f32, f32) {
+        (self.pos.0 + self.size.0, self.pos.1 + self.size.1)
+    }
+
     pub fn contains(&self, loc: (f32, f32)) -> bool {
-        self.pos.0 <= loc.0 && loc.0 <= self.max.0 && self.pos.1 <= loc.1 && loc.1 <= self.max.1
+        self.pos.0 <= loc.0 && loc.0 <= self.max().0 && self.pos.1 <= loc.1 && loc.1 <= self.max().1
     }
 }
 
@@ -40,7 +38,7 @@ impl From<ab_glyph::Rect> for Rect {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Align {
     #[default]
     Left,

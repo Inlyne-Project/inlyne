@@ -1,6 +1,8 @@
 use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
 use crate::image::ImageSize;
+use crate::positioner::Positioned;
+use crate::positioner::Row;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
@@ -98,6 +100,8 @@ struct State {
     element_stack: Vec<html::Element>,
     text_options: html::TextOptions,
     span_color: [f32; 4],
+    // Stores the row and a counter of newlines after each image
+    inline_images: Option<(Row, usize)>,
 }
 
 pub struct HtmlInterpreter {
@@ -175,6 +179,16 @@ impl HtmlInterpreter {
     }
 
     fn push_current_textbox(&mut self) {
+        // Push any inline images
+        if let Some((row, count)) = self.state.inline_images.take() {
+            if count == 0 {
+                self.push_element(row.into());
+                self.push_spacer();
+            } else {
+                self.state.inline_images = Some((row, count))
+            }
+        }
+
         if !self.current_textbox.texts.is_empty() {
             let mut empty = true;
             for text in &self.current_textbox.texts {
@@ -274,8 +288,24 @@ impl TokenSink for HtmlInterpreter {
                                         image = image.with_size(size);
                                     }
 
-                                    self.push_element(image.into());
-                                    self.push_spacer();
+                                    if align == &Align::Left {
+                                        if let Some((row, count)) = &mut self.state.inline_images {
+                                            row.elements.push(Positioned::new(image.into()));
+                                            // Restart newline count
+                                            *count = 1;
+                                        } else {
+                                            self.state.inline_images = Some((
+                                                Row::new(
+                                                    vec![Positioned::new(image.into())],
+                                                    self.hidpi_scale,
+                                                ),
+                                                1,
+                                            ));
+                                        }
+                                    } else {
+                                        self.push_element(image.into());
+                                        self.push_spacer();
+                                    }
                                     break;
                                 }
                             }
@@ -541,6 +571,14 @@ impl TokenSink for HtmlInterpreter {
                             self.hidpi_scale,
                             self.theme.text_color,
                         ));
+                    }
+                    if let Some((row, newline_counter)) = self.state.inline_images.take() {
+                        if newline_counter == 0 {
+                            self.push_element(row.into());
+                            self.push_spacer();
+                        } else {
+                            self.state.inline_images = Some((row, newline_counter - 1));
+                        }
                     }
                 } else if !str.trim().is_empty()
                     || !self.current_textbox.texts.is_empty()

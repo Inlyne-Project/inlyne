@@ -157,15 +157,15 @@ impl TextBox {
         for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds, zoom) {
             if self.texts[glyph.section_index].is_underlined {
                 lines.push((
-                    (glyph_bounds.pos.0, glyph_bounds.max.1),
-                    (glyph_bounds.max.0, glyph_bounds.max.1),
+                    (glyph_bounds.pos.0, glyph_bounds.max().1),
+                    (glyph_bounds.max().0, glyph_bounds.max().1),
                 ));
             }
             if self.texts[glyph.section_index].is_striked {
                 let mid_height = glyph_bounds.pos.1 + glyph_bounds.size.1 / 2.;
                 lines.push((
                     (glyph_bounds.pos.0, mid_height),
-                    (glyph_bounds.max.0, mid_height),
+                    (glyph_bounds.max().0, mid_height),
                 ));
             }
         }
@@ -194,14 +194,14 @@ impl TextBox {
             for (glyph_bounds, glyph) in
                 self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
             {
-                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
-                    || (glyph_bounds.max.1 <= selection.1 .1
-                        && glyph_bounds.max.1 >= selection.0 .1
-                        && glyph_bounds.max.0 >= selection.0 .0)
-                    || (glyph_bounds.max.1 >= selection.1 .1
+                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max().1 <= selection.1 .1)
+                    || (glyph_bounds.max().1 <= selection.1 .1
+                        && glyph_bounds.max().1 >= selection.0 .1
+                        && glyph_bounds.max().0 >= selection.0 .0)
+                    || (glyph_bounds.max().1 >= selection.1 .1
                         && glyph_bounds.pos.1 <= selection.0 .1
                         && glyph_bounds.pos.0 <= selection.0 .0.max(selection.1 .0)
-                        && glyph_bounds.max.0 >= selection.0 .0.min(selection.1 .0))
+                        && glyph_bounds.max().0 >= selection.0 .0.min(selection.1 .0))
                 {
                     selection_rects.push(glyph_bounds);
                     if let Some(char) = self.texts[glyph.section_index]
@@ -216,7 +216,7 @@ impl TextBox {
             selection_text.push('\n');
         }
         if rect.pos.1 >= selection.0 .1.min(selection.1 .1)
-            && rect.max.1 <= selection.0 .1.max(selection.1 .1)
+            && rect.max().1 <= selection.0 .1.max(selection.1 .1)
         {
             selection_rects.push(rect.clone());
             for text in &self.texts {
@@ -228,7 +228,7 @@ impl TextBox {
             for (glyph_bounds, glyph) in
                 self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
             {
-                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max.1 <= selection.1 .1)
+                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max().1 <= selection.1 .1)
                     || (glyph_bounds.pos.1 <= selection.1 .1
                         && glyph_bounds.pos.1 >= selection.0 .1
                         && glyph_bounds.pos.0 <= selection.1 .0)
