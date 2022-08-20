@@ -247,7 +247,7 @@ impl Image {
                 ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
             )
         } else {
-            ((buffer_size.0 * zoom) as u32, (buffer_size.1 * zoom) as u32)
+            (buffer_size.0 as u32, buffer_size.1 as u32)
         }
     }
 
