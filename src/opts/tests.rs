@@ -1,6 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
 use crate::opts::config::FontOptions;
+use crate::opts::Args;
 
 use super::{cli, config, Opts, ThemeType};
 
@@ -22,8 +23,12 @@ fn debug_assert() {
 
 #[test]
 fn defaults() {
+    let config = config::Config::default();
     assert_eq!(
-        Opts::parse_and_load_from(gen_args(vec!["file.md"]), config::Config::default()),
+        Opts::parse_and_load_from(
+            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            config::Config::default()
+        ),
         Opts {
             file_path: PathBuf::from("file.md"),
             theme: ThemeType::default().as_theme(),
@@ -35,13 +40,14 @@ fn defaults() {
 
 #[test]
 fn config_overrides_default() {
+    let config = config::Config {
+        theme: ThemeType::Dark,
+        ..Default::default()
+    };
     assert_eq!(
         Opts::parse_and_load_from(
-            gen_args(vec!["file.md"]),
-            config::Config {
-                theme: ThemeType::Dark,
-                ..Default::default()
-            }
+            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            config
         ),
         Opts {
             file_path: PathBuf::from("file.md"),
@@ -50,13 +56,14 @@ fn config_overrides_default() {
             font_opts: FontOptions::default(),
         }
     );
+    let config = config::Config {
+        scale: Some(1.5),
+        ..Default::default()
+    };
     assert_eq!(
         Opts::parse_and_load_from(
-            gen_args(vec!["file.md"]),
-            config::Config {
-                scale: Some(1.5),
-                ..Default::default()
-            }
+            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            config,
         ),
         Opts {
             file_path: PathBuf::from("file.md"),
@@ -69,9 +76,10 @@ fn config_overrides_default() {
 
 #[test]
 fn from_cli() {
+    let config = config::Config::default();
     assert_eq!(
         Opts::parse_and_load_from(
-            gen_args(vec!["--theme", "dark", "file.md"]),
+            &Args::parse_from(gen_args(vec!["--theme", "dark", "file.md"]), &config),
             config::Config::default()
         ),
         Opts {
@@ -83,14 +91,15 @@ fn from_cli() {
     );
 
     // CLI takes precedence over config
+    let config = config::Config {
+        theme: ThemeType::Dark,
+        scale: Some(0.1),
+        ..Default::default()
+    };
     assert_eq!(
         Opts::parse_and_load_from(
-            gen_args(vec!["--scale", "1.5", "file.md"]),
-            config::Config {
-                theme: ThemeType::Dark,
-                scale: Some(0.1),
-                ..Default::default()
-            },
+            &Args::parse_from(gen_args(vec!["--scale", "1.5", "file.md"]), &config),
+            config
         ),
         Opts {
             file_path: PathBuf::from("file.md"),

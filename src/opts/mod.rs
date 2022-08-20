@@ -3,12 +3,14 @@ mod config;
 #[cfg(test)]
 mod tests;
 
-use std::{env, ffi::OsString, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::color;
 
 use serde::Deserialize;
 
+pub use self::cli::Args;
+pub use self::config::Config;
 pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -27,29 +29,7 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn parse_and_load() -> Self {
-        let args = env::args_os().collect();
-        let config = match config::Config::load() {
-            Ok(config) => config,
-            Err(err) => {
-                // TODO: switch to logging
-                eprintln!(
-                    "WARN: Failed reading config file. Falling back to defaults. Error: {}",
-                    err
-                );
-                config::Config::default()
-            }
-        };
-
-        Self::parse_and_load_from(args, config)
-    }
-
-    fn parse_and_load_from(args: Vec<OsString>, config: config::Config) -> Self {
-        let cli::Args {
-            file_path,
-            theme: args_theme,
-            scale: args_scale,
-        } = cli::Args::parse_from(args, &config);
+    pub fn parse_and_load_from(args: &Args, config: config::Config) -> Self {
         let config::Config {
             theme: config_theme,
             scale: config_scale,
@@ -58,7 +38,7 @@ impl Opts {
             font_options: config_font_options,
         } = config;
 
-        let theme = match args_theme.unwrap_or(config_theme) {
+        let theme = match args.theme.unwrap_or(config_theme) {
             ThemeType::Dark => match config_dark_theme {
                 Some(config_dark_theme) => config_dark_theme.merge(color::DARK_DEFAULT),
                 None => color::DARK_DEFAULT,
@@ -72,9 +52,9 @@ impl Opts {
         let font_opts = config_font_options.unwrap_or_default();
 
         Self {
-            file_path,
+            file_path: args.file_path.clone(),
             theme,
-            scale: args_scale.or(config_scale),
+            scale: args.scale.or(config_scale),
             font_opts,
         }
     }
