@@ -66,8 +66,8 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
     let regular_name = &font_opts.regular_font;
     let monospace_name = &font_opts.monospace_font;
 
-    let handles = if regular_name.is_none() && monospace_name.is_none() {
-        load_best_handles()?
+    if regular_name.is_none() && monospace_name.is_none() {
+        load_best_fonts()
     } else {
         match dirs::cache_dir() {
             Some(cache_dir) => {
@@ -77,57 +77,55 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
                 }
 
                 let reg_cache_path = inlyne_cache.join("font_regular.toml");
-                let mut handles = load_maybe_cached_handles_by_name(
+                let mut handles = load_maybe_cached_fonts_by_name(
                     regular_name.as_deref(),
                     FamilyName::SansSerif,
                     &reg_cache_path,
                 )?;
 
                 let mono_cache_path = inlyne_cache.join("font_mono.toml");
-                let mono_handles = load_maybe_cached_handles_by_name(
+                let mono_handles = load_maybe_cached_fonts_by_name(
                     monospace_name.as_deref(),
                     FamilyName::Monospace,
                     &mono_cache_path,
                 )?;
 
                 handles.extend(mono_handles.into_iter());
-                handles
+                Ok(handles)
             }
-            None => load_best_handles()?,
+            None => load_best_fonts(),
         }
-    };
-
-    handles
-        .into_iter()
-        .map(load_handle)
-        .collect::<anyhow::Result<Vec<FontArc>>>()
+    }
 }
 
-fn load_maybe_cached_handles_by_name(
+fn load_maybe_cached_fonts_by_name(
     name: Option<&str>,
     fallback_family: FamilyName,
     path: &Path,
-) -> anyhow::Result<Vec<Handle>> {
-    let handles = match name {
-        Some(name) => match load_cached_handles_by_name(name, path) {
-            Some(handles) => handles,
+) -> anyhow::Result<Vec<FontArc>> {
+    let fonts = match name {
+        Some(name) => match load_cached_fonts_by_name(name, path) {
+            Some(fonts) => fonts,
             None => {
                 let handles = load_best_handles_by_name(FamilyName::Title(name.to_owned()))?;
                 if let Some(font_cache) = FontCache::new(name, &handles) {
                     fs::write(path, toml::to_string(&font_cache)?)?;
                 }
                 handles
+                    .into_iter()
+                    .map(load_font)
+                    .collect::<anyhow::Result<Vec<_>>>()?
             }
         },
-        None => load_best_handles_by_name(fallback_family)?,
+        None => load_best_fonts_by_name(fallback_family)?,
     };
-    Ok(handles)
+    Ok(fonts)
 }
 
-fn load_best_handles() -> anyhow::Result<Vec<Handle>> {
-    let mut handles = load_best_handles_by_name(FamilyName::SansSerif)?;
-    handles.extend(load_best_handles_by_name(FamilyName::Monospace)?.into_iter());
-    Ok(handles)
+fn load_best_fonts() -> anyhow::Result<Vec<FontArc>> {
+    let mut fonts = load_best_fonts_by_name(FamilyName::SansSerif)?;
+    fonts.extend(load_best_fonts_by_name(FamilyName::Monospace)?.into_iter());
+    Ok(fonts)
 }
 
 fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<Handle>> {
@@ -145,7 +143,15 @@ fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<Hand
     Ok(vec![base, italic, bold, bold_italic])
 }
 
-fn load_cached_handles_by_name(desired_name: &str, path: &Path) -> Option<Vec<Handle>> {
+fn load_best_fonts_by_name(family_name: FamilyName) -> anyhow::Result<Vec<FontArc>> {
+    let handles = load_best_handles_by_name(family_name)?;
+    handles
+        .into_iter()
+        .map(load_font)
+        .collect::<anyhow::Result<Vec<_>>>()
+}
+
+fn load_cached_fonts_by_name(desired_name: &str, path: &Path) -> Option<Vec<FontArc>> {
     let contents = fs::read_to_string(path).ok()?;
     let FontCache {
         name,
@@ -156,11 +162,13 @@ fn load_cached_handles_by_name(desired_name: &str, path: &Path) -> Option<Vec<Ha
     } = toml::from_str(&contents).ok()?;
 
     if desired_name == name {
-        let handles = [base, italic, bold, bold_italic]
+        [base, italic, bold, bold_italic]
             .into_iter()
-            .map(Handle::from)
-            .collect();
-        Some(handles)
+            .map(|cached| {
+                let handle = Handle::from(cached);
+                load_font(handle).ok()
+            })
+            .collect::<Option<Vec<_>>>()
     } else {
         None
     }
@@ -179,7 +187,7 @@ fn select_best_font(
     })
 }
 
-pub fn load_handle(handle: Handle) -> anyhow::Result<FontArc> {
+fn load_font(handle: Handle) -> anyhow::Result<FontArc> {
     match handle {
         Handle::Path { path, font_index } => {
             let file = fs::File::open(path)?;
