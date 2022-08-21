@@ -5,6 +5,7 @@ on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C debuginfo=0"
 
 jobs:
   build:
@@ -16,6 +17,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
+      - name: Cargo build cache
+        uses: actions/cache@v3
+        with:
+          path: target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Stable
         run: cargo test
 
@@ -23,7 +31,15 @@ jobs:
     runs-on: macos-11
     steps:
       - uses: actions/checkout@v2
+
+      - name: Cargo build cache
+        uses: actions/cache@v3
+        with:
+          path: target/
+          key: macos-arm-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install target
         run: rustup update && rustup target add aarch64-apple-darwin
+
       - name: Build
         run: cargo build --target=aarch64-apple-darwin
