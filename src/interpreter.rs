@@ -80,6 +80,7 @@ mod html {
         pub small: usize,
         pub code: usize,
         pub pre_formatted: usize,
+        pub allow_whitespace: usize,
         pub block_quote: usize,
         pub link: Vec<String>,
     }
@@ -337,7 +338,10 @@ impl TokenSink for HtmlInterpreter {
                             }
                             self.state.element_stack.push(match tag_name.as_str() {
                                 "div" => html::Element::Div(align),
-                                "p" => html::Element::Paragraph(align),
+                                "p" => {
+                                    self.state.text_options.allow_whitespace += 1;
+                                    html::Element::Paragraph(align)
+                                }
                                 _ => unreachable!("Arm matches on div and p"),
                             });
                         }
@@ -402,6 +406,7 @@ impl TokenSink for HtmlInterpreter {
                             if let html::HeaderType::H1 = header_type {
                                 self.state.text_options.underline += 1;
                             }
+                            self.state.text_options.allow_whitespace += 1;
                             self.state
                                 .element_stack
                                 .push(html::Element::Header(html::Header { header_type, align }));
@@ -503,6 +508,7 @@ impl TokenSink for HtmlInterpreter {
                         "div" | "p" => {
                             self.push_current_textbox();
                             if tag_name == "p" {
+                                self.state.text_options.allow_whitespace -= 1;
                                 self.push_spacer();
                             }
                             self.state.element_stack.pop();
@@ -513,6 +519,7 @@ impl TokenSink for HtmlInterpreter {
                             if tag_name.as_str() == "h1" {
                                 self.state.text_options.underline -= 1;
                             }
+                            self.state.text_options.allow_whitespace -= 1;
                             let mut anchor_name = "#".to_string();
                             for text in &self.current_textbox.texts {
                                 for char in text.text.chars() {
@@ -563,7 +570,7 @@ impl TokenSink for HtmlInterpreter {
                 }
             }
             CharacterTokens(str) => {
-                let str = str.to_string();
+                let mut str = str.to_string();
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
                         if !self.current_textbox.texts.is_empty() {
@@ -572,12 +579,15 @@ impl TokenSink for HtmlInterpreter {
                         } else {
                             self.push_element(self.current_textbox.clone().with_padding(12.).into())
                         }
-                    } else if !self.current_textbox.texts.is_empty() {
-                        self.current_textbox.texts.push(Text::new(
-                            " ".to_string(),
-                            self.hidpi_scale,
-                            self.theme.text_color,
-                        ));
+                    }
+                    if let Some(last_text) = self.current_textbox.texts.last() {
+                        if !last_text.text.trim().is_empty() {
+                            self.current_textbox.texts.push(Text::new(
+                                " ".to_string(),
+                                self.hidpi_scale,
+                                self.theme.text_color,
+                            ));
+                        }
                     }
                     if let Some((row, newline_counter)) = self.state.inline_images.take() {
                         if newline_counter == 0 {
@@ -587,10 +597,12 @@ impl TokenSink for HtmlInterpreter {
                             self.state.inline_images = Some((row, newline_counter - 1));
                         }
                     }
-                } else if !str.trim().is_empty()
-                    || !self.current_textbox.texts.is_empty()
-                    || self.state.text_options.pre_formatted >= 1
-                {
+                } else if !str.trim().is_empty() || self.state.text_options.pre_formatted >= 1 {
+                    if self.state.text_options.allow_whitespace == 0
+                        && self.state.text_options.pre_formatted == 0
+                    {
+                        str = str.trim().to_owned();
+                    }
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;
