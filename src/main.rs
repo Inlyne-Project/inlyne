@@ -136,7 +136,7 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 }
 
 impl Inlyne {
-    pub async fn new(opts: Opts, args: Args) -> anyhow::Result<Self> {
+    pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         match root_filepath_to_vcs_dir(&args.file_path) {
@@ -146,9 +146,9 @@ impl Inlyne {
         let renderer = Renderer::new(
             &window,
             event_loop.create_proxy(),
-            opts.theme,
+            opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
-            opts.font_opts,
+            opts.font_opts.clone(),
         )
         .await?;
         let clipboard = ClipboardContext::new().unwrap();
@@ -533,13 +533,14 @@ fn main() -> anyhow::Result<()> {
 
     let md_string = std::fs::read_to_string(&opts.file_path)
         .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
-    let inlyne = pollster::block_on(Inlyne::new(opts, args))?;
+    let inlyne = pollster::block_on(Inlyne::new(&opts, args))?;
 
     let interpreter = HtmlInterpreter::new(
         inlyne.window.clone(),
         inlyne.element_queue.clone(),
         inlyne.renderer.theme.clone(),
         inlyne.renderer.hidpi_scale,
+        opts.file_path,
     );
 
     std::thread::spawn(move || interpreter.intepret_md(md_string.as_str()));

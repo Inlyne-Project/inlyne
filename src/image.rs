@@ -5,6 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{Device, TextureFormat};
@@ -97,14 +98,21 @@ impl Image {
         }
     }
 
-    pub fn from_url(url: String, hidpi_scale: f32) -> Image {
+    pub fn from_url(url: String, file_path: PathBuf, hidpi_scale: f32) -> Image {
         let image = Arc::new(Mutex::new(None));
         let callback = Arc::new(Mutex::new(None::<EventLoopProxy<InlyneEvent>>));
         let image_clone = image.clone();
         let callback_clone = callback.clone();
         std::thread::spawn(move || {
-            let image_data = if let Ok(mut img_file) = File::open(url.as_str()) {
-                let img_file_size = std::fs::metadata(url.as_str()).unwrap().len();
+            let mut url_path = PathBuf::from(url.clone());
+            if url_path.is_relative() {
+                if let Some(parent_dir) = file_path.parent() {
+                    url_path = parent_dir.join(url_path.strip_prefix("./").unwrap_or(&url_path));
+                }
+            }
+
+            let image_data = if let Ok(mut img_file) = File::open(&url_path) {
+                let img_file_size = url_path.metadata().unwrap().len();
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf

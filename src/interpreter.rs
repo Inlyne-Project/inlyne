@@ -25,6 +25,7 @@ use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -111,6 +112,7 @@ pub struct HtmlInterpreter {
     theme: Theme,
     window: Arc<Window>,
     state: State,
+    file_path: PathBuf,
 }
 
 impl HtmlInterpreter {
@@ -119,6 +121,7 @@ impl HtmlInterpreter {
         element_queue: Arc<Mutex<VecDeque<Element>>>,
         theme: Theme,
         hidpi_scale: f32,
+        file_path: PathBuf,
     ) -> Self {
         Self {
             window,
@@ -130,6 +133,7 @@ impl HtmlInterpreter {
                 ..Default::default()
             },
             theme,
+            file_path,
         }
     }
 
@@ -278,9 +282,12 @@ impl TokenSink for HtmlInterpreter {
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("src") {
                                     let align = align.as_ref().unwrap_or(&Align::Left);
-                                    let mut image =
-                                        Image::from_url(attr.value.to_string(), self.hidpi_scale)
-                                            .with_align(*align);
+                                    let mut image = Image::from_url(
+                                        attr.value.to_string(),
+                                        self.file_path.clone(),
+                                        self.hidpi_scale,
+                                    )
+                                    .with_align(*align);
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }
