@@ -18,6 +18,7 @@ use crate::text::Text;
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
+use positioner::Row;
 use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
@@ -37,7 +38,7 @@ use winit::{
 };
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -59,8 +60,14 @@ pub enum Element {
     Spacer(Spacer),
     Image(Image),
     Table(Table),
+    Row(Row),
 }
 
+impl From<Row> for Element {
+    fn from(row: Row) -> Self {
+        Element::Row(row)
+    }
+}
 impl From<Image> for Element {
     fn from(image: Image) -> Self {
         Element::Image(image)
@@ -95,17 +102,53 @@ pub struct Inlyne {
     args: Args,
 }
 
+/// Gets a relative path extending from the repo root falling back to the full path
+fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
+    let mut full_path = path.canonicalize().ok()?;
+    let mut parts = vec![full_path.file_name()?.to_owned()];
+
+    full_path.pop();
+    loop {
+        full_path.push(".git");
+        let is_git = full_path.exists();
+        full_path.pop();
+        full_path.push(".hg");
+        let is_mercurial = full_path.exists();
+        full_path.pop();
+
+        let is_vcs_dir = is_git || is_mercurial;
+
+        match full_path.file_name() {
+            Some(name) => parts.push(name.to_owned()),
+            // We've seached the full path and didn't find a vcs dir
+            None => return Some(path.to_owned()),
+        }
+        if is_vcs_dir {
+            let mut rooted = PathBuf::new();
+            for part in parts.into_iter().rev() {
+                rooted.push(part);
+            }
+            return Some(rooted);
+        }
+
+        full_path.pop();
+    }
+}
+
 impl Inlyne {
-    pub async fn new(opts: Opts, args: Args) -> anyhow::Result<Self> {
+    pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        window.set_title("Inlyne");
+        match root_filepath_to_vcs_dir(&args.file_path) {
+            Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
+            None => window.set_title("Inlyne"),
+        }
         let renderer = Renderer::new(
             &window,
             event_loop.create_proxy(),
-            opts.theme,
+            opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
-            opts.font_opts,
+            opts.font_opts.clone(),
         )
         .await?;
         let clipboard = ClipboardContext::new().unwrap();
@@ -155,6 +198,8 @@ impl Inlyne {
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
+        let mut selection_cache = String::new();
+        let mut selecting = false;
         let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -175,8 +220,18 @@ impl Inlyne {
                     if let Ok(queue) = queue {
                         for mut element in queue {
                             // Adds callback for when image is loaded to reposition and redraw
-                            if let Element::Image(ref mut image) = element {
-                                image.add_callback(event_loop_proxy.clone());
+                            match element {
+                                Element::Image(ref mut image) => {
+                                    image.add_callback(event_loop_proxy.clone());
+                                }
+                                Element::Row(ref mut row) => {
+                                    for element in &mut row.elements {
+                                        if let Element::Image(ref mut image) = element.inner {
+                                            image.add_callback(event_loop_proxy.clone());
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
                             // Position element and add it to elements
                             let mut positioned_element = Positioned::new(element);
@@ -200,6 +255,9 @@ impl Inlyne {
                         .redraw(&mut self.elements)
                         .with_context(|| "Renderer failed to redraw the screen")
                         .unwrap();
+                    if selecting {
+                        selection_cache = self.renderer.selection_text.clone();
+                    }
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => pending_resize = Some(size),
@@ -266,6 +324,7 @@ impl Inlyne {
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
+                                selecting = true;
                                 self.window.request_redraw();
                             }
                         }
@@ -335,6 +394,7 @@ impl Inlyne {
                         ElementState::Released => {
                             scrollbar_held = false;
                             mouse_down = false;
+                            selecting = false;
                         }
                     },
                     WindowEvent::ModifiersChanged(new_state) => modifiers = new_state,
@@ -352,7 +412,7 @@ impl Inlyne {
                                 || (!cfg!(target_os = "macos") && modifiers.ctrl());
                             if copy {
                                 self.clipboard
-                                    .set_contents(self.renderer.selection_text.trim().to_owned())
+                                    .set_contents(selection_cache.trim().to_owned())
                                     .unwrap()
                             }
                         }
@@ -444,17 +504,25 @@ impl Inlyne {
                 }
                 Element::Image(image) => Some(Hoverable::Image(image)),
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
+                Element::Row(row) => {
+                    Self::find_hoverable(&row.elements, glyph_brush, loc, screen_size, zoom)
+                }
             })
     }
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Error)
+        .filter_module("inlyne", log::LevelFilter::Info)
+        .parse_env("INLYNE_LOG")
+        .init();
+
     let config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
-            // TODO: switch to logging
-            eprintln!(
-                "WARN: Failed reading config file. Falling back to defaults. Error: {}",
+            log::warn!(
+                "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
             Config::default()
@@ -465,13 +533,14 @@ fn main() -> anyhow::Result<()> {
 
     let md_string = std::fs::read_to_string(&opts.file_path)
         .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
-    let inlyne = pollster::block_on(Inlyne::new(opts, args))?;
+    let inlyne = pollster::block_on(Inlyne::new(&opts, args))?;
 
     let interpreter = HtmlInterpreter::new(
         inlyne.window.clone(),
         inlyne.element_queue.clone(),
         inlyne.renderer.theme.clone(),
         inlyne.renderer.hidpi_scale,
+        opts.file_path,
     );
 
     std::thread::spawn(move || interpreter.intepret_md(md_string.as_str()));

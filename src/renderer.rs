@@ -217,17 +217,13 @@ impl Renderer {
         let mut _prev_indice_num = 0;
         let screen_size = self.screen_size();
         for element in elements.iter() {
-            let Rect { pos, size, max: _ } =
-                element.bounds.as_ref().expect("Element not positioned");
+            let Rect { pos, size } = element.bounds.as_ref().expect("Element not positioned");
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
-            // FIX ME
-            if self.selection.is_none() {
-                if scrolled_pos.1 + size.1 <= 0. {
-                    continue;
-                } else if scrolled_pos.1 >= screen_size.1 {
-                    break;
-                }
+            if scrolled_pos.1 + size.1 <= 0. {
+                continue;
+            } else if scrolled_pos.1 >= screen_size.1 {
+                break;
             }
 
             match &element.inner {
@@ -314,7 +310,7 @@ impl Renderer {
                             indice_ranges.push(self.draw_rectangle(
                                 Rect::from_min_max(
                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                    (rect.max.0, rect.max.1 - self.scroll_y),
+                                    (rect.max().0, rect.max().1 - self.scroll_y),
                                 ),
                                 self.theme.select_color,
                             )?);
@@ -363,7 +359,7 @@ impl Renderer {
                                 indice_ranges.push(self.draw_rectangle(
                                     Rect::from_min_max(
                                         (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                        (rect.max.0, rect.max.1 - self.scroll_y),
+                                        (rect.max().0, rect.max().1 - self.scroll_y),
                                     ),
                                     self.theme.select_color,
                                 )?);
@@ -419,7 +415,7 @@ impl Renderer {
                                             indice_ranges.push(self.draw_rectangle(
                                                 Rect::from_min_max(
                                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                                    (rect.max.0, rect.max.1 - self.scroll_y),
+                                                    (rect.max().0, rect.max().1 - self.scroll_y),
                                                 ),
                                                 self.theme.select_color,
                                             )?);
@@ -450,6 +446,9 @@ impl Renderer {
                 }
                 Element::Image(_) => {}
                 Element::Spacer(_) => {}
+                Element::Row(row) => {
+                    indice_ranges.append(&mut self.render_elements(&row.elements)?)
+                }
             }
         }
 
@@ -460,7 +459,7 @@ impl Renderer {
     fn draw_rectangle(&mut self, rect: Rect, color: [f32; 4]) -> anyhow::Result<Range<u32>> {
         let prev_indice_num = self.lyon_buffer.indices.len() as u32;
         let min = point(rect.pos.0, rect.pos.1, self.screen_size());
-        let max = point(rect.max.0, rect.max.1, self.screen_size());
+        let max = point(rect.max().0, rect.max().1, self.screen_size());
         let mut fill_tessellator = FillTessellator::new();
         fill_tessellator.tessellate_rectangle(
             &Box2D::new(Point2D::from(min), Point2D::from(max)),
@@ -480,9 +479,9 @@ impl Renderer {
         let screen_size = self.screen_size();
         let mut bind_groups = Vec::new();
         for element in elements.iter_mut() {
-            let Rect { pos, size, max } = element.bounds.as_ref().unwrap();
+            let Rect { pos, size } = element.bounds.as_ref().unwrap();
             let pos = (pos.0, pos.1 - self.scroll_y);
-            if max.1 <= 0. {
+            if pos.1 + size.1 <= 0. {
                 continue;
             } else if pos.1 >= screen_size.1 {
                 break;
@@ -500,6 +499,26 @@ impl Renderer {
                     let vertex_buf =
                         ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
                     bind_groups.push((bind_group.clone(), vertex_buf));
+                }
+            } else if let Element::Row(ref mut row) = &mut element.inner {
+                for element in row.elements.iter_mut() {
+                    let Rect { pos, size } = element.bounds.as_ref().unwrap();
+                    let pos = (pos.0, pos.1 - self.scroll_y);
+                    if let Element::Image(ref mut image) = &mut element.inner {
+                        if image.bind_group.is_none() {
+                            image.create_bind_group(
+                                &self.device,
+                                &self.queue,
+                                &self.image_renderer.sampler,
+                                &self.image_renderer.bindgroup_layout,
+                            );
+                        }
+                        if let Some(ref bind_group) = image.bind_group {
+                            let vertex_buf =
+                                ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
+                            bind_groups.push((bind_group.clone(), vertex_buf));
+                        }
+                    }
                 }
             }
         }

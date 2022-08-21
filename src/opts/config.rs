@@ -6,7 +6,7 @@ use crate::color;
 use anyhow::Context;
 use serde::{Deserialize, Deserializer};
 
-#[derive(Deserialize, Debug, PartialEq, Default)]
+#[derive(Deserialize, Debug, PartialEq, Default, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct FontOptions {
     #[serde(default)]
