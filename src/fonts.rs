@@ -1,6 +1,8 @@
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use anyhow::Context;
@@ -22,9 +24,53 @@ struct FontCache {
     bold_italic: HandleCache,
 }
 
+#[derive(Deserialize, Serialize, Clone, Copy)]
+enum FontType {
+    Regular,
+    Bold,
+    Italic,
+    BoldItalic,
+}
+
+impl FontType {
+    pub fn to_str(&self) -> &str {
+        match &self {
+            Self::Regular => "Regular",
+            Self::Bold => "Bold",
+            Self::Italic => "Italic",
+            Self::BoldItalic => "Bold-Italic",
+        }
+    }
+}
+
+struct FontInfo {
+    handle: Handle,
+    family_name: FamilyName,
+    font_type: FontType,
+}
+
+impl FontInfo {
+    pub fn to_string(&self) -> String {
+        format!(
+            "{}-{}",
+            Self::family_name_to_str(&self.family_name),
+            self.font_type.to_str()
+        )
+    }
+
+    pub fn family_name_to_str(family_name: &FamilyName) -> &str {
+        match &family_name {
+            FamilyName::SansSerif => "default-sans-serif",
+            FamilyName::Monospace => "default-monospace",
+            FamilyName::Title(name) => &name,
+            _ => unreachable!("We don't allow other default font types"),
+        }
+    }
+}
+
 impl FontCache {
-    fn new(name: &str, handles: &[Handle]) -> Option<Self> {
-        let mut it = handles.iter().map(HandleCache::new);
+    fn new(name: &str, font_infos: &[FontInfo]) -> Option<Self> {
+        let mut it = font_infos.iter().map(|info| HandleCache::new(&info));
         let cache = Self {
             name: name.to_owned(),
             base: it.next().flatten()?,
@@ -39,25 +85,55 @@ impl FontCache {
 #[derive(Deserialize, Serialize)]
 struct HandleCache {
     path: PathBuf,
+    binary: bool,
     font_index: u32,
 }
 
 impl HandleCache {
-    fn new(handle: &Handle) -> Option<Self> {
-        if let Handle::Path { path, font_index } = handle {
-            Some(Self {
+    fn new(font_info: &FontInfo) -> Option<Self> {
+        match &font_info.handle {
+            Handle::Path { path, font_index } => Some(Self {
                 path: path.to_owned(),
+                binary: false,
                 font_index: *font_index,
-            })
-        } else {
-            None
+            }),
+            Handle::Memory { bytes, font_index } => {
+                let inlyne_cache = dirs::cache_dir().expect("Already created").join("inlyne");
+                let file_name = font_info.to_string();
+                let cache_file_path = inlyne_cache.join(file_name.as_str());
+                let mut cache_file = fs::File::create(cache_file_path).ok()?;
+                cache_file.write_all(&bytes).ok()?;
+                Some(Self {
+                    path: file_name.into(),
+                    binary: true,
+                    font_index: *font_index,
+                })
+            }
         }
     }
 }
 
-impl From<HandleCache> for Handle {
-    fn from(HandleCache { path, font_index }: HandleCache) -> Self {
-        Self::Path { path, font_index }
+impl TryFrom<HandleCache> for Handle {
+    type Error = anyhow::Error;
+    fn try_from(
+        HandleCache {
+            path,
+            binary,
+            font_index,
+        }: HandleCache,
+    ) -> anyhow::Result<Self> {
+        if binary {
+            let inlyne_cache = dirs::cache_dir().expect("Already created").join("inlyne");
+            let font_path = inlyne_cache.join(path);
+            let bytes = fs::read(font_path)?;
+
+            Ok(Self::Memory {
+                bytes: Arc::new(bytes),
+                font_index,
+            })
+        } else {
+            Ok(Self::Path { path, font_index })
+        }
     }
 }
 
@@ -112,7 +188,7 @@ fn load_maybe_cached_fonts_by_name(
                 }
                 handles
                     .into_iter()
-                    .map(load_font)
+                    .map(|info| load_font(info.handle))
                     .collect::<anyhow::Result<Vec<_>>>()?
             }
         },
@@ -127,17 +203,33 @@ fn load_best_fonts() -> anyhow::Result<Vec<FontArc>> {
     Ok(fonts)
 }
 
-fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<Handle>> {
+fn load_best_handles_by_name(family_name: FamilyName) -> anyhow::Result<Vec<FontInfo>> {
     let source = SystemSource::new();
-    let name = &[family_name];
-    let base = select_best_font(&source, name, Properties::new().style(Style::Normal))?;
-    let italic = select_best_font(&source, name, Properties::new().style(Style::Italic))?;
-    let bold = select_best_font(&source, name, Properties::new().weight(Weight::BOLD))?;
-    let bold_italic = select_best_font(
-        &source,
-        name,
-        Properties::new().weight(Weight::BOLD).style(Style::Italic),
-    )?;
+    let name = &[family_name.clone()];
+    let base = FontInfo {
+        handle: select_best_font(&source, name, Properties::new().style(Style::Normal))?,
+        family_name: family_name.clone(),
+        font_type: FontType::Regular,
+    };
+    let italic = FontInfo {
+        handle: select_best_font(&source, name, Properties::new().style(Style::Italic))?,
+        family_name: family_name.clone(),
+        font_type: FontType::Italic,
+    };
+    let bold = FontInfo {
+        handle: select_best_font(&source, name, Properties::new().weight(Weight::BOLD))?,
+        family_name: family_name.clone(),
+        font_type: FontType::Bold,
+    };
+    let bold_italic = FontInfo {
+        handle: select_best_font(
+            &source,
+            name,
+            Properties::new().weight(Weight::BOLD).style(Style::Italic),
+        )?,
+        family_name,
+        font_type: FontType::BoldItalic,
+    };
 
     Ok(vec![base, italic, bold, bold_italic])
 }
@@ -146,7 +238,7 @@ fn load_best_fonts_by_name(family_name: FamilyName) -> anyhow::Result<Vec<FontAr
     let handles = load_best_handles_by_name(family_name)?;
     handles
         .into_iter()
-        .map(load_font)
+        .map(|info| load_font(info.handle))
         .collect::<anyhow::Result<Vec<_>>>()
 }
 
@@ -164,7 +256,7 @@ fn load_cached_fonts_by_name(desired_name: &str, path: &Path) -> Option<Vec<Font
         [base, italic, bold, bold_italic]
             .into_iter()
             .map(|cached| {
-                let handle = Handle::from(cached);
+                let handle = Handle::try_from(cached).ok()?;
                 load_font(handle).ok()
             })
             .collect::<Option<Vec<_>>>()
