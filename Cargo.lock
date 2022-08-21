@@ -865,7 +865,7 @@ checksum = "122fa73a5566372f9df09768a16e8e3dad7ad18abe07835f1f0b71f84078ba4c"
 dependencies = [
  "fontconfig-parser",
  "log",
- "memmap2 0.5.6",
+ "memmap2 0.5.7",
  "ttf-parser",
 ]
 
@@ -1196,6 +1196,7 @@ dependencies = [
  "image",
  "log",
  "lyon",
+ "memmap2 0.5.7",
  "open",
  "pollster",
  "resvg",
@@ -1453,9 +1454,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.5.6"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e2e4455be2010e8c5e77f0d10234b30f3a636a5305725609b5a71ad00d22577"
+checksum = "95af15f345b17af2efc8ead6080fb8bc376f8cec1b35277b935637595fe77498"
 dependencies = [
  "libc",
 ]
@@ -2584,7 +2585,7 @@ dependencies = [
  "dlib",
  "lazy_static",
  "log",
- "memmap2 0.5.6",
+ "memmap2 0.5.7",
  "nix 0.24.2",
  "pkg-config",
  "wayland-client",
