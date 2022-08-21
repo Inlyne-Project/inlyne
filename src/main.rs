@@ -18,6 +18,7 @@ use crate::text::Text;
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
+use positioner::Row;
 use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
@@ -59,8 +60,14 @@ pub enum Element {
     Spacer(Spacer),
     Image(Image),
     Table(Table),
+    Row(Row),
 }
 
+impl From<Row> for Element {
+    fn from(row: Row) -> Self {
+        Element::Row(row)
+    }
+}
 impl From<Image> for Element {
     fn from(image: Image) -> Self {
         Element::Image(image)
@@ -175,8 +182,18 @@ impl Inlyne {
                     if let Ok(queue) = queue {
                         for mut element in queue {
                             // Adds callback for when image is loaded to reposition and redraw
-                            if let Element::Image(ref mut image) = element {
-                                image.add_callback(event_loop_proxy.clone());
+                            match element {
+                                Element::Image(ref mut image) => {
+                                    image.add_callback(event_loop_proxy.clone());
+                                }
+                                Element::Row(ref mut row) => {
+                                    for element in &mut row.elements {
+                                        if let Element::Image(ref mut image) = element.inner {
+                                            image.add_callback(event_loop_proxy.clone());
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
                             // Position element and add it to elements
                             let mut positioned_element = Positioned::new(element);
@@ -444,6 +461,9 @@ impl Inlyne {
                 }
                 Element::Image(image) => Some(Hoverable::Image(image)),
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
+                Element::Row(row) => {
+                    Self::find_hoverable(&row.elements, glyph_brush, loc, screen_size, zoom)
+                }
             })
     }
 }

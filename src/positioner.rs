@@ -11,6 +11,7 @@ use crate::{
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
+#[derive(Debug)]
 pub struct Positioned<T> {
     pub inner: T,
     pub bounds: Option<Rect>,
@@ -56,7 +57,7 @@ impl Positioner {
         element: &mut Positioned<Element>,
         zoom: f32,
     ) {
-        let bounds = match &element.inner {
+        let bounds = match &mut element.inner {
             Element::TextBox(text_box) => {
                 let indent = text_box.indent;
                 let pos = (DEFAULT_MARGIN + indent, self.reserved_height);
@@ -64,10 +65,7 @@ impl Positioner {
                 let size = text_box.size(
                     glyph_brush,
                     pos,
-                    (
-                        self.screen_size.0 - pos.0 - DEFAULT_MARGIN,
-                        f32::INFINITY,
-                    ),
+                    (self.screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
                     zoom,
                 );
 
@@ -119,6 +117,42 @@ impl Positioner {
                     ),
                 )
             }
+            Element::Row(row) => {
+                let mut reserved_width = DEFAULT_MARGIN;
+                let mut inner_reserved_height: f32 = 0.;
+                let mut max_height: f32 = 0.;
+                let mut max_width: f32 = 0.;
+                for element in &mut row.elements {
+                    self.position(glyph_brush, element, zoom);
+                    let element_bounds = element.bounds.as_mut().expect("already positioned");
+
+                    let target_width = reserved_width
+                        + DEFAULT_PADDING * self.hidpi_scale * zoom
+                        + element_bounds.size.0;
+                    // Row would be too long with this element so add another line
+                    if target_width > self.screen_size.0 - DEFAULT_MARGIN {
+                        max_width = max_width.max(reserved_width);
+                        reserved_width = DEFAULT_MARGIN
+                            + DEFAULT_PADDING * self.hidpi_scale * zoom
+                            + element_bounds.size.0;
+                        inner_reserved_height +=
+                            max_height + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                        max_height = element_bounds.size.1;
+                        element_bounds.pos.0 = DEFAULT_MARGIN;
+                    } else {
+                        max_height = max_height.max(element_bounds.size.1);
+                        element_bounds.pos.0 = reserved_width;
+                        reserved_width = target_width;
+                    }
+                    element_bounds.pos.1 = self.reserved_height + inner_reserved_height;
+                }
+                max_width = max_width.max(reserved_width);
+                inner_reserved_height += max_height + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                Rect::new(
+                    (DEFAULT_MARGIN, self.reserved_height),
+                    (max_width - DEFAULT_MARGIN, inner_reserved_height),
+                )
+            }
         };
         element.bounds = Some(bounds);
     }
@@ -148,5 +182,20 @@ pub struct Spacer {
 impl Spacer {
     pub fn new(space: f32) -> Spacer {
         Spacer { space }
+    }
+}
+
+#[derive(Debug)]
+pub struct Row {
+    pub elements: Vec<Positioned<Element>>,
+    pub hidpi_scale: f32,
+}
+
+impl Row {
+    pub fn new(elements: Vec<Positioned<Element>>, hidpi_scale: f32) -> Self {
+        Self {
+            elements,
+            hidpi_scale,
+        }
     }
 }
