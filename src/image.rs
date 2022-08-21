@@ -129,7 +129,7 @@ impl Image {
 
             if let Ok(image) = image::load_from_memory(&image_data) {
                 *(image_clone.lock().unwrap()) = Some(ImageData {
-                    rgba_image: image.to_rgba8(),
+                    rgba_image: image.into_rgba8(),
                     scale: true,
                 });
             } else {
