@@ -469,12 +469,17 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Error)
+        .filter_module("inlyne", log::LevelFilter::Info)
+        .parse_env("INLYNE_LOG")
+        .init();
+
     let config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
-            // TODO: switch to logging
-            eprintln!(
-                "WARN: Failed reading config file. Falling back to defaults. Error: {}",
+            log::warn!(
+                "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
             Config::default()
