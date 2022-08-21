@@ -38,7 +38,7 @@ use winit::{
 };
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -102,11 +102,47 @@ pub struct Inlyne {
     args: Args,
 }
 
+/// Gets a relative path extending from the repo root falling back to the full path
+fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
+    let mut full_path = path.canonicalize().ok()?;
+    let mut parts = vec![full_path.file_name()?.to_owned()];
+
+    full_path.pop();
+    loop {
+        full_path.push(".git");
+        let is_git = full_path.exists();
+        full_path.pop();
+        full_path.push(".hg");
+        let is_mercurial = full_path.exists();
+        full_path.pop();
+
+        let is_vcs_dir = is_git || is_mercurial;
+
+        match full_path.file_name() {
+            Some(name) => parts.push(name.to_owned()),
+            // We've seached the full path and didn't find a vcs dir
+            None => return Some(path.to_owned()),
+        }
+        if is_vcs_dir {
+            let mut rooted = PathBuf::new();
+            for part in parts.into_iter().rev() {
+                rooted.push(part);
+            }
+            return Some(rooted);
+        }
+
+        full_path.pop();
+    }
+}
+
 impl Inlyne {
     pub async fn new(opts: Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        window.set_title("Inlyne");
+        match root_filepath_to_vcs_dir(&args.file_path) {
+            Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
+            None => window.set_title("Inlyne"),
+        }
         let renderer = Renderer::new(
             &window,
             event_loop.create_proxy(),
