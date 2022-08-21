@@ -8,7 +8,6 @@ use font_kit::family_name::FamilyName;
 use font_kit::handle::Handle;
 use font_kit::properties::{Properties, Style, Weight};
 use font_kit::source::SystemSource;
-use font_kit::sources::fontconfig::FontconfigSource;
 use serde::{Deserialize, Serialize};
 use wgpu_glyph::ab_glyph::{FontArc, FontRef, FontVec};
 
@@ -175,7 +174,7 @@ fn load_cached_fonts_by_name(desired_name: &str, path: &Path) -> Option<Vec<Font
 }
 
 fn select_best_font(
-    source: &FontconfigSource,
+    source: &SystemSource,
     name: &[FamilyName],
     props: &Properties,
 ) -> anyhow::Result<Handle> {
