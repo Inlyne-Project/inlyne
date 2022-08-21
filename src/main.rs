@@ -198,6 +198,8 @@ impl Inlyne {
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
+        let mut selection_cache = String::new();
+        let mut selecting = false;
         let event_loop_proxy = self.event_loop.create_proxy();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -253,6 +255,9 @@ impl Inlyne {
                         .redraw(&mut self.elements)
                         .with_context(|| "Renderer failed to redraw the screen")
                         .unwrap();
+                    if selecting {
+                        selection_cache = self.renderer.selection_text.clone();
+                    }
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => pending_resize = Some(size),
@@ -319,6 +324,7 @@ impl Inlyne {
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
+                                selecting = true;
                                 self.window.request_redraw();
                             }
                         }
@@ -388,6 +394,7 @@ impl Inlyne {
                         ElementState::Released => {
                             scrollbar_held = false;
                             mouse_down = false;
+                            selecting = false;
                         }
                     },
                     WindowEvent::ModifiersChanged(new_state) => modifiers = new_state,
@@ -405,7 +412,7 @@ impl Inlyne {
                                 || (!cfg!(target_os = "macos") && modifiers.ctrl());
                             if copy {
                                 self.clipboard
-                                    .set_contents(self.renderer.selection_text.trim().to_owned())
+                                    .set_contents(selection_cache.trim().to_owned())
                                     .unwrap()
                             }
                         }

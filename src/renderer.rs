@@ -220,13 +220,10 @@ impl Renderer {
             let Rect { pos, size } = element.bounds.as_ref().expect("Element not positioned");
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
-            // FIX ME
-            if self.selection.is_none() {
-                if scrolled_pos.1 + size.1 <= 0. {
-                    continue;
-                } else if scrolled_pos.1 >= screen_size.1 {
-                    break;
-                }
+            if scrolled_pos.1 + size.1 <= 0. {
+                continue;
+            } else if scrolled_pos.1 >= screen_size.1 {
+                break;
             }
 
             match &element.inner {
