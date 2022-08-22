@@ -349,6 +349,7 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
+                            self.state.text_options.allow_whitespace += 1;
                             self.current_textbox.indent = self.state.global_indent;
                             self.state.element_stack.push(html::Element::ListItem);
                         }
@@ -536,6 +537,7 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.pop();
                         }
                         "li" => {
+                            self.state.text_options.allow_whitespace -= 1;
                             self.push_current_textbox();
                             self.state.element_stack.pop();
                         }
