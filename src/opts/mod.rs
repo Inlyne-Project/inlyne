@@ -25,6 +25,7 @@ pub struct Opts {
     pub file_path: PathBuf,
     pub theme: color::Theme,
     pub scale: Option<f32>,
+    pub lines_to_scroll: f32,
     pub font_opts: FontOptions,
 }
 
@@ -33,6 +34,7 @@ impl Opts {
         let config::Config {
             theme: config_theme,
             scale: config_scale,
+            lines_to_scroll: config_lines_to_scroll,
             light_theme: config_light_theme,
             dark_theme: config_dark_theme,
             font_options: config_font_options,
@@ -55,6 +57,7 @@ impl Opts {
             file_path: args.file_path.clone(),
             theme,
             scale: args.scale.or(config_scale),
+            lines_to_scroll: config_lines_to_scroll.0,
             font_opts,
         }
     }
