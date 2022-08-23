@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+jobs:
+  release:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use-cross: false
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            use-cross: false
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            use-cross: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+
+    - name: Install packages (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        ci/ubuntu-install-packages
+
+
+    - name: Set the version
+      id: version
+      run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        target: ${{ matrix.target }}
+
+
+    - name: Build
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.use-cross }}
+        command: build
+        args: --target ${{ matrix.target }} --release --locked
+
+    - name: Strip binary
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      run: strip target/${{ matrix.target }}/release/inlyne
+
+    - name: Build archive
+      shell: bash
+      run: |
+        staging="inlyne-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
+        mkdir -p "$staging"
+        cp {README.md,LICENSE,example.png,inlyne.toml.sample} "$staging/"
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          cp "target/${{ matrix.target }}/release/inlyne.exe" "$staging/"
+          7z a "$staging.zip" "$staging"
+          echo "ASSET=$staging.zip" >> $GITHUB_ENV
+        else
+          cp "target/${{ matrix.target }}/release/inlyne" "$staging/"
+          tar czf "$staging.tar.gz" "$staging"
+          echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+        fi
+
+    - name: Upload binaries to release
+      uses: svenstaro/upload-release-action@v1-release
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: ${{ env.ASSET }}
+        asset_name: ${{ env.ASSET }}
+        tag: ${{ github.ref }}
