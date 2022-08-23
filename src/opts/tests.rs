@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use crate::opts::config::FontOptions;
+use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
 
 use super::{cli, config, Opts, ThemeType};
@@ -34,6 +34,7 @@ fn defaults() {
             theme: ThemeType::default().as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
         }
     );
 }
@@ -54,6 +55,7 @@ fn config_overrides_default() {
             theme: ThemeType::Dark.as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
         }
     );
     let config = config::Config {
@@ -70,6 +72,7 @@ fn config_overrides_default() {
             theme: ThemeType::default().as_theme(),
             scale: Some(1.5),
             font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
         }
     );
 }
@@ -87,6 +90,7 @@ fn from_cli() {
             theme: ThemeType::Dark.as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
         }
     );
 
@@ -106,6 +110,7 @@ fn from_cli() {
             theme: ThemeType::Dark.as_theme(),
             scale: Some(1.5),
             font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
         }
     );
 }

@@ -7,6 +7,11 @@
 # # Possible values: ["Light", "Dark"]
 # theme = "Dark"
 
+# # Number of lines to scroll when using a line-based scrolling device (a lot of
+# # mice)
+# # Default: 3.0
+# lines-to-scroll = 4.5
+
 # # The light and dark themes can be customized as well
 # # Here is a dark theme inspired by GitHub's dark dimmed theme
 # [dark-theme]

@@ -99,6 +99,7 @@ pub struct Inlyne {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
+    lines_to_scroll: f32,
     args: Args,
 }
 
@@ -160,6 +161,7 @@ impl Inlyne {
             element_queue: Arc::new(Mutex::new(VecDeque::new())),
             clipboard,
             elements: Vec::new(),
+            lines_to_scroll: opts.lines_to_scroll,
             args,
         })
     }
@@ -267,10 +269,10 @@ impl Inlyne {
                             MouseScrollDelta::PixelDelta(pos) => {
                                 pos.y as f32 * self.renderer.hidpi_scale * self.renderer.zoom
                             }
-                            // Arbitrarily pick x30 as the number of pixels to shift per line
                             MouseScrollDelta::LineDelta(_, y_delta) => {
                                 y_delta as f32
-                                    * 32.0
+                                    * 16.0
+                                    * self.lines_to_scroll
                                     * self.renderer.hidpi_scale
                                     * self.renderer.zoom
                             }

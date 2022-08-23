@@ -67,12 +67,23 @@ impl OptionalTheme {
     }
 }
 
+#[derive(Deserialize, Debug)]
+pub struct LinesToScroll(pub f32);
+
+impl Default for LinesToScroll {
+    fn default() -> Self {
+        Self(3.0)
+    }
+}
+
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
     pub theme: ThemeType,
     pub scale: Option<f32>,
+    #[serde(default)]
+    pub lines_to_scroll: LinesToScroll,
     pub light_theme: Option<OptionalTheme>,
     pub dark_theme: Option<OptionalTheme>,
     pub font_options: Option<FontOptions>,
