@@ -87,6 +87,7 @@ mod html {
     pub enum Element {
         List(List),
         ListItem,
+        Input,
         Table(Table),
         TableRow(Vec<TextBox>),
         Header(Header),
@@ -142,6 +143,7 @@ impl HtmlInterpreter {
         let mut options = ComrakOptions::default();
         options.extension.table = true;
         options.extension.strikethrough = true;
+        options.extension.tasklist = true;
         options.parse.smart = true;
         options.render.unsafe_ = true;
 
@@ -202,10 +204,12 @@ impl HtmlInterpreter {
                 }
             }
             if !empty {
+                self.current_textbox.indent = self.state.global_indent;
                 self.push_element(self.current_textbox.clone().into());
             }
         }
         self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale);
+        self.current_textbox.indent = self.state.global_indent;
     }
     fn push_spacer(&mut self) {
         self.push_element(Spacer::new(5.).into());
@@ -230,7 +234,6 @@ impl TokenSink for HtmlInterpreter {
                             self.push_current_textbox();
                             self.state.text_options.block_quote += 1;
                             self.state.global_indent += DEFAULT_MARGIN / 2.;
-                            self.current_textbox.indent = self.state.global_indent;
                             self.current_textbox
                                 .set_quote_block(Some(self.state.text_options.block_quote));
                         }
@@ -345,7 +348,6 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
-                            self.current_textbox.indent = self.state.global_indent;
                             self.state.element_stack.push(html::Element::ListItem);
                         }
                         "ul" => {
@@ -367,7 +369,6 @@ impl TokenSink for HtmlInterpreter {
                             }
                             self.push_current_textbox();
                             self.state.global_indent += DEFAULT_MARGIN / 2.;
-                            self.current_textbox.indent = self.state.global_indent;
                             self.state
                                 .element_stack
                                 .push(html::Element::List(html::List {
@@ -445,6 +446,18 @@ impl TokenSink for HtmlInterpreter {
                                         if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
                                             self.state.span_color = hex_to_linear_rgba(hex);
                                         }
+                                    }
+                                }
+                            }
+                        }
+                        "input" => {
+                            for Attribute { name, value } in &tag.attrs {
+                                if &name.local == "type" {
+                                    let value = value.to_string();
+                                    if value == "checkbox" {
+                                        self.push_current_textbox();
+                                        self.current_textbox.set_checkbox(Some(tag.attrs.iter().any(|attr| &attr.name.local == "checked")));
+                                        self.state.element_stack.push(html::Element::Input);
                                     }
                                 }
                             }
@@ -532,10 +545,13 @@ impl TokenSink for HtmlInterpreter {
                             self.push_current_textbox();
                             self.state.element_stack.pop();
                         }
+                        "input" => {
+                            self.push_current_textbox();
+                            self.state.element_stack.pop();
+                        }
                         "ul" | "ol" => {
                             self.push_current_textbox();
                             self.state.global_indent -= DEFAULT_MARGIN / 2.;
-                            self.current_textbox.indent = self.state.global_indent;
                             self.state.element_stack.pop();
                             if self.state.global_indent == 0. {
                                 self.push_spacer();
@@ -551,7 +567,6 @@ impl TokenSink for HtmlInterpreter {
                             self.push_current_textbox();
                             self.state.text_options.block_quote -= 1;
                             self.state.global_indent -= DEFAULT_MARGIN / 2.;
-                            self.current_textbox.indent = self.state.global_indent;
                             self.current_textbox.set_quote_block(None);
                             if self.state.global_indent == 0. {
                                 self.push_spacer();
@@ -563,7 +578,7 @@ impl TokenSink for HtmlInterpreter {
                 }
             }
             CharacterTokens(str) => {
-                let str = str.to_string();
+                let mut str = str.to_string();
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
                         if !self.current_textbox.texts.is_empty() {
@@ -605,6 +620,10 @@ impl TokenSink for HtmlInterpreter {
                         }
                     }
                 } else {
+                    if self.current_textbox.texts.is_empty() && self.state.text_options.pre_formatted == 0 {
+                        str = str.trim_start().to_owned();
+                    }
+
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;

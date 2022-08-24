@@ -29,6 +29,8 @@
 # link-color = 0x539bf5
 # # Text selection color
 # select-color = 0x438bd5
+# # Checkbox ticked background color
+# checkbox-color = 0x006400
 # # Syntax highlighting theme. All of `syntect`s default themes are supported
 # # Possible values: [
 # #     "base16-ocean-dark",  "base16-eighties-dark", "base16-mocha-dark",

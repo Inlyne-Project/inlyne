@@ -21,6 +21,7 @@ pub struct Theme {
     pub quote_block_color: [f32; 4],
     pub link_color: [f32; 4],
     pub select_color: [f32; 4],
+    pub checkbox_color: [f32; 4],
     pub code_highlighter: SyntaxTheme,
 }
 
@@ -37,6 +38,7 @@ pub const DARK_DEFAULT: Theme = Theme {
     quote_block_color: [0.0080, 0.0110, 0.0156, 1.0],
     link_color: [0.0976, 0.3813, 1.0, 1.0],
     select_color: [0.17, 0.22, 0.3, 1.0],
+    checkbox_color: [0.1, 0.3, 0.1, 1.0],
     code_highlighter: SyntaxTheme::Base16OceanDark,
 };
 
@@ -48,6 +50,7 @@ pub const LIGHT_DEFAULT: Theme = Theme {
     quote_block_color: [0.5841 * 1.5, 0.6376 * 1.5, 0.6939 * 1.5, 1.0],
     link_color: [0.0975, 0.1813, 1.0, 1.0],
     select_color: [0.67, 0.85, 0.9, 1.0],
+    checkbox_color: [0.37, 0.85, 0.5, 1.0],
     code_highlighter: SyntaxTheme::Base16OceanLight,
 };
 

@@ -32,6 +32,8 @@ pub struct OptionalTheme {
     pub link_color: Option<[f32; 4]>,
     #[serde(default, deserialize_with = "deserialize_hex_to_linear_rgba")]
     pub select_color: Option<[f32; 4]>,
+    #[serde(default, deserialize_with = "deserialize_hex_to_linear_rgba")]
+    pub checkbox_color: Option<[f32; 4]>,
     #[serde(default)]
     pub code_highlighter: Option<color::SyntaxTheme>,
 }
@@ -62,6 +64,7 @@ impl OptionalTheme {
             quote_block_color: self.quote_block_color.unwrap_or(other.quote_block_color),
             link_color: self.link_color.unwrap_or(other.link_color),
             select_color: self.select_color.unwrap_or(other.select_color),
+            checkbox_color: self.checkbox_color.unwrap_or(other.checkbox_color),
             code_highlighter: self.code_highlighter.unwrap_or(other.code_highlighter),
         }
     }

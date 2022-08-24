@@ -10,6 +10,7 @@ pub struct TextBox {
     pub texts: Vec<Text>,
     pub is_code_block: bool,
     pub is_quote_block: Option<usize>,
+    pub is_checkbox: Option<bool>,
     pub is_anchor: Option<String>,
     pub align: Align,
     pub hidpi_scale: f32,
@@ -32,6 +33,10 @@ impl TextBox {
 
     pub fn set_quote_block(&mut self, nest: Option<usize>) {
         self.is_quote_block = nest;
+    }
+
+    pub fn set_checkbox(&mut self, is_checked: Option<bool>) {
+        self.is_checkbox = is_checked;
     }
 
     pub fn set_anchor(&mut self, anchor: Option<String>) {

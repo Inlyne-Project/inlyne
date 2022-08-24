@@ -228,7 +228,7 @@ impl Renderer {
 
             match &element.inner {
                 Element::TextBox(text_box) => {
-                    let bounds = (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY);
+                    let bounds = ((screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.), f32::INFINITY);
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
@@ -241,18 +241,20 @@ impl Renderer {
                         };
 
                         let mut min = (
-                            (scrolled_pos.0 - 10.).max(DEFAULT_MARGIN - 10.),
+                            (scrolled_pos.0 - 10.),
                             scrolled_pos.1,
                         );
                         let max = (
-                            (min.0 + bounds.0 + 10.).max(DEFAULT_MARGIN - 10.),
+                            (min.0 + bounds.0 + 10.).min(screen_size.0 - DEFAULT_MARGIN),
                             min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
-                        indice_ranges
-                            .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
+                        if min.0 < screen_size.0 - DEFAULT_MARGIN {
+                            indice_ranges
+                                .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
+                        }
                     }
                     if let Some(nest) = text_box.is_quote_block {
                         for n in 0..nest {
@@ -275,6 +277,31 @@ impl Renderer {
                                 self.theme.select_color,
                             )?);
                         }
+                    }
+                    if let Some(is_checked) = text_box.is_checkbox {
+                        let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.) * self.hidpi_scale * self.zoom * 0.75;
+                            let min = (
+                                scrolled_pos.0 - box_size - 10.,
+                                scrolled_pos.1 + size.1 / 2. - box_size / 2.,
+                            );
+                            let max = (
+                                scrolled_pos.0 - 10.,
+                                scrolled_pos.1 + size.1 / 2. + box_size / 2.,
+                            );
+                            if max.0 < screen_size.0 - DEFAULT_MARGIN {
+                                if is_checked {
+                                    indice_ranges.push(self.draw_rectangle(
+                                        Rect::from_min_max(min, max),
+                                        self.theme.checkbox_color,
+                                    )?);
+                                    indice_ranges.push(self.draw_tick(min, box_size, self.theme.text_color, 4.)?);
+                                }
+                                indice_ranges.push(self.stroke_rectangle(
+                                    Rect::from_min_max(min, max),
+                                    self.theme.text_color,
+                                    2.,
+                                )?);
+                            }
                     }
                     if let Some(ref lines) = text_box.render_lines(
                         &mut self.glyph_brush,
@@ -469,6 +496,48 @@ impl Renderer {
                 color,
             }),
         )?;
+        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+    }
+
+    fn stroke_rectangle(&mut self, rect: Rect, color: [f32; 4], width: f32) -> anyhow::Result<Range<u32>> {
+        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+        let mut stroke_tessellator = StrokeTessellator::new();
+        let screen_size = self.screen_size();
+        stroke_tessellator.tessellate_rectangle(
+            &Box2D::new(Point2D::from(rect.pos), Point2D::from(rect.max())),
+            &StrokeOptions::default().with_line_width(width),
+            &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: StrokeVertex| {
+                let point = point(vertex.position().x, vertex.position().y, screen_size);
+                Vertex {
+                    pos: [point[0], point[1], 0.0],
+                    color,
+                }
+            }),
+        )?;
+        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+    }
+
+    fn draw_tick(&mut self, pos: (f32, f32), box_size: f32, color: [f32; 4], width: f32) -> anyhow::Result<Range<u32>> {
+        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+        let screen_size = self.screen_size();
+        let mut stroke_tessellator = StrokeTessellator::new();
+        let stroke_opts = StrokeOptions::default().with_line_width(width);
+        let mut vertex_builder = BuffersBuilder::new(&mut self.lyon_buffer, |vertex: StrokeVertex| {
+                let point = point(vertex.position().x, vertex.position().y, screen_size);
+                Vertex {
+                    pos: [point[0], point[1], 0.0],
+                    color,
+                }
+            });
+        let mut builder = stroke_tessellator.builder(&stroke_opts, &mut vertex_builder);
+
+        // Build a simple path.
+        builder.begin((pos.0 + box_size * 0.2, pos.1 + box_size * 0.5).into());
+        builder.line_to((pos.0 + box_size * 0.4, pos.1 + box_size * 0.7).into());
+        builder.line_to((pos.0 + box_size * 0.8 , pos.1 + box_size * 0.2).into());
+        builder.end(false);
+        let _ = builder.build()?;
+
         Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
     }
 

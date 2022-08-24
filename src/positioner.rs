@@ -65,7 +65,7 @@ impl Positioner {
                 let size = text_box.size(
                     glyph_brush,
                     pos,
-                    (self.screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                    ((self.screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.), f32::INFINITY),
                     zoom,
                 );
 
