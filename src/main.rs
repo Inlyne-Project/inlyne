@@ -259,7 +259,8 @@ impl Inlyne {
                         self.window.request_redraw()
                     }
                     InlyneEvent::FileReload => {
-                        self.interpreter_should_queue.store(false, Ordering::Relaxed);
+                        self.interpreter_should_queue
+                            .store(false, Ordering::Relaxed);
                         self.element_queue.lock().unwrap().clear();
                         self.elements.clear();
                         self.renderer.positioner.reserved_height = DEFAULT_PADDING;

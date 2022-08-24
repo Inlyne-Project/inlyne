@@ -159,7 +159,11 @@ impl HtmlInterpreter {
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in reciever {
-            if tok.sink.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+            if tok
+                .sink
+                .should_queue
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 tok.sink.state = State::default();
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
