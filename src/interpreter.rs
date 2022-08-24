@@ -27,6 +27,8 @@ use Token::{CharacterTokens, EOFToken};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -114,6 +116,7 @@ pub struct HtmlInterpreter {
     window: Arc<Window>,
     state: State,
     file_path: PathBuf,
+    pub should_queue: Arc<AtomicBool>,
 }
 
 impl HtmlInterpreter {
@@ -135,10 +138,11 @@ impl HtmlInterpreter {
             },
             theme,
             file_path,
+            should_queue: Arc::new(AtomicBool::new(true)),
         }
     }
 
-    pub fn intepret_md(self, md_string: &str) {
+    pub fn intepret_md(self, reciever: mpsc::Receiver<String>) {
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
         options.extension.table = true;
@@ -152,20 +156,26 @@ impl HtmlInterpreter {
             self.theme.code_highlighter.as_syntect_name(),
         );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
-
-        let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);
-
-        input.push_back(
-            Tendril::from_str(&htmlified)
-                .unwrap()
-                .try_reinterpret::<fmt::UTF8>()
-                .unwrap(),
-        );
-
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
-        let _ = tok.feed(&mut input);
-        assert!(input.is_empty());
-        tok.end();
+
+        for md_string in reciever {
+            if tok.sink.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+                tok.sink.state = State::default();
+                tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
+                let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
+
+                input.push_back(
+                    Tendril::from_str(&htmlified)
+                        .unwrap()
+                        .try_reinterpret::<fmt::UTF8>()
+                        .unwrap(),
+                );
+
+                let _ = tok.feed(&mut input);
+                assert!(input.is_empty());
+                tok.end();
+            }
+        }
     }
 
     // Searches the currently nested elements for align attribute
@@ -224,6 +234,9 @@ impl TokenSink for HtmlInterpreter {
     type Handle = ();
 
     fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
+        if !self.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+            return TokenSinkResult::Continue;
+        }
         match token {
             TagToken(tag) => {
                 let tag_name = tag.name.to_string();
@@ -713,7 +726,8 @@ impl TokenSink for HtmlInterpreter {
             }
             EOFToken => {
                 self.push_current_textbox();
-                self.window.request_redraw();
+                self.should_queue
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
             }
             _ => {}
         }
