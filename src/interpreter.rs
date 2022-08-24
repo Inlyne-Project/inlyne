@@ -80,7 +80,6 @@ mod html {
         pub small: usize,
         pub code: usize,
         pub pre_formatted: usize,
-        pub allow_whitespace: usize,
         pub block_quote: usize,
         pub link: Vec<String>,
     }
@@ -338,10 +337,7 @@ impl TokenSink for HtmlInterpreter {
                             }
                             self.state.element_stack.push(match tag_name.as_str() {
                                 "div" => html::Element::Div(align),
-                                "p" => {
-                                    self.state.text_options.allow_whitespace += 1;
-                                    html::Element::Paragraph(align)
-                                }
+                                "p" => html::Element::Paragraph(align),
                                 _ => unreachable!("Arm matches on div and p"),
                             });
                         }
@@ -349,7 +345,6 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
-                            self.state.text_options.allow_whitespace += 1;
                             self.current_textbox.indent = self.state.global_indent;
                             self.state.element_stack.push(html::Element::ListItem);
                         }
@@ -407,7 +402,6 @@ impl TokenSink for HtmlInterpreter {
                             if let html::HeaderType::H1 = header_type {
                                 self.state.text_options.underline += 1;
                             }
-                            self.state.text_options.allow_whitespace += 1;
                             self.state
                                 .element_stack
                                 .push(html::Element::Header(html::Header { header_type, align }));
@@ -509,7 +503,6 @@ impl TokenSink for HtmlInterpreter {
                         "div" | "p" => {
                             self.push_current_textbox();
                             if tag_name == "p" {
-                                self.state.text_options.allow_whitespace -= 1;
                                 self.push_spacer();
                             }
                             self.state.element_stack.pop();
@@ -520,7 +513,6 @@ impl TokenSink for HtmlInterpreter {
                             if tag_name.as_str() == "h1" {
                                 self.state.text_options.underline -= 1;
                             }
-                            self.state.text_options.allow_whitespace -= 1;
                             let mut anchor_name = "#".to_string();
                             for text in &self.current_textbox.texts {
                                 for char in text.text.chars() {
@@ -537,7 +529,6 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.pop();
                         }
                         "li" => {
-                            self.state.text_options.allow_whitespace -= 1;
                             self.push_current_textbox();
                             self.state.element_stack.pop();
                         }
@@ -572,7 +563,7 @@ impl TokenSink for HtmlInterpreter {
                 }
             }
             CharacterTokens(str) => {
-                let mut str = str.to_string();
+                let str = str.to_string();
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
                         if !self.current_textbox.texts.is_empty() {
@@ -583,12 +574,14 @@ impl TokenSink for HtmlInterpreter {
                         }
                     }
                     if let Some(last_text) = self.current_textbox.texts.last() {
-                        if !last_text.text.trim().is_empty() {
-                            self.current_textbox.texts.push(Text::new(
-                                " ".to_string(),
-                                self.hidpi_scale,
-                                self.theme.text_color,
-                            ));
+                        if let Some(last_char) = last_text.text.chars().last() {
+                            if !last_char.is_whitespace() {
+                                self.current_textbox.texts.push(Text::new(
+                                    " ".to_string(),
+                                    self.hidpi_scale,
+                                    self.theme.text_color,
+                                ));
+                            }
                         }
                     }
                     if let Some((row, newline_counter)) = self.state.inline_images.take() {
@@ -599,12 +592,19 @@ impl TokenSink for HtmlInterpreter {
                             self.state.inline_images = Some((row, newline_counter - 1));
                         }
                     }
-                } else if !str.trim().is_empty() || self.state.text_options.pre_formatted >= 1 {
-                    if self.state.text_options.allow_whitespace == 0
-                        && self.state.text_options.pre_formatted == 0
-                    {
-                        str = str.trim().to_owned();
+                } else if str.trim().is_empty() && self.state.text_options.pre_formatted == 0 {
+                    if let Some(last_text) = self.current_textbox.texts.last() {
+                        if let Some(last_char) = last_text.text.chars().last() {
+                            if !last_char.is_whitespace() {
+                                self.current_textbox.texts.push(Text::new(
+                                    " ".to_string(),
+                                    self.hidpi_scale,
+                                    self.theme.text_color,
+                                ));
+                            }
+                        }
                     }
+                } else {
                     let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;
