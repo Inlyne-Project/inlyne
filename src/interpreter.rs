@@ -1,4 +1,3 @@
-use crate::ImageCache;
 use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
 use crate::image::ImageSize;
@@ -7,6 +6,7 @@ use crate::positioner::Row;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
+use crate::ImageCache;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
@@ -321,19 +321,19 @@ impl TokenSink for HtmlInterpreter {
                                     let src = attr.value.to_string();
                                     let is_url =
                                         src.starts_with("http://") || src.starts_with("https://");
-                                    let mut image = if let Some(image_data) = self.image_cache.lock().unwrap().get(&src) && is_url {
-                                        Image::from_image_data(
+                                    let mut image = match self.image_cache.lock().unwrap().get(&src)
+                                    {
+                                        Some(image_data) if is_url => Image::from_image_data(
                                             image_data.clone(),
-                                            self.hidpi_scale
+                                            self.hidpi_scale,
                                         )
-                                        .with_align(*align)
-                                    } else {
-                                        Image::from_src(
+                                        .with_align(*align),
+                                        _ => Image::from_src(
                                             src,
                                             self.file_path.clone(),
                                             self.hidpi_scale,
                                         )
-                                        .with_align(*align)
+                                        .with_align(*align),
                                     };
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())

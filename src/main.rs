@@ -264,10 +264,7 @@ impl Inlyne {
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::LoadedImage(src, image_data) => {
-                        self.image_cache
-                            .lock()
-                            .unwrap()
-                            .insert(src, image_data);
+                        self.image_cache.lock().unwrap().insert(src, image_data);
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw()
                     }
