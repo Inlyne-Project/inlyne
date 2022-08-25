@@ -9,13 +9,12 @@ pub mod table;
 pub mod text;
 pub mod utils;
 
-use crate::image::Image;
+use crate::image::{Image, ImageData};
 use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
 
-use notify::op::Op;
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
@@ -24,16 +23,14 @@ use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
+use text::TextBox;
 use utils::{Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
+use notify::op::Op;
 use notify::{raw_watcher, RecursiveMode, Watcher};
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::sync::mpsc::channel;
-use text::TextBox;
+
 use winit::event::ModifiersState;
 use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
@@ -43,16 +40,21 @@ use winit::{
     window::{CursorIcon, Window},
 };
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum InlyneEvent {
-    Reposition,
+    LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
 }
 
@@ -108,6 +110,7 @@ pub struct Inlyne {
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     args: Args,
+    image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
 }
@@ -211,12 +214,14 @@ impl Inlyne {
         let clipboard = ClipboardContext::new().unwrap();
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
+        let image_cache = Arc::new(Mutex::new(HashMap::new()));
         let interpreter = HtmlInterpreter::new(
             window.clone(),
             element_queue.clone(),
             renderer.theme.clone(),
             renderer.hidpi_scale,
             args.file_path.clone(),
+            image_cache.clone(),
         );
 
         let (interpreter_sender, interpreter_reciever) = channel();
@@ -237,6 +242,7 @@ impl Inlyne {
             args,
             interpreter_sender,
             interpreter_should_queue,
+            image_cache,
         })
     }
 
@@ -254,7 +260,11 @@ impl Inlyne {
 
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
-                    InlyneEvent::Reposition => {
+                    InlyneEvent::LoadedImage(src, image_data) => {
+                        self.image_cache
+                            .lock()
+                            .unwrap()
+                            .insert(src, image_data.clone());
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw()
                     }
@@ -311,6 +321,7 @@ impl Inlyne {
                             self.elements.push(positioned_element);
                         }
                     }
+                    self.renderer.set_scroll_y(self.renderer.scroll_y);
                     self.renderer
                         .redraw(&mut self.elements)
                         .context("Renderer failed to redraw the screen")

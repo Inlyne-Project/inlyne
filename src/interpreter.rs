@@ -1,11 +1,13 @@
 use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
+use crate::image::ImageData;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
 use crate::positioner::Row;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
+use crate::InlyneEvent;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
@@ -21,9 +23,11 @@ use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
 use html5ever::Attribute;
+use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -116,8 +120,12 @@ pub struct HtmlInterpreter {
     window: Arc<Window>,
     state: State,
     file_path: PathBuf,
+    // Whether the interpreters is allowed to queue elements
     pub should_queue: Arc<AtomicBool>,
+    // Whether interpreter should stop queuing till next recieved file
+    stopped: bool,
     first_pass: bool,
+    image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
 }
 
 impl HtmlInterpreter {
@@ -127,6 +135,7 @@ impl HtmlInterpreter {
         theme: Theme,
         hidpi_scale: f32,
         file_path: PathBuf,
+        image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
     ) -> Self {
         Self {
             window,
@@ -140,7 +149,9 @@ impl HtmlInterpreter {
             theme,
             file_path,
             should_queue: Arc::new(AtomicBool::new(true)),
+            stopped: false,
             first_pass: true,
+            image_cache,
         }
     }
 
@@ -168,6 +179,7 @@ impl HtmlInterpreter {
             {
                 tok.sink.state = State::default();
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
+                tok.sink.stopped = false;
                 let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
 
                 input.push_back(
@@ -243,6 +255,9 @@ impl TokenSink for HtmlInterpreter {
 
     fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
         if !self.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+            self.stopped = true;
+        }
+        if self.stopped {
             return TokenSinkResult::Continue;
         }
         match token {
@@ -306,12 +321,23 @@ impl TokenSink for HtmlInterpreter {
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("src") {
                                     let align = align.as_ref().unwrap_or(&Align::Left);
-                                    let mut image = Image::from_url(
-                                        attr.value.to_string(),
-                                        self.file_path.clone(),
-                                        self.hidpi_scale,
-                                    )
-                                    .with_align(*align);
+                                    let src = attr.value.to_string();
+                                    let is_url =
+                                        src.starts_with("http://") || src.starts_with("https://");
+                                    let mut image = if let Some(image_data) = self.image_cache.lock().unwrap().get(&src) && is_url {
+                                        Image::from_image_data(
+                                            image_data.clone(),
+                                            self.hidpi_scale
+                                        )
+                                        .with_align(*align)
+                                    } else {
+                                        Image::from_src(
+                                            src,
+                                            self.file_path.clone(),
+                                            self.hidpi_scale,
+                                        )
+                                        .with_align(*align)
+                                    };
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }
