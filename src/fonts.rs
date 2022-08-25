@@ -72,16 +72,16 @@ impl FontInfo {
 }
 
 impl FontCache {
-    fn new(name: &str, font_infos: &[FontInfo]) -> Option<Self> {
+    fn new(name: &str, font_infos: &[FontInfo]) -> anyhow::Result<Self> {
         let mut it = font_infos.iter().map(HandleCache::new);
         let cache = Self {
             name: name.to_owned(),
-            base: it.next().flatten()?,
-            italic: it.next().flatten()?,
-            bold: it.next().flatten()?,
-            bold_italic: it.next().flatten()?,
+            base: it.next().context("Font info missing")??,
+            italic: it.next().context("Font info missing")??,
+            bold: it.next().context("Font info missing")??,
+            bold_italic: it.next().context("Font info missing")??,
         };
-        Some(cache)
+        Ok(cache)
     }
 }
 
@@ -93,26 +93,29 @@ struct HandleCache {
 }
 
 impl HandleCache {
-    fn new(font_info: &FontInfo) -> Option<Self> {
-        match &font_info.handle {
-            Handle::Path { path, font_index } => Some(Self {
+    fn new(font_info: &FontInfo) -> anyhow::Result<Self> {
+        let handle = match &font_info.handle {
+            Handle::Path { path, font_index } => Self {
                 path: path.to_owned(),
                 binary: false,
                 font_index: *font_index,
-            }),
+            },
             Handle::Memory { bytes, font_index } => {
-                let inlyne_cache = dirs::cache_dir().expect("Already created").join("inlyne");
+                let inlyne_cache = dirs::cache_dir()
+                    .context("Couldn't find cache dir")?
+                    .join("inlyne");
                 let file_name = font_info.to_string();
                 let cache_file_path = inlyne_cache.join(file_name.as_str());
-                let mut cache_file = fs::File::create(cache_file_path).ok()?;
-                cache_file.write_all(bytes).ok()?;
-                Some(Self {
+                let mut cache_file = fs::File::create(cache_file_path)?;
+                cache_file.write_all(bytes)?;
+                Self {
                     path: file_name.into(),
                     binary: true,
                     font_index: *font_index,
-                })
+                }
             }
-        }
+        };
+        Ok(handle)
     }
 }
 
@@ -126,7 +129,9 @@ impl TryFrom<HandleCache> for Handle {
         }: HandleCache,
     ) -> anyhow::Result<Self> {
         if binary {
-            let inlyne_cache = dirs::cache_dir().expect("Already created").join("inlyne");
+            let inlyne_cache = dirs::cache_dir()
+                .context("Couldn't find cache dir")?
+                .join("inlyne");
             let font_path = inlyne_cache.join(path);
             let bytes = fs::read(font_path)?;
 
@@ -186,7 +191,7 @@ fn load_maybe_cached_fonts_by_name(
             Some(fonts) => fonts,
             None => {
                 let handles = load_best_handles_by_name(FamilyName::Title(name.to_owned()))?;
-                if let Some(font_cache) = FontCache::new(name, &handles) {
+                if let Ok(font_cache) = FontCache::new(name, &handles) {
                     fs::write(path, toml::to_string(&font_cache)?)?;
                 }
                 handles

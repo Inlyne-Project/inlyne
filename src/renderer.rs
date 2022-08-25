@@ -6,7 +6,7 @@ use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::{Element, InlyneEvent};
-use anyhow::Ok;
+use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
@@ -74,7 +74,7 @@ impl Renderer {
                 compatible_surface: Some(&surface),
             })
             .await
-            .expect("Failed to find an appropriate adapter");
+            .context("Failed to find an appropriate adapter")?;
 
         let (device, queue) = adapter
             .request_device(
@@ -86,8 +86,7 @@ impl Renderer {
                 },
                 None,
             )
-            .await
-            .expect("Failed to create device");
+            .await?;
 
         let staging_belt = wgpu::util::StagingBelt::new(1024);
 
@@ -217,7 +216,7 @@ impl Renderer {
         let mut _prev_indice_num = 0;
         let screen_size = self.screen_size();
         for element in elements.iter() {
-            let Rect { pos, size } = element.bounds.as_ref().expect("Element not positioned");
+            let Rect { pos, size } = element.bounds.as_ref().context("Element not positioned")?;
             let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
             if scrolled_pos.1 + size.1 <= 0. {
@@ -618,7 +617,7 @@ impl Renderer {
         let frame = self
             .surface
             .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
+            .context("Failed to acquire next swap chain texture")?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -709,7 +708,7 @@ impl Renderer {
                     1.0,
                 ],
             )
-            .expect("Draw queued");
+            .expect("Failed to draw queued glyphs");
 
         self.staging_belt.finish();
         self.queue.submit(Some(encoder.finish()));
@@ -719,9 +718,9 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn reposition(&mut self, elements: &mut [Positioned<Element>]) {
+    pub fn reposition(&mut self, elements: &mut [Positioned<Element>]) -> anyhow::Result<()> {
         self.positioner
-            .reposition(&mut self.glyph_brush, elements, self.zoom);
+            .reposition(&mut self.glyph_brush, elements, self.zoom)
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {

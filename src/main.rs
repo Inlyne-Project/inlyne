@@ -181,7 +181,7 @@ impl Inlyne {
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::Reposition => {
-                        self.renderer.reposition(&mut self.elements);
+                        self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw()
                     }
                 },
@@ -209,25 +209,23 @@ impl Inlyne {
                             }
                             // Position element and add it to elements
                             let mut positioned_element = Positioned::new(element);
-                            self.renderer.positioner.position(
-                                &mut self.renderer.glyph_brush,
-                                &mut positioned_element,
-                                self.renderer.zoom,
-                            );
+                            self.renderer
+                                .positioner
+                                .position(
+                                    &mut self.renderer.glyph_brush,
+                                    &mut positioned_element,
+                                    self.renderer.zoom,
+                                )
+                                .unwrap();
                             self.renderer.positioner.reserved_height +=
                                 DEFAULT_PADDING * self.renderer.hidpi_scale * self.renderer.zoom
-                                    + positioned_element
-                                        .bounds
-                                        .as_ref()
-                                        .expect("already positioned")
-                                        .size
-                                        .1;
+                                    + positioned_element.bounds.as_ref().unwrap().size.1;
                             self.elements.push(positioned_element);
                         }
                     }
                     self.renderer
                         .redraw(&mut self.elements)
-                        .with_context(|| "Renderer failed to redraw the screen")
+                        .context("Renderer failed to redraw the screen")
                         .unwrap();
                     if selecting {
                         selection_cache = self.renderer.selection_text.clone();
@@ -337,8 +335,7 @@ impl Inlyne {
                                     if is_md {
                                         // Open markdown files ourselves
                                         let mut args = self.args.clone();
-                                        args.file_path =
-                                            maybe_path.expect("Already checked path extension");
+                                        args.file_path = maybe_path.unwrap();
                                         Command::new(
                                             std::env::current_exe()
                                                 .unwrap_or_else(|_| "inlyne".into()),
@@ -396,7 +393,7 @@ impl Inlyne {
                                 && modifiers.shift();
                             if zoom {
                                 self.renderer.zoom *= 1.1;
-                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.reposition(&mut self.elements).unwrap();
                                 self.renderer.set_scroll_y(self.renderer.scroll_y);
                                 self.window.request_redraw();
                             }
@@ -407,7 +404,7 @@ impl Inlyne {
                                 && modifiers.shift();
                             if zoom {
                                 self.renderer.zoom *= 0.9;
-                                self.renderer.reposition(&mut self.elements);
+                                self.renderer.reposition(&mut self.elements).unwrap();
                                 self.renderer.set_scroll_y(self.renderer.scroll_y);
                                 self.window.request_redraw();
                             }
@@ -427,7 +424,7 @@ impl Inlyne {
                         self.renderer
                             .surface
                             .configure(&self.renderer.device, &self.renderer.config);
-                        self.renderer.reposition(&mut self.elements);
+                        self.renderer.reposition(&mut self.elements).unwrap();
                         self.renderer.set_scroll_y(self.renderer.scroll_y);
                         self.window.request_redraw();
                     }

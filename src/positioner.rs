@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use wgpu_glyph::GlyphBrush;
 
 use crate::{
@@ -19,7 +20,11 @@ pub struct Positioned<T> {
 
 impl<T> Positioned<T> {
     pub fn contains(&self, loc: Point) -> bool {
-        self.bounds.as_ref().unwrap().contains(loc)
+        self.bounds
+            .as_ref()
+            .context("Element not positioned")
+            .unwrap()
+            .contains(loc)
     }
 }
 
@@ -56,7 +61,7 @@ impl Positioner {
         glyph_brush: &mut GlyphBrush<()>,
         element: &mut Positioned<Element>,
         zoom: f32,
-    ) {
+    ) -> anyhow::Result<()> {
         let bounds = match &mut element.inner {
             Element::TextBox(text_box) => {
                 let indent = text_box.indent;
@@ -126,8 +131,11 @@ impl Positioner {
                 let mut max_height: f32 = 0.;
                 let mut max_width: f32 = 0.;
                 for element in &mut row.elements {
-                    self.position(glyph_brush, element, zoom);
-                    let element_bounds = element.bounds.as_mut().expect("already positioned");
+                    self.position(glyph_brush, element, zoom)?;
+                    let element_bounds = element
+                        .bounds
+                        .as_mut()
+                        .context("Element didn't have bounds")?;
 
                     let target_width = reserved_width
                         + DEFAULT_PADDING * self.hidpi_scale * zoom
@@ -158,6 +166,7 @@ impl Positioner {
             }
         };
         element.bounds = Some(bounds);
+        Ok(())
     }
 
     // Resets reserved height and positions every element again
@@ -166,14 +175,20 @@ impl Positioner {
         glyph_brush: &mut GlyphBrush<()>,
         elements: &mut [Positioned<Element>],
         zoom: f32,
-    ) {
+    ) -> anyhow::Result<()> {
         self.reserved_height = DEFAULT_PADDING * self.hidpi_scale * zoom;
 
         for element in elements {
-            self.position(glyph_brush, element, zoom);
+            self.position(glyph_brush, element, zoom)?;
             self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * zoom
-                + element.bounds.as_ref().expect("already positioned").size.1;
+                + element
+                    .bounds
+                    .as_ref()
+                    .context("Element didn't have bounds")?
+                    .size
+                    .1;
         }
+        Ok(())
     }
 }
 
