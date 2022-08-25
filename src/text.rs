@@ -1,4 +1,4 @@
-use crate::utils::{Align, Rect};
+use crate::utils::{Align, Line, Rect};
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
@@ -147,7 +147,7 @@ impl TextBox {
         screen_position: (f32, f32),
         bounds: (f32, f32),
         zoom: f32,
-    ) -> Option<Vec<((f32, f32), (f32, f32))>> {
+    ) -> Vec<Line> {
         let mut has_lines = false;
         for text in &self.texts {
             if text.is_striked || text.is_underlined {
@@ -156,7 +156,7 @@ impl TextBox {
             }
         }
         if !has_lines {
-            return None;
+            return Vec::new();
         }
         let mut lines = Vec::new();
         for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds, zoom) {
@@ -175,7 +175,7 @@ impl TextBox {
             }
         }
 
-        Some(lines)
+        lines
     }
 
     pub fn render_selection<T: GlyphCruncher>(

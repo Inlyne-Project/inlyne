@@ -13,7 +13,7 @@ pub use self::cli::Args;
 pub use self::config::Config;
 pub use self::config::FontOptions;
 
-#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeType {
     Dark,
     #[default]

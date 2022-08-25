@@ -1,6 +1,8 @@
 use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
+pub type Line = ((f32, f32), (f32, f32));
+
 #[derive(Debug, Clone)]
 pub struct Rect {
     pub pos: (f32, f32),

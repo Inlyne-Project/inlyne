@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -33,7 +34,7 @@ enum FontType {
 }
 
 impl FontType {
-    pub fn to_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match &self {
             Self::Regular => "Regular",
             Self::Bold => "Bold",
@@ -49,20 +50,22 @@ struct FontInfo {
     font_type: FontType,
 }
 
-impl FontInfo {
-    pub fn to_string(&self) -> String {
-        format!(
+impl Display for FontInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "{}-{}",
             Self::family_name_to_str(&self.family_name),
-            self.font_type.to_str()
+            self.font_type.as_str()
         )
     }
-
+}
+impl FontInfo {
     pub fn family_name_to_str(family_name: &FamilyName) -> &str {
         match &family_name {
             FamilyName::SansSerif => "default-sans-serif",
             FamilyName::Monospace => "default-monospace",
-            FamilyName::Title(name) => &name,
+            FamilyName::Title(name) => name,
             _ => unreachable!("We don't allow other default font types"),
         }
     }
@@ -70,7 +73,7 @@ impl FontInfo {
 
 impl FontCache {
     fn new(name: &str, font_infos: &[FontInfo]) -> Option<Self> {
-        let mut it = font_infos.iter().map(|info| HandleCache::new(&info));
+        let mut it = font_infos.iter().map(HandleCache::new);
         let cache = Self {
             name: name.to_owned(),
             base: it.next().flatten()?,
@@ -102,7 +105,7 @@ impl HandleCache {
                 let file_name = font_info.to_string();
                 let cache_file_path = inlyne_cache.join(file_name.as_str());
                 let mut cache_file = fs::File::create(cache_file_path).ok()?;
-                cache_file.write_all(&bytes).ok()?;
+                cache_file.write_all(bytes).ok()?;
                 Some(Self {
                     path: file_name.into(),
                     binary: true,

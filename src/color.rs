@@ -54,7 +54,7 @@ pub const LIGHT_DEFAULT: Theme = Theme {
     code_highlighter: SyntaxTheme::Base16OceanLight,
 };
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SyntaxTheme {
     Base16OceanDark,

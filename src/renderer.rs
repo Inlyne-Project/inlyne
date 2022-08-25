@@ -303,26 +303,26 @@ impl Renderer {
                                 )?);
                             }
                     }
-                    if let Some(ref lines) = text_box.render_lines(
+                    for line in text_box.render_lines(
                         &mut self.glyph_brush,
                         scrolled_pos,
                         bounds,
                         self.zoom,
                     ) {
-                        for line in lines {
-                            let min = (
-                                line.0 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
-                                line.0 .1,
-                            );
-                            let max = (
-                                line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
-                                line.1 .1 + 2. * self.hidpi_scale * self.zoom,
-                            );
-                            indice_ranges.push(self.draw_rectangle(
+                        let min = (
+                            line.0 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                            line.0 .1,
+                        );
+                        let max = (
+                            line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                            line.1 .1 + 2. * self.hidpi_scale * self.zoom,
+                        );
+                        indice_ranges.push(
+                            self.draw_rectangle(
                                 Rect::from_min_max(min, max),
                                 self.theme.text_color,
-                            )?);
-                        }
+                            )?,
+                        );
                     }
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(
@@ -536,7 +536,7 @@ impl Renderer {
         builder.line_to((pos.0 + box_size * 0.4, pos.1 + box_size * 0.7).into());
         builder.line_to((pos.0 + box_size * 0.8 , pos.1 + box_size * 0.2).into());
         builder.end(false);
-        let _ = builder.build()?;
+        builder.build()?;
 
         Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
     }
