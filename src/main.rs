@@ -101,6 +101,9 @@ impl From<Table> for Element {
     }
 }
 
+type MaybeImageData = Arc<Mutex<Option<ImageData>>>;
+type ImageCache = Arc<Mutex<HashMap<String, MaybeImageData>>>;
+
 pub struct Inlyne {
     window: Arc<Window>,
     event_loop: EventLoop<InlyneEvent>,
@@ -110,7 +113,7 @@ pub struct Inlyne {
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     args: Args,
-    image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
+    image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
 }
@@ -264,7 +267,7 @@ impl Inlyne {
                         self.image_cache
                             .lock()
                             .unwrap()
-                            .insert(src, image_data.clone());
+                            .insert(src, image_data);
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw()
                     }

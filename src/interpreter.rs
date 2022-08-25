@@ -1,13 +1,12 @@
+use crate::ImageCache;
 use crate::color::hex_to_linear_rgba;
 use crate::image::Image;
-use crate::image::ImageData;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
 use crate::positioner::Row;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
-use crate::InlyneEvent;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
@@ -23,11 +22,9 @@ use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
 use html5ever::Attribute;
-use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -125,7 +122,7 @@ pub struct HtmlInterpreter {
     // Whether interpreter should stop queuing till next recieved file
     stopped: bool,
     first_pass: bool,
-    image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
+    image_cache: ImageCache,
 }
 
 impl HtmlInterpreter {
@@ -135,7 +132,7 @@ impl HtmlInterpreter {
         theme: Theme,
         hidpi_scale: f32,
         file_path: PathBuf,
-        image_cache: Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>,
+        image_cache: ImageCache,
     ) -> Self {
         Self {
             window,
