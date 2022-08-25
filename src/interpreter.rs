@@ -117,6 +117,7 @@ pub struct HtmlInterpreter {
     state: State,
     file_path: PathBuf,
     pub should_queue: Arc<AtomicBool>,
+    first_pass: bool,
 }
 
 impl HtmlInterpreter {
@@ -139,6 +140,7 @@ impl HtmlInterpreter {
             theme,
             file_path,
             should_queue: Arc::new(AtomicBool::new(true)),
+            first_pass: true,
         }
     }
 
@@ -230,7 +232,9 @@ impl HtmlInterpreter {
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);
-        self.window.request_redraw()
+        if self.first_pass {
+            self.window.request_redraw()
+        }
     }
 }
 
@@ -732,6 +736,8 @@ impl TokenSink for HtmlInterpreter {
                 self.push_current_textbox();
                 self.should_queue
                     .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.first_pass = false;
+                self.window.request_redraw();
             }
             _ => {}
         }

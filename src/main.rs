@@ -271,7 +271,6 @@ impl Inlyne {
                             .unwrap();
                         self.interpreter_should_queue.store(true, Ordering::Relaxed);
                         self.interpreter_sender.send(md_string).unwrap();
-                        self.window.request_redraw();
                     }
                 },
                 Event::RedrawRequested(_) => {
