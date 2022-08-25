@@ -23,7 +23,7 @@ use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
-use utils::Rect;
+use utils::{Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -167,34 +167,6 @@ impl Inlyne {
     }
 
     pub fn run(mut self) {
-        // Why do we handle resizes lazily like this?
-        //
-        // For a bit of background. `winit`'s event loop has separate tiers of events. It won't move
-        // on to the next tier until all of the events from the current tier have been processed and
-        // (here's the kicker) events can keep coming in while all of this is happening. Here are
-        // the tiers for reference
-        //
-        // 1. Window events, User events, Device events
-        // --- `MainEventsCleared` sent ---
-        // 2. Redraw windows (goes back to 1. after this)
-        //
-        // The obvious issue here is that expensive events from one tier continually coming in will
-        // block us from moving on to the next tier
-        //
-        // How does this matter in practice?
-        //
-        // Dragging to resize a window is represented as a mix of window events
-        // (`WindowEvent::Resized` and `WindowEvent::CursorMoved`) followed by a final
-        // `MainEventsCleared`. With large READMEs a window resize will be expensive because it has
-        // to reposition many elements. This means that dragging a window will queue up a lot of
-        // window resizes before we can even redraw a window, but it's pointless to calculate a
-        // window resize if there is already another size pending
-        //
-        // Instead we lazily store the size and only reposition elements and request a redraw when
-        // we recieve a `MainEventsCleared` indicating that we've finished recieveing the first tier
-        // of events. This prevents us from clogging up the queue with a bunch of costly resizes.
-        // For more information take a look at
-        // https://github.com/trimental/inlyne/issues/25
         let mut pending_resize = None;
         let mut scrollbar_held = false;
         let mut mouse_down = false;
@@ -445,6 +417,9 @@ impl Inlyne {
                     _ => {}
                 },
                 Event::MainEventsCleared => {
+                    // We lazily store the size and only reposition elements and request a redraw when
+                    // we recieve a `MainEventsCleared`.  This prevents us from clogging up the queue
+                    // with a bunch of costly resizes. (https://github.com/trimental/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
                         self.renderer.config.width = size.width;
                         self.renderer.config.height = size.height;
@@ -465,11 +440,11 @@ impl Inlyne {
     fn find_hoverable<'a, T: wgpu_glyph::GlyphCruncher>(
         elements: &'a [Positioned<Element>],
         glyph_brush: &'a mut T,
-        loc: (f32, f32),
-        screen_size: (f32, f32),
+        loc: Point,
+        screen_size: Size,
         zoom: f32,
     ) -> Option<Hoverable<'a>> {
-        let screen_pos = |screen_size: (f32, f32), bounds_offset: f32| {
+        let screen_pos = |screen_size: Size, bounds_offset: f32| {
             (
                 screen_size.0 - bounds_offset - DEFAULT_MARGIN,
                 screen_size.1,

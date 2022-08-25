@@ -4,7 +4,7 @@ use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
-use crate::utils::Rect;
+use crate::utils::{Point, Rect, Selection, Size};
 use crate::{Element, InlyneEvent};
 use anyhow::Ok;
 use bytemuck::{Pod, Zeroable};
@@ -42,7 +42,7 @@ pub struct Renderer {
     pub image_renderer: ImageRenderer,
     pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
-    pub selection: Option<((f32, f32), (f32, f32))>,
+    pub selection: Option<Selection>,
     pub selection_text: String,
     pub zoom: f32,
     pub positioner: Positioner,
@@ -53,7 +53,7 @@ impl Renderer {
         self.positioner.screen_size.1
     }
 
-    pub const fn screen_size(&self) -> (f32, f32) {
+    pub const fn screen_size(&self) -> Size {
         self.positioner.screen_size
     }
 
@@ -228,7 +228,10 @@ impl Renderer {
 
             match &element.inner {
                 Element::TextBox(text_box) => {
-                    let bounds = ((screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.), f32::INFINITY);
+                    let bounds = (
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.),
+                        f32::INFINITY,
+                    );
                     self.glyph_brush
                         .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
@@ -240,10 +243,7 @@ impl Renderer {
                             self.theme.quote_block_color
                         };
 
-                        let mut min = (
-                            (scrolled_pos.0 - 10.),
-                            scrolled_pos.1,
-                        );
+                        let mut min = ((scrolled_pos.0 - 10.), scrolled_pos.1);
                         let max = (
                             (min.0 + bounds.0 + 10.).min(screen_size.0 - DEFAULT_MARGIN),
                             min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
@@ -279,29 +279,37 @@ impl Renderer {
                         }
                     }
                     if let Some(is_checked) = text_box.is_checkbox {
-                        let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.) * self.hidpi_scale * self.zoom * 0.75;
-                            let min = (
-                                scrolled_pos.0 - box_size - 10.,
-                                scrolled_pos.1 + size.1 / 2. - box_size / 2.,
-                            );
-                            let max = (
-                                scrolled_pos.0 - 10.,
-                                scrolled_pos.1 + size.1 / 2. + box_size / 2.,
-                            );
-                            if max.0 < screen_size.0 - DEFAULT_MARGIN {
-                                if is_checked {
-                                    indice_ranges.push(self.draw_rectangle(
-                                        Rect::from_min_max(min, max),
-                                        self.theme.checkbox_color,
-                                    )?);
-                                    indice_ranges.push(self.draw_tick(min, box_size, self.theme.text_color, 4.)?);
-                                }
-                                indice_ranges.push(self.stroke_rectangle(
+                        let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.)
+                            * self.hidpi_scale
+                            * self.zoom
+                            * 0.75;
+                        let min = (
+                            scrolled_pos.0 - box_size - 10.,
+                            scrolled_pos.1 + size.1 / 2. - box_size / 2.,
+                        );
+                        let max = (
+                            scrolled_pos.0 - 10.,
+                            scrolled_pos.1 + size.1 / 2. + box_size / 2.,
+                        );
+                        if max.0 < screen_size.0 - DEFAULT_MARGIN {
+                            if is_checked {
+                                indice_ranges.push(self.draw_rectangle(
                                     Rect::from_min_max(min, max),
+                                    self.theme.checkbox_color,
+                                )?);
+                                indice_ranges.push(self.draw_tick(
+                                    min,
+                                    box_size,
                                     self.theme.text_color,
-                                    2.,
+                                    4.,
                                 )?);
                             }
+                            indice_ranges.push(self.stroke_rectangle(
+                                Rect::from_min_max(min, max),
+                                self.theme.text_color,
+                                2.,
+                            )?);
+                        }
                     }
                     for line in text_box.render_lines(
                         &mut self.glyph_brush,
@@ -499,7 +507,12 @@ impl Renderer {
         Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
     }
 
-    fn stroke_rectangle(&mut self, rect: Rect, color: [f32; 4], width: f32) -> anyhow::Result<Range<u32>> {
+    fn stroke_rectangle(
+        &mut self,
+        rect: Rect,
+        color: [f32; 4],
+        width: f32,
+    ) -> anyhow::Result<Range<u32>> {
         let prev_indice_num = self.lyon_buffer.indices.len() as u32;
         let mut stroke_tessellator = StrokeTessellator::new();
         let screen_size = self.screen_size();
@@ -517,12 +530,19 @@ impl Renderer {
         Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
     }
 
-    fn draw_tick(&mut self, pos: (f32, f32), box_size: f32, color: [f32; 4], width: f32) -> anyhow::Result<Range<u32>> {
+    fn draw_tick(
+        &mut self,
+        pos: Point,
+        box_size: f32,
+        color: [f32; 4],
+        width: f32,
+    ) -> anyhow::Result<Range<u32>> {
         let prev_indice_num = self.lyon_buffer.indices.len() as u32;
         let screen_size = self.screen_size();
         let mut stroke_tessellator = StrokeTessellator::new();
         let stroke_opts = StrokeOptions::default().with_line_width(width);
-        let mut vertex_builder = BuffersBuilder::new(&mut self.lyon_buffer, |vertex: StrokeVertex| {
+        let mut vertex_builder =
+            BuffersBuilder::new(&mut self.lyon_buffer, |vertex: StrokeVertex| {
                 let point = point(vertex.position().x, vertex.position().y, screen_size);
                 Vertex {
                     pos: [point[0], point[1], 0.0],
@@ -534,7 +554,7 @@ impl Renderer {
         // Build a simple path.
         builder.begin((pos.0 + box_size * 0.2, pos.1 + box_size * 0.5).into());
         builder.line_to((pos.0 + box_size * 0.4, pos.1 + box_size * 0.7).into());
-        builder.line_to((pos.0 + box_size * 0.8 , pos.1 + box_size * 0.2).into());
+        builder.line_to((pos.0 + box_size * 0.8, pos.1 + box_size * 0.2).into());
         builder.end(false);
         builder.build()?;
 
@@ -714,7 +734,7 @@ impl Renderer {
 }
 
 // Translates points from pixel coordinates to wgpu coordinates
-pub fn point(x: f32, y: f32, screen: (f32, f32)) -> [f32; 2] {
+pub fn point(x: f32, y: f32, screen: Size) -> [f32; 2] {
     let scale_x = 2. / screen.0;
     let scale_y = 2. / screen.1;
     let new_x = -1. + (x * scale_x);

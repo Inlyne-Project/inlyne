@@ -2,30 +2,33 @@ use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
 pub type Line = ((f32, f32), (f32, f32));
+pub type Selection = ((f32, f32), (f32, f32));
+pub type Point = (f32, f32);
+pub type Size = (f32, f32);
 
 #[derive(Debug, Clone)]
 pub struct Rect {
-    pub pos: (f32, f32),
-    pub size: (f32, f32),
+    pub pos: Point,
+    pub size: Point,
 }
 
 impl Rect {
-    pub fn new(pos: (f32, f32), size: (f32, f32)) -> Rect {
+    pub fn new(pos: Point, size: Point) -> Rect {
         Rect { pos, size }
     }
 
-    pub fn from_min_max(min: (f32, f32), max: (f32, f32)) -> Rect {
+    pub fn from_min_max(min: Point, max: Point) -> Rect {
         Rect {
             pos: min,
             size: (max.0 - min.0, max.1 - min.1),
         }
     }
 
-    pub fn max(&self) -> (f32, f32) {
+    pub fn max(&self) -> Point {
         (self.pos.0 + self.size.0, self.pos.1 + self.size.1)
     }
 
-    pub fn contains(&self, loc: (f32, f32)) -> bool {
+    pub fn contains(&self, loc: Point) -> bool {
         self.pos.0 <= loc.0 && loc.0 <= self.max().0 && self.pos.1 <= loc.1 && loc.1 <= self.max().1
     }
 }

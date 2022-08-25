@@ -1,4 +1,4 @@
-use crate::utils::{Align, Line, Rect};
+use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
@@ -59,9 +59,9 @@ impl TextBox {
     pub fn find_hoverable<'a, T: GlyphCruncher>(
         &'a self,
         glyph_brush: &'a mut T,
-        loc: (f32, f32),
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        loc: Point,
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Option<&'a Text> {
         let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
@@ -77,8 +77,8 @@ impl TextBox {
     pub fn glyph_bounds<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Vec<(Rect, SectionGlyph)> {
         let mut glyph_bounds = Vec::new();
@@ -93,10 +93,10 @@ impl TextBox {
     pub fn size<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
-    ) -> (f32, f32) {
+    ) -> Size {
         if self.texts.is_empty() {
             return (0., self.padding_height * self.hidpi_scale * zoom);
         }
@@ -113,12 +113,7 @@ impl TextBox {
         }
     }
 
-    pub fn glyph_section(
-        &self,
-        mut screen_position: (f32, f32),
-        bounds: (f32, f32),
-        zoom: f32,
-    ) -> Section {
+    pub fn glyph_section(&self, mut screen_position: Point, bounds: Size, zoom: f32) -> Section {
         let texts = self.texts.iter().map(|t| t.wgpu_text(zoom)).collect();
 
         let horizontal_align = match self.align {
@@ -144,8 +139,8 @@ impl TextBox {
     pub fn render_lines<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Vec<Line> {
         let mut has_lines = false;
@@ -181,10 +176,10 @@ impl TextBox {
     pub fn render_selection<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
-        mut selection: ((f32, f32), (f32, f32)),
+        mut selection: Selection,
     ) -> (Vec<Rect>, String) {
         let mut selection_rects = Vec::new();
         let mut selection_text = String::new();

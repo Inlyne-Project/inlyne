@@ -2,7 +2,7 @@ use wgpu_glyph::GlyphCruncher;
 
 use crate::{
     text::{Text, TextBox},
-    utils::Rect,
+    utils::{Point, Rect, Size},
 };
 
 pub const TABLE_ROW_GAP: f32 = 20.;
@@ -22,9 +22,9 @@ impl Table {
     pub fn find_hoverable<'a, T: GlyphCruncher>(
         &'a self,
         glyph_brush: &'a mut T,
-        loc: (f32, f32),
-        pos: (f32, f32),
-        bounds: (f32, f32),
+        loc: Point,
+        pos: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Option<&'a Text> {
         let row_heights = self.row_heights(glyph_brush, pos, bounds, zoom);
@@ -78,8 +78,8 @@ impl Table {
     pub fn column_widths<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Vec<f32> {
         let mut widths = Vec::with_capacity(self.headers.len());
@@ -103,8 +103,8 @@ impl Table {
     pub fn row_heights<T: GlyphCruncher>(
         &self,
         glyph_brush: &mut T,
-        screen_position: (f32, f32),
-        bounds: (f32, f32),
+        screen_position: Point,
+        bounds: Size,
         zoom: f32,
     ) -> Vec<f32> {
         let widths = self.column_widths(glyph_brush, screen_position, bounds, zoom);

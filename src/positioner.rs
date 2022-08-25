@@ -4,7 +4,7 @@ use wgpu_glyph::GlyphBrush;
 
 use crate::{
     table::{TABLE_COL_GAP, TABLE_ROW_GAP},
-    utils::{Align, Rect},
+    utils::{Align, Point, Rect, Size},
     Element,
 };
 
@@ -18,7 +18,7 @@ pub struct Positioned<T> {
 }
 
 impl<T> Positioned<T> {
-    pub fn contains(&self, loc: (f32, f32)) -> bool {
+    pub fn contains(&self, loc: Point) -> bool {
         self.bounds.as_ref().unwrap().contains(loc)
     }
 }
@@ -34,14 +34,14 @@ impl<T> Positioned<T> {
 
 #[derive(Default)]
 pub struct Positioner {
-    pub screen_size: (f32, f32),
+    pub screen_size: Size,
     pub reserved_height: f32,
     pub hidpi_scale: f32,
     pub anchors: HashMap<String, f32>,
 }
 
 impl Positioner {
-    pub fn new(screen_size: (f32, f32), hidpi_scale: f32) -> Self {
+    pub fn new(screen_size: Size, hidpi_scale: f32) -> Self {
         Self {
             reserved_height: DEFAULT_PADDING * hidpi_scale,
             hidpi_scale,
@@ -65,7 +65,10 @@ impl Positioner {
                 let size = text_box.size(
                     glyph_brush,
                     pos,
-                    ((self.screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.), f32::INFINITY),
+                    (
+                        (self.screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.),
+                        f32::INFINITY,
+                    ),
                     zoom,
                 );
 

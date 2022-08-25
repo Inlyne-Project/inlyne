@@ -1,5 +1,5 @@
 use crate::positioner::DEFAULT_MARGIN;
-use crate::utils::Align;
+use crate::utils::{Align, Point, Size};
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
@@ -224,7 +224,7 @@ impl Image {
             (0, 0)
         }
     }
-    pub fn dimensions(&self, screen_size: (f32, f32), zoom: f32) -> (u32, u32) {
+    pub fn dimensions(&self, screen_size: Size, zoom: f32) -> (u32, u32) {
         let buffer_size = self.buffer_dimensions();
         let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
         if let Ok(Some(image)) = self.image.try_lock().as_deref() {
@@ -261,7 +261,7 @@ impl Image {
         }
     }
 
-    pub fn size(&self, screen_size: (f32, f32), zoom: f32) -> (f32, f32) {
+    pub fn size(&self, screen_size: Size, zoom: f32) -> Size {
         let dimensions = self.dimensions(screen_size, zoom);
         (dimensions.0 as f32, dimensions.1 as f32)
     }
@@ -280,13 +280,7 @@ pub struct ImageRenderer {
     pub sampler: wgpu::Sampler,
 }
 
-pub fn point(
-    x: f32,
-    y: f32,
-    position: (f32, f32),
-    size: (f32, f32),
-    screen: (f32, f32),
-) -> [f32; 3] {
+pub fn point(x: f32, y: f32, position: Point, size: Size, screen: Size) -> [f32; 3] {
     let scale_x = size.0 / screen.0;
     let scale_y = size.1 / screen.1;
     let shift_x = (position.0 / screen.0) * 2.;
@@ -389,12 +383,7 @@ impl ImageRenderer {
         }
     }
 
-    pub fn vertex_buf(
-        device: &Device,
-        pos: (f32, f32),
-        size: (f32, f32),
-        screen_size: (f32, f32),
-    ) -> wgpu::Buffer {
+    pub fn vertex_buf(device: &Device, pos: Point, size: Size, screen_size: Size) -> wgpu::Buffer {
         let vertices: &[ImageVertex] = &[
             // TOP LEFT
             ImageVertex {

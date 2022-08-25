@@ -456,7 +456,11 @@ impl TokenSink for HtmlInterpreter {
                                     let value = value.to_string();
                                     if value == "checkbox" {
                                         self.push_current_textbox();
-                                        self.current_textbox.set_checkbox(Some(tag.attrs.iter().any(|attr| &attr.name.local == "checked")));
+                                        self.current_textbox.set_checkbox(Some(
+                                            tag.attrs
+                                                .iter()
+                                                .any(|attr| &attr.name.local == "checked"),
+                                        ));
                                         self.state.element_stack.push(html::Element::Input);
                                     }
                                 }
@@ -620,7 +624,9 @@ impl TokenSink for HtmlInterpreter {
                         }
                     }
                 } else {
-                    if self.current_textbox.texts.is_empty() && self.state.text_options.pre_formatted == 0 {
+                    if self.current_textbox.texts.is_empty()
+                        && self.state.text_options.pre_formatted == 0
+                    {
                         str = str.trim_start().to_owned();
                     }
 
