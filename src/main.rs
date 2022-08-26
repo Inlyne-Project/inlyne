@@ -9,7 +9,7 @@ pub mod table;
 pub mod text;
 pub mod utils;
 
-use crate::image::{Image, ImageData};
+use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
@@ -24,7 +24,7 @@ use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
 use text::TextBox;
-use utils::{Point, Rect, Size};
+use utils::{ImageCache, MaybeImageData, Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -54,7 +54,7 @@ use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum InlyneEvent {
-    LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
+    LoadedImage(String, MaybeImageData),
     FileReload,
 }
 
@@ -100,9 +100,6 @@ impl From<Table> for Element {
         Element::Table(table)
     }
 }
-
-type MaybeImageData = Arc<Mutex<Option<ImageData>>>;
-type ImageCache = Arc<Mutex<HashMap<String, MaybeImageData>>>;
 
 pub struct Inlyne {
     window: Arc<Window>,
