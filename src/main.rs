@@ -270,7 +270,9 @@ impl Inlyne {
                             .store(false, Ordering::Relaxed);
                         self.element_queue.lock().unwrap().clear();
                         self.elements.clear();
-                        self.renderer.positioner.reserved_height = DEFAULT_PADDING;
+                        self.renderer.positioner.reserved_height =
+                            DEFAULT_PADDING * self.renderer.hidpi_scale;
+                        self.renderer.positioner.anchors.clear();
                         let md_string = std::fs::read_to_string(&self.args.file_path)
                             .with_context(|| {
                                 format!("Could not read file at {:?}", self.args.file_path)
