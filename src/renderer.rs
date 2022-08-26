@@ -724,11 +724,9 @@ impl Renderer {
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {
-        if self.positioner.reserved_height > self.screen_height() {
-            self.scroll_y = scroll_y
-                .max(0.)
-                .min(self.positioner.reserved_height - self.screen_height());
-        }
+        self.scroll_y = scroll_y
+            .min(self.positioner.reserved_height - self.screen_height())
+            .max(0.);
     }
 }
 

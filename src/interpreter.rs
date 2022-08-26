@@ -6,6 +6,7 @@ use crate::positioner::Row;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
+use crate::ImageCache;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
@@ -27,6 +28,8 @@ use Token::{CharacterTokens, EOFToken};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -114,6 +117,12 @@ pub struct HtmlInterpreter {
     window: Arc<Window>,
     state: State,
     file_path: PathBuf,
+    // Whether the interpreters is allowed to queue elements
+    pub should_queue: Arc<AtomicBool>,
+    // Whether interpreter should stop queuing till next recieved file
+    stopped: bool,
+    first_pass: bool,
+    image_cache: ImageCache,
 }
 
 impl HtmlInterpreter {
@@ -123,6 +132,7 @@ impl HtmlInterpreter {
         theme: Theme,
         hidpi_scale: f32,
         file_path: PathBuf,
+        image_cache: ImageCache,
     ) -> Self {
         Self {
             window,
@@ -135,10 +145,14 @@ impl HtmlInterpreter {
             },
             theme,
             file_path,
+            should_queue: Arc::new(AtomicBool::new(true)),
+            stopped: false,
+            first_pass: true,
+            image_cache,
         }
     }
 
-    pub fn intepret_md(self, md_string: &str) {
+    pub fn intepret_md(self, reciever: mpsc::Receiver<String>) {
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
         options.extension.table = true;
@@ -152,20 +166,31 @@ impl HtmlInterpreter {
             self.theme.code_highlighter.as_syntect_name(),
         );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
-
-        let htmlified = markdown_to_html_with_plugins(md_string, &options, &plugins);
-
-        input.push_back(
-            Tendril::from_str(&htmlified)
-                .unwrap()
-                .try_reinterpret::<fmt::UTF8>()
-                .unwrap(),
-        );
-
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
-        let _ = tok.feed(&mut input);
-        assert!(input.is_empty());
-        tok.end();
+
+        for md_string in reciever {
+            if tok
+                .sink
+                .should_queue
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                tok.sink.state = State::default();
+                tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
+                tok.sink.stopped = false;
+                let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
+
+                input.push_back(
+                    Tendril::from_str(&htmlified)
+                        .unwrap()
+                        .try_reinterpret::<fmt::UTF8>()
+                        .unwrap(),
+                );
+
+                let _ = tok.feed(&mut input);
+                assert!(input.is_empty());
+                tok.end();
+            }
+        }
     }
 
     // Searches the currently nested elements for align attribute
@@ -216,7 +241,9 @@ impl HtmlInterpreter {
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);
-        self.window.request_redraw()
+        if self.first_pass {
+            self.window.request_redraw()
+        }
     }
 }
 
@@ -224,6 +251,12 @@ impl TokenSink for HtmlInterpreter {
     type Handle = ();
 
     fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
+        if !self.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+            self.stopped = true;
+        }
+        if self.stopped {
+            return TokenSinkResult::Continue;
+        }
         match token {
             TagToken(tag) => {
                 let tag_name = tag.name.to_string();
@@ -285,12 +318,23 @@ impl TokenSink for HtmlInterpreter {
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("src") {
                                     let align = align.as_ref().unwrap_or(&Align::Left);
-                                    let mut image = Image::from_url(
-                                        attr.value.to_string(),
-                                        self.file_path.clone(),
-                                        self.hidpi_scale,
-                                    )
-                                    .with_align(*align);
+                                    let src = attr.value.to_string();
+                                    let is_url =
+                                        src.starts_with("http://") || src.starts_with("https://");
+                                    let mut image = match self.image_cache.lock().unwrap().get(&src)
+                                    {
+                                        Some(image_data) if is_url => Image::from_image_data(
+                                            image_data.clone(),
+                                            self.hidpi_scale,
+                                        )
+                                        .with_align(*align),
+                                        _ => Image::from_src(
+                                            src,
+                                            self.file_path.clone(),
+                                            self.hidpi_scale,
+                                        )
+                                        .with_align(*align),
+                                    };
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }
@@ -713,6 +757,9 @@ impl TokenSink for HtmlInterpreter {
             }
             EOFToken => {
                 self.push_current_textbox();
+                self.should_queue
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.first_pass = false;
                 self.window.request_redraw();
             }
             _ => {}

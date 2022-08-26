@@ -1,10 +1,19 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
+
+use crate::image::ImageData;
 
 pub type Line = ((f32, f32), (f32, f32));
 pub type Selection = ((f32, f32), (f32, f32));
 pub type Point = (f32, f32);
 pub type Size = (f32, f32);
+pub type MaybeImageData = Arc<Mutex<Option<ImageData>>>;
+pub type ImageCache = Arc<Mutex<HashMap<String, MaybeImageData>>>;
 
 #[derive(Debug, Clone)]
 pub struct Rect {

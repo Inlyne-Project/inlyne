@@ -20,14 +20,14 @@ pub enum ImageSize {
 }
 
 #[derive(Debug)]
-struct ImageData {
+pub struct ImageData {
     rgba_image: RgbaImage,
     scale: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Image {
-    image: Arc<Mutex<Option<ImageData>>>,
+    pub image: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,
     callback: Arc<Mutex<Option<EventLoopProxy<InlyneEvent>>>>,
     pub size: Option<ImageSize>,
@@ -98,25 +98,25 @@ impl Image {
         }
     }
 
-    pub fn from_url(url: String, file_path: PathBuf, hidpi_scale: f32) -> Image {
+    pub fn from_src(src: String, file_path: PathBuf, hidpi_scale: f32) -> Image {
         let image = Arc::new(Mutex::new(None));
         let callback = Arc::new(Mutex::new(None::<EventLoopProxy<InlyneEvent>>));
         let image_clone = image.clone();
         let callback_clone = callback.clone();
         std::thread::spawn(move || {
-            let mut url_path = PathBuf::from(url.clone());
-            if url_path.is_relative() {
+            let mut src_path = PathBuf::from(src.clone());
+            if src_path.is_relative() {
                 if let Some(parent_dir) = file_path.parent() {
-                    url_path = parent_dir.join(url_path.strip_prefix("./").unwrap_or(&url_path));
+                    src_path = parent_dir.join(src_path.strip_prefix("./").unwrap_or(&src_path));
                 }
             }
 
-            let image_data = if let Ok(mut img_file) = File::open(&url_path) {
-                let img_file_size = url_path.metadata().unwrap().len();
+            let image_data = if let Ok(mut img_file) = File::open(&src_path) {
+                let img_file_size = src_path.metadata().unwrap().len();
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
-            } else if let Ok(data) = ureq::get(&url).call().and_then(|resp| {
+            } else if let Ok(data) = ureq::get(&src).call().and_then(|resp| {
                 // Limit the length to 20 MiB to avoid malicious servers causing OOM
                 const MAX_SIZE: usize = 20 * 1_024 * 1_024;
 
@@ -169,18 +169,25 @@ impl Image {
                 }
             }
             if let Ok(Some(callback)) = callback_clone.try_lock().as_deref() {
-                callback.send_event(InlyneEvent::Reposition).unwrap();
+                callback
+                    .send_event(InlyneEvent::LoadedImage(src, image_clone.clone()))
+                    .unwrap();
             }
         });
 
         Image {
             image,
-            is_aligned: None,
             callback,
-            size: None,
-            bind_group: None,
-            is_link: None,
             hidpi_scale,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_image_data(image_data: Arc<Mutex<Option<ImageData>>>, hidpi_scale: f32) -> Image {
+        Image {
+            image: image_data,
+            hidpi_scale,
+            ..Default::default()
         }
     }
 

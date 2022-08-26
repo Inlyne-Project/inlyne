@@ -23,11 +23,14 @@ use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
-use utils::{Point, Rect, Size};
+use text::TextBox;
+use utils::{ImageCache, MaybeImageData, Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
-use text::TextBox;
+use notify::op::Op;
+use notify::{raw_watcher, RecursiveMode, Watcher};
+
 use winit::event::ModifiersState;
 use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
@@ -37,16 +40,22 @@ use winit::{
     window::{CursorIcon, Window},
 };
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum InlyneEvent {
-    Reposition,
+    LoadedImage(String, MaybeImageData),
+    FileReload,
 }
 
 pub enum Hoverable<'a> {
@@ -101,6 +110,9 @@ pub struct Inlyne {
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     args: Args,
+    image_cache: ImageCache,
+    interpreter_sender: mpsc::Sender<String>,
+    interpreter_should_queue: Arc<AtomicBool>,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -137,6 +149,53 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 }
 
 impl Inlyne {
+    pub fn spawn_watcher(&self) {
+        // Create a channel to receive the events.
+        let (watch_tx, watch_rx) = channel();
+
+        // Create a watcher object, delivering raw events.
+        // The notification back-end is selected based on the platform.
+        let mut watcher = raw_watcher(watch_tx).unwrap();
+
+        // Add a path to be watched. All files and directories at that path and
+        // below will be monitored for changes.
+        let root_folder = self
+            .args
+            .file_path
+            .parent()
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| Path::new("."))
+            .to_owned();
+
+        let event_proxy = self.event_loop.create_proxy();
+        let file_path = self.args.file_path.clone();
+        std::thread::spawn(move || {
+            watcher
+                .watch(root_folder, RecursiveMode::Recursive)
+                .unwrap();
+
+            loop {
+                let event = match watch_rx.recv() {
+                    Ok(event) => event,
+                    Err(err) => {
+                        log::warn!("Config watcher channel dropped unexpectedly: {}", err);
+                        break;
+                    }
+                };
+
+                if event.op.unwrap().intersects(Op::WRITE)
+                    && event
+                        .path
+                        .map(|p| p.file_name() == file_path.file_name())
+                        .unwrap_or_default()
+                {
+                    // Always reload the primary configuration file.
+                    let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                }
+            }
+        });
+    }
+
     pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
@@ -154,15 +213,36 @@ impl Inlyne {
         .await?;
         let clipboard = ClipboardContext::new().unwrap();
 
+        let element_queue = Arc::new(Mutex::new(VecDeque::new()));
+        let image_cache = Arc::new(Mutex::new(HashMap::new()));
+        let interpreter = HtmlInterpreter::new(
+            window.clone(),
+            element_queue.clone(),
+            renderer.theme.clone(),
+            renderer.hidpi_scale,
+            args.file_path.clone(),
+            image_cache.clone(),
+        );
+
+        let (interpreter_sender, interpreter_reciever) = channel();
+        let interpreter_should_queue = interpreter.should_queue.clone();
+        std::thread::spawn(move || interpreter.intepret_md(interpreter_reciever));
+        let md_string = std::fs::read_to_string(&opts.file_path)
+            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+        interpreter_sender.send(md_string)?;
+
         Ok(Self {
             window,
             event_loop,
             renderer,
-            element_queue: Arc::new(Mutex::new(VecDeque::new())),
+            element_queue,
             clipboard,
             elements: Vec::new(),
             lines_to_scroll: opts.lines_to_scroll,
             args,
+            interpreter_sender,
+            interpreter_should_queue,
+            image_cache,
         })
     }
 
@@ -180,9 +260,26 @@ impl Inlyne {
 
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
-                    InlyneEvent::Reposition => {
+                    InlyneEvent::LoadedImage(src, image_data) => {
+                        self.image_cache.lock().unwrap().insert(src, image_data);
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw()
+                    }
+                    InlyneEvent::FileReload => {
+                        self.interpreter_should_queue
+                            .store(false, Ordering::Relaxed);
+                        self.element_queue.lock().unwrap().clear();
+                        self.elements.clear();
+                        self.renderer.positioner.reserved_height =
+                            DEFAULT_PADDING * self.renderer.hidpi_scale;
+                        self.renderer.positioner.anchors.clear();
+                        let md_string = std::fs::read_to_string(&self.args.file_path)
+                            .with_context(|| {
+                                format!("Could not read file at {:?}", self.args.file_path)
+                            })
+                            .unwrap();
+                        self.interpreter_should_queue.store(true, Ordering::Relaxed);
+                        self.interpreter_sender.send(md_string).unwrap();
                     }
                 },
                 Event::RedrawRequested(_) => {
@@ -223,6 +320,7 @@ impl Inlyne {
                             self.elements.push(positioned_element);
                         }
                     }
+                    self.renderer.set_scroll_y(self.renderer.scroll_y);
                     self.renderer
                         .redraw(&mut self.elements)
                         .context("Renderer failed to redraw the screen")
@@ -504,20 +602,9 @@ fn main() -> anyhow::Result<()> {
     };
     let args = Args::new(&config);
     let opts = Opts::parse_and_load_from(&args, config);
-
-    let md_string = std::fs::read_to_string(&opts.file_path)
-        .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
     let inlyne = pollster::block_on(Inlyne::new(&opts, args))?;
 
-    let interpreter = HtmlInterpreter::new(
-        inlyne.window.clone(),
-        inlyne.element_queue.clone(),
-        inlyne.renderer.theme.clone(),
-        inlyne.renderer.hidpi_scale,
-        opts.file_path,
-    );
-
-    std::thread::spawn(move || interpreter.intepret_md(md_string.as_str()));
+    inlyne.spawn_watcher();
     inlyne.run();
 
     Ok(())
