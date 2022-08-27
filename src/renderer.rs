@@ -5,7 +5,7 @@ use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::utils::{Point, Rect, Selection, Size};
-use crate::{Element, InlyneEvent};
+use crate::Element;
 use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
@@ -18,7 +18,6 @@ use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
 use wgpu::{BindGroup, Buffer, IndexFormat};
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
-use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
 #[repr(C)]
@@ -40,7 +39,6 @@ pub struct Renderer {
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
     pub hidpi_scale: f32,
     pub image_renderer: ImageRenderer,
-    pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
     pub selection: Option<Selection>,
     pub selection_text: String,
@@ -59,7 +57,6 @@ impl Renderer {
 
     pub async fn new(
         window: &Window,
-        eventloop_proxy: EventLoopProxy<InlyneEvent>,
         theme: Theme,
         hidpi_scale: f32,
         font_opts: FontOptions,
@@ -164,7 +161,6 @@ impl Renderer {
             hidpi_scale,
             zoom: 1.,
             image_renderer,
-            eventloop_proxy,
             theme,
             selection: None,
             selection_text: String::new(),
