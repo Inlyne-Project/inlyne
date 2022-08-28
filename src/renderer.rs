@@ -5,20 +5,18 @@ use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::utils::{Point, Rect, Selection, Size};
-use crate::{Element, InlyneEvent};
+use crate::Element;
 use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::tessellation::*;
 use std::borrow::Cow;
-use std::ops::Range;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::{util::StagingBelt, TextureFormat};
 use wgpu::{BindGroup, Buffer, IndexFormat};
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
-use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
 #[repr(C)]
@@ -40,7 +38,6 @@ pub struct Renderer {
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
     pub hidpi_scale: f32,
     pub image_renderer: ImageRenderer,
-    pub eventloop_proxy: EventLoopProxy<InlyneEvent>,
     pub theme: Theme,
     pub selection: Option<Selection>,
     pub selection_text: String,
@@ -59,7 +56,6 @@ impl Renderer {
 
     pub async fn new(
         window: &Window,
-        eventloop_proxy: EventLoopProxy<InlyneEvent>,
         theme: Theme,
         hidpi_scale: f32,
         font_opts: FontOptions,
@@ -164,7 +160,6 @@ impl Renderer {
             hidpi_scale,
             zoom: 1.,
             image_renderer,
-            eventloop_proxy,
             theme,
             selection: None,
             selection_text: String::new(),
@@ -172,7 +167,7 @@ impl Renderer {
         })
     }
 
-    fn draw_scrollbar(&mut self) -> u32 {
+    fn draw_scrollbar(&mut self) {
         let screen_height = self.screen_height();
         let screen_width = self.config.width as f32;
         let top = if screen_height < self.positioner.reserved_height {
@@ -204,16 +199,9 @@ impl Renderer {
                 )
                 .unwrap();
         }
-
-        self.lyon_buffer.indices.len() as u32
     }
 
-    fn render_elements(
-        &mut self,
-        elements: &[Positioned<Element>],
-    ) -> anyhow::Result<Vec<Range<u32>>> {
-        let mut indice_ranges = Vec::new();
-        let mut _prev_indice_num = 0;
+    fn render_elements(&mut self, elements: &[Positioned<Element>]) -> anyhow::Result<()> {
         let screen_size = self.screen_size();
         for element in elements.iter() {
             let Rect { pos, size } = element.bounds.as_ref().context("Element not positioned")?;
@@ -251,8 +239,7 @@ impl Renderer {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
                         if min.0 < screen_size.0 - DEFAULT_MARGIN {
-                            indice_ranges
-                                .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
+                            self.draw_rectangle(Rect::from_min_max(min, max), color)?;
                         }
                     }
                     if let Some(nest) = text_box.is_quote_block {
@@ -271,10 +258,10 @@ impl Renderer {
                                     .min(screen_size.0 - DEFAULT_MARGIN),
                                 min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                             );
-                            indice_ranges.push(self.draw_rectangle(
+                            self.draw_rectangle(
                                 Rect::from_min_max(min, max),
                                 self.theme.select_color,
-                            )?);
+                            )?;
                         }
                     }
                     if let Some(is_checked) = text_box.is_checkbox {
@@ -292,22 +279,17 @@ impl Renderer {
                         );
                         if max.0 < screen_size.0 - DEFAULT_MARGIN {
                             if is_checked {
-                                indice_ranges.push(self.draw_rectangle(
+                                self.draw_rectangle(
                                     Rect::from_min_max(min, max),
                                     self.theme.checkbox_color,
-                                )?);
-                                indice_ranges.push(self.draw_tick(
-                                    min,
-                                    box_size,
-                                    self.theme.text_color,
-                                    4.,
-                                )?);
+                                )?;
+                                self.draw_tick(min, box_size, self.theme.text_color, 4.)?;
                             }
-                            indice_ranges.push(self.stroke_rectangle(
+                            self.stroke_rectangle(
                                 Rect::from_min_max(min, max),
                                 self.theme.text_color,
                                 2.,
-                            )?);
+                            )?;
                         }
                     }
                     for line in text_box.render_lines(
@@ -324,12 +306,7 @@ impl Renderer {
                             line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
                             line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                         );
-                        indice_ranges.push(
-                            self.draw_rectangle(
-                                Rect::from_min_max(min, max),
-                                self.theme.text_color,
-                            )?,
-                        );
+                        self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
                     }
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(
@@ -341,13 +318,13 @@ impl Renderer {
                         );
                         self.selection_text.push_str(&selection_text);
                         for rect in selection_rects {
-                            indice_ranges.push(self.draw_rectangle(
+                            self.draw_rectangle(
                                 Rect::from_min_max(
                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
                                     (rect.max().0, rect.max().1 - self.scroll_y),
                                 ),
                                 self.theme.select_color,
-                            )?);
+                            )?;
                         }
                     }
                 }
@@ -390,13 +367,13 @@ impl Renderer {
                             );
                             self.selection_text.push_str(&selection_text);
                             for rect in selection_rects {
-                                indice_ranges.push(self.draw_rectangle(
+                                self.draw_rectangle(
                                     Rect::from_min_max(
                                         (rect.pos.0, rect.pos.1 - self.scroll_y),
                                         (rect.max().0, rect.max().1 - self.scroll_y),
                                     ),
                                     self.theme.select_color,
-                                )?);
+                                )?;
                             }
                         }
                         x += width + TABLE_COL_GAP;
@@ -413,12 +390,7 @@ impl Renderer {
                                 .min(screen_size.0 - DEFAULT_MARGIN),
                             scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                         );
-                        indice_ranges.push(
-                            self.draw_rectangle(
-                                Rect::from_min_max(min, max),
-                                self.theme.text_color,
-                            )?,
-                        );
+                        self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
                     }
 
                     y += TABLE_ROW_GAP / 2.;
@@ -446,13 +418,13 @@ impl Renderer {
                                             );
                                         self.selection_text.push_str(&selection_text);
                                         for rect in selection_rects {
-                                            indice_ranges.push(self.draw_rectangle(
+                                            self.draw_rectangle(
                                                 Rect::from_min_max(
                                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
                                                     (rect.max().0, rect.max().1 - self.scroll_y),
                                                 ),
                                                 self.theme.select_color,
-                                            )?);
+                                            )?;
                                         }
                                     }
                                 }
@@ -472,8 +444,7 @@ impl Renderer {
                                 scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                             );
                             let color = self.theme.code_block_color;
-                            indice_ranges
-                                .push(self.draw_rectangle(Rect::from_min_max(min, max), color)?);
+                            self.draw_rectangle(Rect::from_min_max(min, max), color)?;
                         }
                         y += TABLE_ROW_GAP / 2.;
                     }
@@ -481,17 +452,16 @@ impl Renderer {
                 Element::Image(_) => {}
                 Element::Spacer(_) => {}
                 Element::Row(row) => {
-                    indice_ranges.append(&mut self.render_elements(&row.elements)?)
+                    self.render_elements(&row.elements)?;
                 }
             }
         }
 
-        indice_ranges.push(_prev_indice_num..self.draw_scrollbar());
-        Ok(indice_ranges)
+        self.draw_scrollbar();
+        Ok(())
     }
 
-    fn draw_rectangle(&mut self, rect: Rect, color: [f32; 4]) -> anyhow::Result<Range<u32>> {
-        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+    fn draw_rectangle(&mut self, rect: Rect, color: [f32; 4]) -> anyhow::Result<()> {
         let min = point(rect.pos.0, rect.pos.1, self.screen_size());
         let max = point(rect.max().0, rect.max().1, self.screen_size());
         let mut fill_tessellator = FillTessellator::new();
@@ -503,16 +473,10 @@ impl Renderer {
                 color,
             }),
         )?;
-        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+        Ok(())
     }
 
-    fn stroke_rectangle(
-        &mut self,
-        rect: Rect,
-        color: [f32; 4],
-        width: f32,
-    ) -> anyhow::Result<Range<u32>> {
-        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+    fn stroke_rectangle(&mut self, rect: Rect, color: [f32; 4], width: f32) -> anyhow::Result<()> {
         let mut stroke_tessellator = StrokeTessellator::new();
         let screen_size = self.screen_size();
         stroke_tessellator.tessellate_rectangle(
@@ -526,7 +490,7 @@ impl Renderer {
                 }
             }),
         )?;
-        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+        Ok(())
     }
 
     fn draw_tick(
@@ -535,8 +499,7 @@ impl Renderer {
         box_size: f32,
         color: [f32; 4],
         width: f32,
-    ) -> anyhow::Result<Range<u32>> {
-        let prev_indice_num = self.lyon_buffer.indices.len() as u32;
+    ) -> anyhow::Result<()> {
         let screen_size = self.screen_size();
         let mut stroke_tessellator = StrokeTessellator::new();
         let stroke_opts = StrokeOptions::default().with_line_width(width);
@@ -556,8 +519,7 @@ impl Renderer {
         builder.line_to((pos.0 + box_size * 0.8, pos.1 + box_size * 0.2).into());
         builder.end(false);
         builder.build()?;
-
-        Ok(prev_indice_num..self.lyon_buffer.indices.len() as u32)
+        Ok(())
     }
 
     fn image_bindgroups(
@@ -629,7 +591,7 @@ impl Renderer {
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         self.selection_text = String::new();
-        let indice_ranges = self.render_elements(elements)?;
+        self.render_elements(elements)?;
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -666,9 +628,7 @@ impl Renderer {
             rpass.set_pipeline(&self.render_pipeline);
             rpass.set_vertex_buffer(0, vertex_buf.slice(..));
             rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            for range in indice_ranges {
-                rpass.draw_indexed(range, 0, 0..1);
-            }
+            rpass.draw_indexed(0..self.lyon_buffer.indices.len() as u32, 0, 0..1);
 
             // Draw images
             rpass.set_pipeline(&self.image_renderer.render_pipeline);

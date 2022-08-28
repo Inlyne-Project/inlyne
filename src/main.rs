@@ -209,7 +209,6 @@ impl Inlyne {
         }
         let renderer = Renderer::new(
             &window,
-            event_loop.create_proxy(),
             opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
             opts.font_opts.clone(),
