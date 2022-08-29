@@ -34,8 +34,8 @@ core features that will remain at the heart of the project.
 as much on the GPU as we can get away with.
 - **Basic HTML Rendering** - HTML is used in almost all project markdown files, thus having the bare minimum html to
 support common use cases is necessary, but don't expect forms and buttons.
-- **Future Live Code Change** - Inlyne will monitor your markdown file for any write modifications and automatically refresh
-the document where you left off. It's designed to work seamlessly and allow you to make on the fly edits.
+- **Live Code Change** - Inlyne will monitor your markdown file for any write modifications and automatically refresh
+the document where you left off. It's designed to work seamlessly and allow you to make edits on the fly.
 
 ## What does it support?
 

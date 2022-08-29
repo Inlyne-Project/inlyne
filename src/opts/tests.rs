@@ -1,9 +1,9 @@
 use std::{ffi::OsString, path::PathBuf};
 
+use super::{cli, config, Opts, ThemeType};
+use crate::keybindings;
 use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
-use crate::keybindings;
-use super::{cli, config, Opts, ThemeType};
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
     std::iter::once("inlyne")
