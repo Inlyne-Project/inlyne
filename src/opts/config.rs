@@ -1,7 +1,7 @@
 use std::fs;
 
 use super::ThemeType;
-use crate::color;
+use crate::{color, keybindings::Keybindings};
 
 use anyhow::Context;
 use serde::{Deserialize, Deserializer};
@@ -80,16 +80,21 @@ impl Default for LinesToScroll {
 }
 
 #[derive(Deserialize, Debug, Default)]
-#[serde(rename_all = "kebab-case")]
+pub struct KeybindingsSection {
+    pub base: Option<Keybindings>,
+    pub extra: Option<Keybindings>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct Config {
-    #[serde(default)]
     pub theme: ThemeType,
     pub scale: Option<f32>,
-    #[serde(default)]
     pub lines_to_scroll: LinesToScroll,
     pub light_theme: Option<OptionalTheme>,
     pub dark_theme: Option<OptionalTheme>,
     pub font_options: Option<FontOptions>,
+    pub keybindings: KeybindingsSection,
 }
 
 impl Config {

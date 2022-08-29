@@ -2,6 +2,7 @@ pub mod color;
 pub mod fonts;
 pub mod image;
 pub mod interpreter;
+mod keybindings;
 pub mod opts;
 pub mod positioner;
 pub mod renderer;
@@ -15,6 +16,7 @@ use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
 
+use keybindings::{Action, Key, KeyCombos, ModifiedKey};
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
@@ -32,7 +34,6 @@ use notify::op::Op;
 use notify::{raw_watcher, RecursiveMode, Watcher};
 
 use winit::event::ModifiersState;
-use winit::event::VirtualKeyCode;
 use winit::event::{ElementState, MouseButton};
 use winit::{
     event::{Event, KeyboardInput, MouseScrollDelta, WindowEvent},
@@ -113,6 +114,7 @@ pub struct Inlyne {
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
+    keycombos: KeyCombos,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -197,6 +199,8 @@ impl Inlyne {
     }
 
     pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
+        let keycombos = KeyCombos::new(opts.keybindings.clone())?;
+
         let event_loop = EventLoop::<InlyneEvent>::with_user_event();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         match root_filepath_to_vcs_dir(&args.file_path) {
@@ -242,6 +246,7 @@ impl Inlyne {
             interpreter_sender,
             interpreter_should_queue,
             image_cache,
+            keycombos,
         })
     }
 
@@ -331,24 +336,17 @@ impl Inlyne {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => pending_resize = Some(size),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::MouseWheel { delta, .. } => {
-                        let y_pixel_shift = match delta {
-                            MouseScrollDelta::PixelDelta(pos) => {
-                                pos.y as f32 * self.renderer.hidpi_scale * self.renderer.zoom
-                            }
-                            MouseScrollDelta::LineDelta(_, y_delta) => {
-                                y_delta as f32
-                                    * 16.0
-                                    * self.lines_to_scroll
-                                    * self.renderer.hidpi_scale
-                                    * self.renderer.zoom
-                            }
-                        };
-
-                        self.renderer
-                            .set_scroll_y(self.renderer.scroll_y - y_pixel_shift);
-                        self.window.request_redraw();
-                    }
+                    WindowEvent::MouseWheel { delta, .. } => match delta {
+                        MouseScrollDelta::PixelDelta(pos) => {
+                            Self::scroll_pixels(&mut self.renderer, &self.window, pos.y as f32)
+                        }
+                        MouseScrollDelta::LineDelta(_, y_delta) => Self::scroll_lines(
+                            &mut self.renderer,
+                            &self.window,
+                            self.lines_to_scroll,
+                            y_delta,
+                        ),
+                    },
                     WindowEvent::CursorMoved { position, .. } => {
                         let screen_size = self.renderer.screen_size();
                         let loc = (
@@ -470,44 +468,59 @@ impl Inlyne {
                         input:
                             KeyboardInput {
                                 state: ElementState::Pressed,
-                                virtual_keycode: Some(keycode),
+                                virtual_keycode,
+                                scancode,
                                 ..
                             },
                         ..
-                    } => match keycode {
-                        VirtualKeyCode::C => {
-                            let copy = (cfg!(target_os = "macos") && modifiers.logo())
-                                || (!cfg!(target_os = "macos") && modifiers.ctrl());
-                            if copy {
-                                self.clipboard
+                    } => {
+                        let key = Key::new(virtual_keycode, scancode);
+                        let modified_key = ModifiedKey(key, modifiers);
+                        if let Some(action) = self.keycombos.munch(modified_key) {
+                            match action {
+                                Action::ToTop => {
+                                    self.renderer.set_scroll_y(0.0);
+                                    self.window.request_redraw();
+                                }
+                                Action::ToBottom => {
+                                    self.renderer.set_scroll_y(f32::INFINITY);
+                                    self.window.request_redraw();
+                                }
+                                a_scroll @ (Action::ScrollUp | Action::ScrollDown) => {
+                                    let lines = match a_scroll {
+                                        Action::ScrollUp => 1.0,
+                                        Action::ScrollDown => -1.0,
+                                        _ => unreachable!("This arm is only for scroll actions"),
+                                    };
+
+                                    Self::scroll_lines(
+                                        &mut self.renderer,
+                                        &self.window,
+                                        self.lines_to_scroll,
+                                        lines,
+                                    )
+                                }
+                                a_zoom @ (Action::ZoomIn | Action::ZoomOut | Action::ZoomReset) => {
+                                    let zoom = match a_zoom {
+                                        Action::ZoomIn => self.renderer.zoom * 1.1,
+                                        Action::ZoomOut => self.renderer.zoom * 0.9,
+                                        Action::ZoomReset => 1.0,
+                                        _ => unreachable!("This arm is only for zoom actions"),
+                                    };
+
+                                    self.renderer.zoom = zoom;
+                                    self.renderer.reposition(&mut self.elements).unwrap();
+                                    self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                    self.window.request_redraw();
+                                }
+                                Action::Copy => self
+                                    .clipboard
                                     .set_contents(selection_cache.trim().to_owned())
-                                    .unwrap()
+                                    .unwrap(),
+                                Action::Quit => *control_flow = ControlFlow::Exit,
                             }
                         }
-                        VirtualKeyCode::Equals => {
-                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                                && modifiers.shift();
-                            if zoom {
-                                self.renderer.zoom *= 1.1;
-                                self.renderer.reposition(&mut self.elements).unwrap();
-                                self.renderer.set_scroll_y(self.renderer.scroll_y);
-                                self.window.request_redraw();
-                            }
-                        }
-                        VirtualKeyCode::Minus => {
-                            let zoom = ((cfg!(target_os = "macos") && modifiers.logo())
-                                || (!cfg!(target_os = "macos") && modifiers.ctrl()))
-                                && modifiers.shift();
-                            if zoom {
-                                self.renderer.zoom *= 0.9;
-                                self.renderer.reposition(&mut self.elements).unwrap();
-                                self.renderer.set_scroll_y(self.renderer.scroll_y);
-                                self.window.request_redraw();
-                            }
-                        }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 },
                 Event::MainEventsCleared => {
@@ -529,6 +542,22 @@ impl Inlyne {
                 _ => {}
             }
         });
+    }
+
+    fn scroll_lines(
+        renderer: &mut Renderer,
+        window: &Window,
+        lines_to_scroll: f32,
+        num_lines: f32,
+    ) {
+        let num_pixels =
+            num_lines as f32 * 16.0 * lines_to_scroll * renderer.hidpi_scale * renderer.zoom;
+        Self::scroll_pixels(renderer, window, num_pixels);
+    }
+
+    fn scroll_pixels(renderer: &mut Renderer, window: &Window, num_pixels: f32) {
+        renderer.set_scroll_y(renderer.scroll_y - num_pixels);
+        window.request_redraw();
     }
 
     fn find_hoverable<'a, T: wgpu_glyph::GlyphCruncher>(

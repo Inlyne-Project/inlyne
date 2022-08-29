@@ -5,7 +5,10 @@ mod tests;
 
 use std::path::PathBuf;
 
-use crate::color;
+use crate::{
+    color,
+    keybindings::{self, Keybindings},
+};
 
 use serde::Deserialize;
 
@@ -27,6 +30,7 @@ pub struct Opts {
     pub scale: Option<f32>,
     pub lines_to_scroll: f32,
     pub font_opts: FontOptions,
+    pub keybindings: Keybindings,
 }
 
 impl Opts {
@@ -38,6 +42,11 @@ impl Opts {
             light_theme: config_light_theme,
             dark_theme: config_dark_theme,
             font_options: config_font_options,
+            keybindings:
+                config::KeybindingsSection {
+                    base: keybindings_base,
+                    extra: keybindings_extra,
+                },
         } = config;
 
         let theme = match args.theme.unwrap_or(config_theme) {
@@ -53,12 +62,21 @@ impl Opts {
 
         let font_opts = config_font_options.unwrap_or_default();
 
+        let keybindings = {
+            let mut temp = keybindings_base.unwrap_or_else(keybindings::defaults);
+            if let Some(extra) = keybindings_extra {
+                temp.extend(extra.into_iter());
+            }
+            temp
+        };
+
         Self {
             file_path: args.file_path.clone(),
             theme,
             scale: args.scale.or(config_scale),
             lines_to_scroll: config_lines_to_scroll.0,
             font_opts,
+            keybindings,
         }
     }
 }

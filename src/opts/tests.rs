@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
-
+use crate::keybindings;
 use super::{cli, config, Opts, ThemeType};
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
@@ -10,6 +10,19 @@ fn gen_args(args: Vec<&str>) -> Vec<OsString> {
         .chain(args.into_iter())
         .map(OsString::from)
         .collect()
+}
+
+impl Opts {
+    fn mostly_default(file_path: impl Into<PathBuf>) -> Self {
+        Self {
+            file_path: file_path.into(),
+            theme: ThemeType::default().as_theme(),
+            scale: None,
+            font_opts: FontOptions::default(),
+            lines_to_scroll: LinesToScroll::default().0,
+            keybindings: keybindings::defaults(),
+        }
+    }
 }
 
 #[test]
@@ -29,13 +42,7 @@ fn defaults() {
             &Args::parse_from(gen_args(vec!["file.md"]), &config),
             config::Config::default()
         ),
-        Opts {
-            file_path: PathBuf::from("file.md"),
-            theme: ThemeType::default().as_theme(),
-            scale: None,
-            font_opts: FontOptions::default(),
-            lines_to_scroll: LinesToScroll::default().0,
-        }
+        Opts::mostly_default("file.md")
     );
 }
 
@@ -51,11 +58,8 @@ fn config_overrides_default() {
             config
         ),
         Opts {
-            file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
-            scale: None,
-            font_opts: FontOptions::default(),
-            lines_to_scroll: LinesToScroll::default().0,
+            ..Opts::mostly_default("file.md")
         }
     );
     let config = config::Config {
@@ -68,11 +72,8 @@ fn config_overrides_default() {
             config,
         ),
         Opts {
-            file_path: PathBuf::from("file.md"),
-            theme: ThemeType::default().as_theme(),
             scale: Some(1.5),
-            font_opts: FontOptions::default(),
-            lines_to_scroll: LinesToScroll::default().0,
+            ..Opts::mostly_default("file.md")
         }
     );
 }
@@ -86,11 +87,8 @@ fn from_cli() {
             config::Config::default()
         ),
         Opts {
-            file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
-            scale: None,
-            font_opts: FontOptions::default(),
-            lines_to_scroll: LinesToScroll::default().0,
+            ..Opts::mostly_default("file.md")
         }
     );
 
@@ -106,11 +104,9 @@ fn from_cli() {
             config
         ),
         Opts {
-            file_path: PathBuf::from("file.md"),
             theme: ThemeType::Dark.as_theme(),
             scale: Some(1.5),
-            font_opts: FontOptions::default(),
-            lines_to_scroll: LinesToScroll::default().0,
+            ..Opts::mostly_default("file.md")
         }
     );
 }
