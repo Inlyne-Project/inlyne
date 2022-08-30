@@ -159,21 +159,12 @@ impl Inlyne {
         // The notification back-end is selected based on the platform.
         let mut watcher = raw_watcher(watch_tx).unwrap();
 
-        // Add a path to be watched. All files and directories at that path and
-        // below will be monitored for changes.
-        let root_folder = self
-            .args
-            .file_path
-            .parent()
-            .filter(|p| p.is_dir())
-            .unwrap_or_else(|| Path::new("."))
-            .to_owned();
-
+        // Add the file path to be watched.
         let event_proxy = self.event_loop.create_proxy();
         let file_path = self.args.file_path.clone();
         std::thread::spawn(move || {
             watcher
-                .watch(root_folder, RecursiveMode::Recursive)
+                .watch(file_path, RecursiveMode::NonRecursive)
                 .unwrap();
 
             loop {
@@ -185,12 +176,7 @@ impl Inlyne {
                     }
                 };
 
-                if event.op.unwrap().intersects(Op::WRITE)
-                    && event
-                        .path
-                        .map(|p| p.file_name() == file_path.file_name())
-                        .unwrap_or_default()
-                {
+                if event.op.unwrap().intersects(Op::WRITE) {
                     // Always reload the primary configuration file.
                     let _ = event_proxy.send_event(InlyneEvent::FileReload);
                 }
