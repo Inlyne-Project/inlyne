@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use anyhow::Context;
 use wgpu_glyph::GlyphBrush;
 
 use crate::{
     table::{TABLE_COL_GAP, TABLE_ROW_GAP},
+    text::TextBox,
     utils::{Align, Point, Rect, Size},
     Element,
 };
@@ -164,6 +165,40 @@ impl Positioner {
                     (max_width - DEFAULT_MARGIN, inner_reserved_height),
                 )
             }
+            Element::Section(section) => {
+                let mut section_bounds =
+                    Rect::new((DEFAULT_MARGIN, self.reserved_height), (0., 0.));
+                if let Some(ref mut summary) = *section.summary {
+                    self.position(glyph_brush, summary, zoom)?;
+                    let element_size = summary
+                        .bounds
+                        .as_mut()
+                        .context("Element didn't have bounds")?
+                        .size;
+                    self.reserved_height +=
+                        element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                    section_bounds.size.1 +=
+                        element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                    section_bounds.size.0 = section_bounds.size.0.max(element_size.0)
+                }
+                for element in &mut section.elements {
+                    self.position(glyph_brush, element, zoom)?;
+                    let element_size = element
+                        .bounds
+                        .as_mut()
+                        .context("Element didn't have bounds")?
+                        .size;
+                    self.reserved_height +=
+                        element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                    if !*section.hidden.borrow() {
+                        section_bounds.size.1 +=
+                            element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
+                        section_bounds.size.0 = section_bounds.size.0.max(element_size.0)
+                    }
+                }
+                self.reserved_height = section_bounds.pos.1;
+                section_bounds
+            }
         };
         element.bounds = Some(bounds);
         Ok(())
@@ -214,6 +249,29 @@ impl Row {
         Self {
             elements,
             hidpi_scale,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Section {
+    pub elements: Vec<Positioned<Element>>,
+    pub hidpi_scale: f32,
+    pub hidden: RefCell<bool>,
+    pub summary: Box<Option<Positioned<Element>>>,
+}
+
+impl Section {
+    pub fn new(
+        summary: Option<TextBox>,
+        elements: Vec<Positioned<Element>>,
+        hidpi_scale: f32,
+    ) -> Self {
+        Self {
+            elements,
+            hidpi_scale,
+            hidden: RefCell::new(false),
+            summary: Box::new(summary.map(|t| Positioned::new(t.into()))),
         }
     }
 }

@@ -10,6 +10,7 @@ use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
+use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -451,13 +452,65 @@ impl Renderer {
                 }
                 Element::Image(_) => {}
                 Element::Spacer(_) => {}
-                Element::Row(row) => {
-                    self.render_elements(&row.elements)?;
+                Element::Row(row) => self.render_elements(&row.elements)?,
+                Element::Section(section) => {
+                    if let Some(ref summary) = *section.summary {
+                        let bounds = summary.bounds.as_ref().unwrap();
+                        self.draw_hidden_marker(
+                            (
+                                bounds.pos.0 - 5. * self.hidpi_scale * self.zoom,
+                                bounds.pos.1 + bounds.size.1 / 2. - self.scroll_y,
+                            ),
+                            10.,
+                            self.theme.text_color,
+                            *section.hidden.borrow(),
+                        )?;
+                        self.render_elements(std::slice::from_ref(summary))?
+                    }
+                    if !*section.hidden.borrow() {
+                        self.render_elements(&section.elements)?
+                    }
                 }
             }
         }
 
         self.draw_scrollbar();
+        Ok(())
+    }
+
+    fn draw_hidden_marker(
+        &mut self,
+        pos: Point,
+        size: f32,
+        color: [f32; 4],
+        hidden: bool,
+    ) -> anyhow::Result<()> {
+        let points = if hidden {
+            [
+                point(pos.0, pos.1, self.screen_size()).into(),
+                point(pos.0 - size, pos.1 + size, self.screen_size()).into(),
+                point(pos.0 - size, pos.1 - size, self.screen_size()).into(),
+            ]
+        } else {
+            [
+                point(pos.0, pos.1 - size / 2., self.screen_size()).into(),
+                point(pos.0 - size * 2., pos.1 - size / 2., self.screen_size()).into(),
+                point(pos.0 - size, pos.1 + size / 2., self.screen_size()).into(),
+            ]
+        };
+        let triangle = Polygon {
+            points: &points,
+            closed: true,
+        };
+        let mut fill_tessellator = FillTessellator::new();
+        fill_tessellator.tessellate_polygon(
+            triangle,
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
+                pos: [vertex.position().x, vertex.position().y, 0.0],
+                color,
+            }),
+        )?;
         Ok(())
     }
 
@@ -536,40 +589,76 @@ impl Renderer {
             } else if pos.1 >= screen_size.1 {
                 break;
             }
-            if let Element::Image(ref mut image) = &mut element.inner {
-                if image.bind_group.is_none() {
-                    image.create_bind_group(
-                        &self.device,
-                        &self.queue,
-                        &self.image_renderer.sampler,
-                        &self.image_renderer.bindgroup_layout,
-                    );
+            match &mut element.inner {
+                Element::Image(ref mut image) => {
+                    if image.bind_group.is_none() {
+                        image.create_bind_group(
+                            &self.device,
+                            &self.queue,
+                            &self.image_renderer.sampler,
+                            &self.image_renderer.bindgroup_layout,
+                        );
+                    }
+                    if let Some(ref bind_group) = image.bind_group {
+                        let vertex_buf =
+                            ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
+                        bind_groups.push((bind_group.clone(), vertex_buf));
+                    }
                 }
-                if let Some(ref bind_group) = image.bind_group {
-                    let vertex_buf =
-                        ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
-                    bind_groups.push((bind_group.clone(), vertex_buf));
-                }
-            } else if let Element::Row(ref mut row) = &mut element.inner {
-                for element in row.elements.iter_mut() {
-                    let Rect { pos, size } = element.bounds.as_ref().unwrap();
-                    let pos = (pos.0, pos.1 - self.scroll_y);
-                    if let Element::Image(ref mut image) = &mut element.inner {
-                        if image.bind_group.is_none() {
-                            image.create_bind_group(
-                                &self.device,
-                                &self.queue,
-                                &self.image_renderer.sampler,
-                                &self.image_renderer.bindgroup_layout,
-                            );
-                        }
-                        if let Some(ref bind_group) = image.bind_group {
-                            let vertex_buf =
-                                ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
-                            bind_groups.push((bind_group.clone(), vertex_buf));
+                Element::Row(ref mut row) => {
+                    for element in row.elements.iter_mut() {
+                        let Rect { pos, size } = element.bounds.as_ref().unwrap();
+                        let pos = (pos.0, pos.1 - self.scroll_y);
+                        if let Element::Image(ref mut image) = &mut element.inner {
+                            if image.bind_group.is_none() {
+                                image.create_bind_group(
+                                    &self.device,
+                                    &self.queue,
+                                    &self.image_renderer.sampler,
+                                    &self.image_renderer.bindgroup_layout,
+                                );
+                            }
+                            if let Some(ref bind_group) = image.bind_group {
+                                let vertex_buf = ImageRenderer::vertex_buf(
+                                    &self.device,
+                                    pos,
+                                    *size,
+                                    screen_size,
+                                );
+                                bind_groups.push((bind_group.clone(), vertex_buf));
+                            }
                         }
                     }
                 }
+                Element::Section(ref mut section) => {
+                    if *section.hidden.borrow() {
+                        continue;
+                    }
+                    for element in section.elements.iter_mut() {
+                        let Rect { pos, size } = element.bounds.as_ref().unwrap();
+                        let pos = (pos.0, pos.1 - self.scroll_y);
+                        if let Element::Image(ref mut image) = &mut element.inner {
+                            if image.bind_group.is_none() {
+                                image.create_bind_group(
+                                    &self.device,
+                                    &self.queue,
+                                    &self.image_renderer.sampler,
+                                    &self.image_renderer.bindgroup_layout,
+                                );
+                            }
+                            if let Some(ref bind_group) = image.bind_group {
+                                let vertex_buf = ImageRenderer::vertex_buf(
+                                    &self.device,
+                                    pos,
+                                    *size,
+                                    screen_size,
+                                );
+                                bind_groups.push((bind_group.clone(), vertex_buf));
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         bind_groups

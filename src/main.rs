@@ -21,6 +21,7 @@ use opts::Args;
 use opts::Config;
 use positioner::Positioned;
 use positioner::Row;
+use positioner::Section;
 use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
@@ -57,11 +58,13 @@ use std::sync::Mutex;
 pub enum InlyneEvent {
     LoadedImage(String, MaybeImageData),
     FileReload,
+    Reposition,
 }
 
 pub enum Hoverable<'a> {
     Image(&'a Image),
     Text(&'a Text),
+    Summary(&'a Section),
 }
 
 #[derive(Debug)]
@@ -71,6 +74,13 @@ pub enum Element {
     Image(Image),
     Table(Table),
     Row(Row),
+    Section(Section),
+}
+
+impl From<Section> for Element {
+    fn from(section: Section) -> Self {
+        Element::Section(section)
+    }
 }
 
 impl From<Row> for Element {
@@ -78,6 +88,7 @@ impl From<Row> for Element {
         Element::Row(row)
     }
 }
+
 impl From<Image> for Element {
     fn from(image: Image) -> Self {
         Element::Image(image)
@@ -271,6 +282,10 @@ impl Inlyne {
                         self.interpreter_should_queue.store(true, Ordering::Relaxed);
                         self.interpreter_sender.send(md_string).unwrap();
                     }
+                    InlyneEvent::Reposition => {
+                        self.renderer.reposition(&mut self.elements).unwrap();
+                        self.window.request_redraw()
+                    }
                 },
                 Event::RedrawRequested(_) => {
                     let queue = {
@@ -403,9 +418,18 @@ impl Inlyne {
                                 screen_size,
                                 self.renderer.zoom,
                             ) {
+                                if let Hoverable::Summary(summary) = hoverable {
+                                    let mut hidden = summary.hidden.borrow_mut();
+                                    *hidden = !*hidden;
+                                    event_loop_proxy
+                                        .send_event(InlyneEvent::Reposition)
+                                        .unwrap();
+                                }
+
                                 let maybe_link = match hoverable {
                                     Hoverable::Image(Image { is_link, .. }) => is_link,
                                     Hoverable::Text(Text { link, .. }) => link,
+                                    Hoverable::Summary(_) => &None,
                                 };
 
                                 if let Some(link) = maybe_link {
@@ -592,6 +616,20 @@ impl Inlyne {
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
                 Element::Row(row) => {
                     Self::find_hoverable(&row.elements, glyph_brush, loc, screen_size, zoom)
+                }
+                Element::Section(section) => {
+                    if let Some(ref summary) = *section.summary {
+                        if let Some(ref bounds) = summary.bounds {
+                            if bounds.contains(loc) {
+                                return Some(Hoverable::Summary(section));
+                            }
+                        }
+                    }
+                    if !*section.hidden.borrow() {
+                        Self::find_hoverable(&section.elements, glyph_brush, loc, screen_size, zoom)
+                    } else {
+                        None
+                    }
                 }
             })
     }

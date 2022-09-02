@@ -68,6 +68,13 @@ self.glyph_brush.queue(&text_box.glyph_section(*pos, bounds));
 - [x] Watch Game of Thrones
 - [ ] Feed the cat
 
+#### Hideable sections
+<details>
+<summary>Click me to show text</summary>
+
+You weren't suppost to see this!
+</details>
+
 #### Alignment
 <p align="left">Text/Image..</p>
 <p align="center">alignment..</p>
