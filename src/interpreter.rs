@@ -181,7 +181,6 @@ impl HtmlInterpreter {
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
                 let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
-                println!("{}", &htmlified);
 
                 input.push_back(
                     Tendril::from_str(&htmlified)
@@ -242,7 +241,6 @@ impl HtmlInterpreter {
                     }
                 });
                 if let Some(section) = section {
-                    dbg!("hello");
                     section
                         .elements
                         .push(Positioned::new(self.current_textbox.clone().into()));
@@ -666,7 +664,6 @@ impl TokenSink for HtmlInterpreter {
                                 if let html::Element::Details(ref mut section) = element {
                                     *section.summary =
                                         Some(Positioned::new(self.current_textbox.clone().into()));
-                                    dbg!(&section.elements);
                                     self.current_textbox.texts.clear();
                                     break;
                                 }
