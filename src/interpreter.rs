@@ -3,6 +3,7 @@ use crate::image::Image;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
 use crate::positioner::Row;
+use crate::positioner::Section;
 use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
@@ -34,7 +35,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 mod html {
-    use crate::{table::Table, text::TextBox, utils::Align};
+    use crate::{positioner::Section, table::Table, text::TextBox, utils::Align};
 
     pub enum HeaderType {
         H1,
@@ -96,6 +97,8 @@ mod html {
         Header(Header),
         Paragraph(Option<Align>),
         Div(Option<Align>),
+        Details(Section),
+        Summary,
     }
 }
 
@@ -230,7 +233,20 @@ impl HtmlInterpreter {
             }
             if !empty {
                 self.current_textbox.indent = self.state.global_indent;
-                self.push_element(self.current_textbox.clone().into());
+                let section = self.state.element_stack.iter_mut().rev().find_map(|e| {
+                    if let html::Element::Details(section) = e {
+                        Some(section)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(section) = section {
+                    section
+                        .elements
+                        .push(Positioned::new(self.current_textbox.clone().into()));
+                } else {
+                    self.push_element(self.current_textbox.clone().into());
+                }
             }
         }
         self.current_textbox = TextBox::new(Vec::new(), self.hidpi_scale);
@@ -510,6 +526,19 @@ impl TokenSink for HtmlInterpreter {
                                 }
                             }
                         }
+                        "details" => {
+                            self.push_current_textbox();
+                            self.push_spacer();
+                            let section = Section::new(None, vec![], self.hidpi_scale);
+                            *section.hidden.borrow_mut() = true;
+                            self.state
+                                .element_stack
+                                .push(html::Element::Details(section));
+                        }
+                        "summary" => {
+                            self.push_current_textbox();
+                            self.state.element_stack.push(html::Element::Summary);
+                        }
                         _ => {}
                     },
                     TagKind::EndTag => match tag_name.as_str() {
@@ -621,6 +650,26 @@ impl TokenSink for HtmlInterpreter {
                             }
                         }
                         "span" => self.state.span_color = self.theme.code_color,
+                        "details" => {
+                            self.push_current_textbox();
+                            if let Some(html::Element::Details(section)) =
+                                self.state.element_stack.pop()
+                            {
+                                self.push_element(section.into());
+                            }
+                            self.push_spacer();
+                        }
+                        "summary" => {
+                            for element in self.state.element_stack.iter_mut().rev() {
+                                if let html::Element::Details(ref mut section) = element {
+                                    *section.summary =
+                                        Some(Positioned::new(self.current_textbox.clone().into()));
+                                    self.current_textbox.texts.clear();
+                                    break;
+                                }
+                            }
+                            self.state.element_stack.pop();
+                        }
                         _ => {}
                     },
                 }
