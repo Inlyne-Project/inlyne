@@ -168,38 +168,20 @@ impl Renderer {
         })
     }
 
-    fn draw_scrollbar(&mut self) {
-        let screen_height = self.screen_height();
-        let screen_width = self.config.width as f32;
-        let top = if screen_height < self.positioner.reserved_height {
-            1. - (self.scroll_y / (self.positioner.reserved_height - screen_height)
-                * (1. - (screen_height / self.positioner.reserved_height)))
-                * 2.
-        } else {
-            1.
-        };
-        let bottom = if screen_height < self.positioner.reserved_height {
-            top - ((screen_height / self.positioner.reserved_height) * 2.)
-        } else {
-            top - 2.
-        };
-        let mut fill_tessellator = FillTessellator::new();
-
-        {
-            fill_tessellator
-                .tessellate_rectangle(
-                    &Box2D::new(
-                        Point2D::from((1. - 50. / screen_width, top)),
-                        Point2D::from((1.0, bottom)),
-                    ),
-                    &FillOptions::default(),
-                    &mut BuffersBuilder::new(&mut self.lyon_buffer, |vertex: FillVertex| Vertex {
-                        pos: [vertex.position().x, vertex.position().y, 0.0],
-                        color: [0.3, 0.3, 0.3, 1.0],
-                    }),
-                )
-                .unwrap();
-        }
+    fn draw_scrollbar(&mut self) -> anyhow::Result<()> {
+        let (screen_width, screen_height) = self.screen_size();
+        let height = (screen_height / self.positioner.reserved_height) * screen_height;
+        self.draw_rectangle(
+            Rect::new(
+                (
+                    screen_width - DEFAULT_MARGIN / 4.,
+                    ((self.scroll_y / self.positioner.reserved_height) * screen_height),
+                ),
+                (DEFAULT_MARGIN / 4., height),
+            ),
+            [0.3, 0.3, 0.3, 1.0],
+        )?;
+        Ok(())
     }
 
     fn render_elements(&mut self, elements: &[Positioned<Element>]) -> anyhow::Result<()> {
@@ -491,7 +473,7 @@ impl Renderer {
             }
         }
 
-        self.draw_scrollbar();
+        self.draw_scrollbar()?;
         Ok(())
     }
 

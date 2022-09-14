@@ -249,7 +249,7 @@ impl Inlyne {
 
     pub fn run(mut self) {
         let mut pending_resize = None;
-        let mut scrollbar_held = false;
+        let mut scrollbar_held = None;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
         let mut last_loc = (0.0, 0.0);
@@ -354,7 +354,6 @@ impl Inlyne {
                             position.x as f32,
                             position.y as f32 + self.renderer.scroll_y,
                         );
-                        last_loc = loc;
 
                         let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
                             &self.elements,
@@ -375,20 +374,52 @@ impl Inlyne {
                         };
                         self.window.set_cursor_icon(cursor_icon);
 
-                        if scrollbar_held
-                            || (Rect::new((screen_size.0 - 25., 0.), (25., screen_size.1))
-                                .contains(position.into())
+                        if scrollbar_held.is_some()
+                            || (Rect::new(
+                                (screen_size.0 - DEFAULT_MARGIN / 4., 0.),
+                                (DEFAULT_MARGIN / 4., screen_size.1),
+                            )
+                            .contains(position.into())
                                 && mouse_down)
                         {
-                            let target_scroll = ((position.y as f32 / screen_size.1)
-                                * self.renderer.positioner.reserved_height)
-                                - (screen_size.1 / self.renderer.positioner.reserved_height
-                                    * screen_size.1);
+                            let scrollbar_height = (screen_size.1
+                                / self.renderer.positioner.reserved_height)
+                                * screen_size.1;
+                            if scrollbar_held.is_none() {
+                                if Rect::new(
+                                    (
+                                        screen_size.0 - DEFAULT_MARGIN / 4.,
+                                        ((self.renderer.scroll_y
+                                            / self.renderer.positioner.reserved_height)
+                                            * screen_size.1),
+                                    ),
+                                    (DEFAULT_MARGIN / 4., scrollbar_height),
+                                )
+                                .contains(position.into())
+                                {
+                                    // If we click in the bounds of the scrollbar, maintain the difference between the
+                                    // center of the scrollbar and the mouse
+                                    scrollbar_held = Some(
+                                        position.y as f32
+                                            - (((self.renderer.scroll_y
+                                                / self.renderer.positioner.reserved_height)
+                                                * screen_size.1)
+                                                + scrollbar_height / 2.),
+                                    );
+                                } else {
+                                    scrollbar_held = Some(0.);
+                                }
+                            }
+
+                            let pos_y = if let Some(diff) = scrollbar_held {
+                                position.y as f32 - diff
+                            } else {
+                                position.y as f32
+                            };
+                            let target_scroll = ((pos_y - scrollbar_height / 2.) / screen_size.1)
+                                * self.renderer.positioner.reserved_height;
                             self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
-                            if !scrollbar_held {
-                                scrollbar_held = true;
-                            }
                         } else if let Some(selection) = &mut self.renderer.selection {
                             if mouse_down {
                                 selection.1 = loc;
@@ -396,6 +427,7 @@ impl Inlyne {
                                 self.window.request_redraw();
                             }
                         }
+                        last_loc = loc;
                     }
                     WindowEvent::MouseInput {
                         state,
@@ -468,7 +500,7 @@ impl Inlyne {
                             mouse_down = true;
                         }
                         ElementState::Released => {
-                            scrollbar_held = false;
+                            scrollbar_held = None;
                             mouse_down = false;
                             selecting = false;
                         }
