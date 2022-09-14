@@ -551,8 +551,12 @@ impl Inlyne {
                                     };
 
                                     self.renderer.zoom = zoom;
+                                    let old_reserved = self.renderer.positioner.reserved_height;
                                     self.renderer.reposition(&mut self.elements).unwrap();
-                                    self.renderer.set_scroll_y(self.renderer.scroll_y);
+                                    let new_reserved = self.renderer.positioner.reserved_height;
+                                    self.renderer.set_scroll_y(
+                                        self.renderer.scroll_y * (new_reserved / old_reserved),
+                                    );
                                     self.window.request_redraw();
                                 }
                                 Action::Copy => self
@@ -576,8 +580,11 @@ impl Inlyne {
                         self.renderer
                             .surface
                             .configure(&self.renderer.device, &self.renderer.config);
+                        let old_reserved = self.renderer.positioner.reserved_height;
                         self.renderer.reposition(&mut self.elements).unwrap();
-                        self.renderer.set_scroll_y(self.renderer.scroll_y);
+                        let new_reserved = self.renderer.positioner.reserved_height;
+                        self.renderer
+                            .set_scroll_y(self.renderer.scroll_y * (new_reserved / old_reserved));
                         self.window.request_redraw();
                     }
                 }
