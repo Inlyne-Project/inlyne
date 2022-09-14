@@ -230,11 +230,12 @@ impl Positioner {
 #[derive(Debug)]
 pub struct Spacer {
     pub space: f32,
+    pub visibile: bool,
 }
 
 impl Spacer {
-    pub fn new(space: f32) -> Spacer {
-        Spacer { space }
+    pub fn new(space: f32, visibile: bool) -> Spacer {
+        Spacer { space, visibile }
     }
 }
 

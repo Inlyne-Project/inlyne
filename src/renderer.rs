@@ -451,7 +451,24 @@ impl Renderer {
                     }
                 }
                 Element::Image(_) => {}
-                Element::Spacer(_) => {}
+                Element::Spacer(spacer) => {
+                    if spacer.visibile {
+                        self.draw_rectangle(
+                            Rect::new(
+                                (
+                                    DEFAULT_MARGIN,
+                                    scrolled_pos.1 + size.1 / 2.
+                                        - 2. * self.hidpi_scale * self.zoom,
+                                ),
+                                (
+                                    screen_size.0 - 2. * DEFAULT_MARGIN,
+                                    2. * self.hidpi_scale * self.zoom,
+                                ),
+                            ),
+                            self.theme.text_color,
+                        )?;
+                    }
+                }
                 Element::Row(row) => self.render_elements(&row.elements)?,
                 Element::Section(section) => {
                     if let Some(ref summary) = *section.summary {

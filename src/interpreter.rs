@@ -253,7 +253,7 @@ impl HtmlInterpreter {
         self.current_textbox.indent = self.state.global_indent;
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(5.).into());
+        self.push_element(Spacer::new(5., false).into());
     }
     fn push_element(&mut self, element: Element) {
         self.element_queue.lock().unwrap().push_back(element);
@@ -538,6 +538,9 @@ impl TokenSink for HtmlInterpreter {
                         "summary" => {
                             self.push_current_textbox();
                             self.state.element_stack.push(html::Element::Summary);
+                        }
+                        "hr" => {
+                            self.push_element(Spacer::new(5., true).into());
                         }
                         _ => {}
                     },
