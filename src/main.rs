@@ -472,7 +472,22 @@ impl Inlyne {
                                     if is_md {
                                         // Open markdown files ourselves
                                         let mut args = self.args.clone();
-                                        args.file_path = maybe_path.unwrap();
+                                        let maybe_path = maybe_path.expect("not a path");
+                                        // Handle relative paths and make them
+                                        // absolute by prepending current
+                                        // parent
+                                        // Note: starts_with checks a whole (path) component, so `starts_with("http")` is not enough!
+                                        let maybe_path = if maybe_path.is_relative() && !maybe_path.starts_with("http://") && !maybe_path.starts_with("https://") {
+                                            // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
+                                            let current_parent = args.file_path.parent().expect("no current parent");
+                                            let link_without_prefix: &Path = maybe_path.strip_prefix(std::path::Component::CurDir).expect("no CurDir prefix");
+                                            let mut link = current_parent.to_path_buf();
+                                            link.push(link_without_prefix);
+                                            link
+                                        } else {
+                                            maybe_path
+                                        };
+                                        args.file_path = maybe_path;
                                         Command::new(
                                             std::env::current_exe()
                                                 .unwrap_or_else(|_| "inlyne".into()),
