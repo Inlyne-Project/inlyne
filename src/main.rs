@@ -466,10 +466,11 @@ impl Inlyne {
 
                                 if let Some(link) = maybe_link {
                                     let maybe_path = PathBuf::from_str(link).ok();
-                                    let is_md = maybe_path.as_ref().map_or(false, |p| {
+                                    let is_local_md = maybe_path.as_ref().map_or(false, |p| {
                                         p.extension().map_or(false, |ext| ext == "md")
+                                        && !p.to_str().map_or(false, |s| s.starts_with("http"))
                                     });
-                                    if is_md {
+                                    if is_local_md {
                                         // Open markdown files ourselves
                                         let mut args = self.args.clone();
                                         let maybe_path = maybe_path.expect("not a path");
@@ -477,7 +478,7 @@ impl Inlyne {
                                         // absolute by prepending current
                                         // parent
                                         // Note: starts_with checks a whole (path) component, so `starts_with("http")` is not enough!
-                                        let maybe_path = if maybe_path.is_relative() && !maybe_path.starts_with("http://") && !maybe_path.starts_with("https://") {
+                                        let maybe_path = if maybe_path.is_relative() {
                                             // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
                                             let current_parent = args.file_path.parent().expect("no current parent");
                                             let link_without_prefix: &Path = maybe_path.strip_prefix(std::path::Component::CurDir).expect("no CurDir prefix");
