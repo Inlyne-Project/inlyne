@@ -477,7 +477,6 @@ impl Inlyne {
                                         // Handle relative paths and make them
                                         // absolute by prepending current
                                         // parent
-                                        // Note: starts_with checks a whole (path) component, so `starts_with("http")` is not enough!
                                         let maybe_path = if maybe_path.is_relative() {
                                             // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
                                             let current_parent = args.file_path.parent().expect("no current parent");
