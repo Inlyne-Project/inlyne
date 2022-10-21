@@ -169,6 +169,7 @@ impl HtmlInterpreter {
             self.theme.code_highlighter.as_syntect_name(),
         );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
+        let span_color = self.theme.code_color.clone();
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in reciever {
@@ -177,7 +178,10 @@ impl HtmlInterpreter {
                 .should_queue
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                tok.sink.state = State::default();
+                tok.sink.state = State {
+                    span_color,
+                    ..Default::default()
+                };
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
                 let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
