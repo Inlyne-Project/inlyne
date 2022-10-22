@@ -169,7 +169,7 @@ impl HtmlInterpreter {
             self.theme.code_highlighter.as_syntect_name(),
         );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
-        let span_color = self.theme.code_color.clone();
+        let span_color = self.theme.code_color;
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in reciever {
@@ -220,7 +220,7 @@ impl HtmlInterpreter {
         // Push any inline images
         if let Some((row, count)) = self.state.inline_images.take() {
             if count == 0 {
-                self.push_element(row.into());
+                self.push_element(row);
                 self.push_spacer();
             } else {
                 self.state.inline_images = Some((row, count))
@@ -247,9 +247,9 @@ impl HtmlInterpreter {
                 if let Some(section) = section {
                     section
                         .elements
-                        .push(Positioned::new(self.current_textbox.clone().into()));
+                        .push(Positioned::new(self.current_textbox.clone()));
                 } else {
-                    self.push_element(self.current_textbox.clone().into());
+                    self.push_element(self.current_textbox.clone());
                 }
             }
         }
@@ -257,10 +257,10 @@ impl HtmlInterpreter {
         self.current_textbox.indent = self.state.global_indent;
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(5., false).into());
+        self.push_element(Spacer::new(5., false));
     }
-    fn push_element(&mut self, element: Element) {
-        self.element_queue.lock().unwrap().push_back(element);
+    fn push_element<I: Into<Element>>(&mut self, element: I) {
+        self.element_queue.lock().unwrap().push_back(element.into());
         if self.first_pass {
             self.window.request_redraw()
         }
@@ -364,20 +364,20 @@ impl TokenSink for HtmlInterpreter {
 
                                     if align == &Align::Left {
                                         if let Some((row, count)) = &mut self.state.inline_images {
-                                            row.elements.push(Positioned::new(image.into()));
+                                            row.elements.push(Positioned::new(image));
                                             // Restart newline count
                                             *count = 1;
                                         } else {
                                             self.state.inline_images = Some((
                                                 Row::new(
-                                                    vec![Positioned::new(image.into())],
+                                                    vec![Positioned::new(image)],
                                                     self.hidpi_scale,
                                                 ),
                                                 1,
                                             ));
                                         }
                                     } else {
-                                        self.push_element(image.into());
+                                        self.push_element(image);
                                         self.push_spacer();
                                     }
                                     break;
@@ -544,7 +544,7 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.push(html::Element::Summary);
                         }
                         "hr" => {
-                            self.push_element(Spacer::new(5., true).into());
+                            self.push_element(Spacer::new(5., true));
                         }
                         _ => {}
                     },
@@ -589,7 +589,7 @@ impl TokenSink for HtmlInterpreter {
                             if let Some(html::Element::Table(table)) =
                                 self.state.element_stack.pop()
                             {
-                                self.push_element(table.into());
+                                self.push_element(table);
                                 self.push_spacer();
                             }
                         }
@@ -662,7 +662,7 @@ impl TokenSink for HtmlInterpreter {
                             if let Some(html::Element::Details(section)) =
                                 self.state.element_stack.pop()
                             {
-                                self.push_element(section.into());
+                                self.push_element(section);
                             }
                             self.push_spacer();
                         }
@@ -670,7 +670,7 @@ impl TokenSink for HtmlInterpreter {
                             for element in self.state.element_stack.iter_mut().rev() {
                                 if let html::Element::Details(ref mut section) = element {
                                     *section.summary =
-                                        Some(Positioned::new(self.current_textbox.clone().into()));
+                                        Some(Positioned::new(self.current_textbox.clone()));
                                     self.current_textbox.texts.clear();
                                     break;
                                 }
@@ -686,10 +686,10 @@ impl TokenSink for HtmlInterpreter {
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
                         if !self.current_textbox.texts.is_empty() {
-                            self.push_element(self.current_textbox.clone().into());
+                            self.push_element(self.current_textbox.clone());
                             self.current_textbox.texts.clear();
                         } else {
-                            self.push_element(self.current_textbox.clone().with_padding(12.).into())
+                            self.push_element(self.current_textbox.clone().with_padding(12.))
                         }
                     }
                     if let Some(last_text) = self.current_textbox.texts.last() {
@@ -705,7 +705,7 @@ impl TokenSink for HtmlInterpreter {
                     }
                     if let Some((row, newline_counter)) = self.state.inline_images.take() {
                         if newline_counter == 0 {
-                            self.push_element(row.into());
+                            self.push_element(row);
                             self.push_spacer();
                         } else {
                             self.state.inline_images = Some((row, newline_counter - 1));

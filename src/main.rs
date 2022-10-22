@@ -625,8 +625,7 @@ impl Inlyne {
         lines_to_scroll: f32,
         num_lines: f32,
     ) {
-        let num_pixels =
-            num_lines as f32 * 16.0 * lines_to_scroll * renderer.hidpi_scale * renderer.zoom;
+        let num_pixels = num_lines * 16.0 * lines_to_scroll * renderer.hidpi_scale * renderer.zoom;
         Self::scroll_pixels(renderer, window, num_pixels);
     }
 

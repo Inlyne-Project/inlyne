@@ -282,11 +282,15 @@ impl Renderer {
                         self.zoom,
                     ) {
                         let min = (
-                            line.0 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                            line.0
+                                 .0
+                                .clamp((screen_size.0 - DEFAULT_MARGIN).min(pos.0), pos.0),
                             line.0 .1,
                         );
                         let max = (
-                            line.1 .0.min(screen_size.0 - DEFAULT_MARGIN).max(pos.0),
+                            line.1
+                                 .0
+                                .clamp((screen_size.0 - DEFAULT_MARGIN).min(pos.0), pos.0),
                             line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
@@ -368,9 +372,10 @@ impl Renderer {
                             scrolled_pos.1 + y,
                         );
                         let max = (
-                            (scrolled_pos.0 + x)
-                                .max(scrolled_pos.0)
-                                .min(screen_size.0 - DEFAULT_MARGIN),
+                            (scrolled_pos.0 + x).clamp(
+                                (screen_size.0 - DEFAULT_MARGIN).min(scrolled_pos.0),
+                                scrolled_pos.0,
+                            ),
                             scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
@@ -421,9 +426,10 @@ impl Renderer {
                                 scrolled_pos.1 + y,
                             );
                             let max = (
-                                (scrolled_pos.0 + x)
-                                    .max(scrolled_pos.0)
-                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                (scrolled_pos.0 + x).clamp(
+                                    (screen_size.0 - DEFAULT_MARGIN).min(scrolled_pos.0),
+                                    scrolled_pos.0,
+                                ),
                                 scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
                             );
                             let color = self.theme.code_block_color;
@@ -772,9 +778,10 @@ impl Renderer {
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {
-        self.scroll_y = scroll_y
-            .min(self.positioner.reserved_height - self.screen_height())
-            .max(0.);
+        self.scroll_y = scroll_y.clamp(
+            0.,
+            (self.positioner.reserved_height - self.screen_height()).max(0.),
+        )
     }
 }
 

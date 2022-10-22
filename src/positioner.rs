@@ -30,9 +30,9 @@ impl<T> Positioned<T> {
 }
 
 impl<T> Positioned<T> {
-    pub fn new(item: T) -> Positioned<T> {
+    pub fn new<I: Into<T>>(item: I) -> Positioned<T> {
         Positioned {
-            inner: item,
+            inner: item.into(),
             bounds: None,
         }
     }
@@ -272,7 +272,7 @@ impl Section {
             elements,
             hidpi_scale,
             hidden: RefCell::new(false),
-            summary: Box::new(summary.map(|t| Positioned::new(t.into()))),
+            summary: Box::new(summary.map(Positioned::new)),
         }
     }
 }

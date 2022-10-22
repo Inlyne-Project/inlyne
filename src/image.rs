@@ -253,7 +253,7 @@ impl Image {
             if target_dimensions.0 > max_width as u32 {
                 (
                     max_width as u32,
-                    ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
+                    ((max_width / buffer_size.0) * buffer_size.1) as u32,
                 )
             } else {
                 target_dimensions
@@ -261,7 +261,7 @@ impl Image {
         } else if buffer_size.0 > max_width {
             (
                 max_width as u32,
-                ((max_width / buffer_size.0 as f32) * buffer_size.1 as f32) as u32,
+                ((max_width / buffer_size.0) * buffer_size.1) as u32,
             )
         } else {
             (buffer_size.0 as u32, buffer_size.1 as u32)
