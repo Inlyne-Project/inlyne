@@ -22,14 +22,14 @@ html5ever = "0.26.0"
 image = "0.24.5"
 clap = { version = "4.1.6", features = ["cargo"] }
 copypasta = "0.8.2"
-resvg = { version = "0.29.0", features = ["text", "system-fonts", "memmap-fonts"] }
+resvg = "0.29.0"
 usvg = "0.29.0"
 tiny-skia = "0.8.3"
 anyhow = "1.0.69"
 dirs = "4.0.0"
 serde = { version = "1.0.152", features = ["derive"] }
 toml = "0.7.2"
-ureq = { version = "2.6.2", features = ["native-tls"] }
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 font-kit = "0.11.0"
 memmap2 = "0.5.10"
 log = "0.4.17"

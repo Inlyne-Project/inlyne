@@ -3,6 +3,7 @@ use crate::utils::{Align, Point, Size};
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use resvg::usvg_text_layout::TreeTextToPath;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
@@ -117,21 +118,15 @@ impl Image {
                 let mut img_buf = Vec::with_capacity(img_file_size as usize);
                 img_file.read_to_end(&mut img_buf).unwrap();
                 img_buf
-            } else if let Ok(data) = ureq::get(&src).call().and_then(|resp| {
+            } else if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
                 // Limit the length to 20 MiB to avoid malicious servers causing OOM
                 const MAX_SIZE: usize = 20 * 1_024 * 1_024;
 
-                let initial_capacity = resp
-                    .header("Content-Length")
-                    .and_then(|len| len.parse().ok())
-                    .unwrap_or(1_024);
-                let mut bytes = Vec::with_capacity(std::cmp::min(initial_capacity, MAX_SIZE));
-                resp.into_reader()
-                    .take(MAX_SIZE as u64)
-                    .read_to_end(&mut bytes)?;
-                Ok(bytes)
-            }) {
-                data
+                if bytes.len() > MAX_SIZE {
+                    return;
+                }
+
+                bytes.to_vec()
             } else {
                 return;
             };
@@ -143,7 +138,10 @@ impl Image {
                 });
             } else {
                 let opt = usvg::Options::default();
-                if let Ok(rtree) = usvg::Tree::from_data(&image_data, &opt) {
+                if let Ok(mut rtree) = usvg::Tree::from_data(&image_data, &opt) {
+                    let mut fontdb = resvg::usvg_text_layout::fontdb::Database::new();
+                    fontdb.load_system_fonts();
+                    rtree.convert_text(&fontdb);
                     let pixmap_size = rtree.size.to_screen_size();
                     let mut pixmap = tiny_skia::Pixmap::new(
                         (pixmap_size.width() as f32 * hidpi_scale) as u32,
