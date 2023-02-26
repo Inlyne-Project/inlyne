@@ -1,4 +1,4 @@
-<h1 align="center">Inlyne - a GPU powered, browserless, markdown + html viewer </h1>
+<h1 align="center">Inlyne - a GPU powered, browserless, markdown + html viewer</h1>
 
 <p align="center">
 <a href="https://crates.io/crates/inlyne" target="_blank"><img height=25 src="https://img.shields.io/crates/v/inlyne.svg" /></a>

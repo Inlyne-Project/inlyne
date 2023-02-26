@@ -197,8 +197,9 @@ impl Renderer {
     fn render_elements(&mut self, elements: &[Positioned<Element>]) -> anyhow::Result<()> {
         let screen_size = self.screen_size();
         for element in elements.iter() {
-            let Rect { pos, size } = element.bounds.as_ref().context("Element not positioned")?;
-            let scrolled_pos = (pos.0, pos.1 - self.scroll_y);
+            let Rect { mut pos, size } =
+                element.bounds.as_ref().context("Element not positioned")?;
+            let mut scrolled_pos = (pos.0, pos.1 - self.scroll_y);
             // Dont render off screen elements
             if scrolled_pos.1 + size.1 <= 0. {
                 continue;
@@ -208,12 +209,23 @@ impl Renderer {
 
             match &element.inner {
                 Element::TextBox(text_box) => {
+                    let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.)
+                        * self.hidpi_scale
+                        * self.zoom
+                        * 0.75;
+
+                    if text_box.is_checkbox.is_some() {
+                        pos.0 += box_size * 1.5;
+                        scrolled_pos.0 += box_size * 1.5;
+                    }
+
                     let bounds = (
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.),
                         f32::INFINITY,
                     );
+
                     self.glyph_brush
-                        .queue(&text_box.glyph_section(*pos, bounds, self.zoom));
+                        .queue(&text_box.glyph_section(pos, bounds, self.zoom));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if let Some(bg_color) = text_box.background_color {
                             bg_color
@@ -258,16 +270,12 @@ impl Renderer {
                         }
                     }
                     if let Some(is_checked) = text_box.is_checkbox {
-                        let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.)
-                            * self.hidpi_scale
-                            * self.zoom
-                            * 0.75;
                         let min = (
-                            scrolled_pos.0 - box_size - 10.,
+                            scrolled_pos.0 - box_size * 1.5,
                             scrolled_pos.1 + size.1 / 2. - box_size / 2.,
                         );
                         let max = (
-                            scrolled_pos.0 - 10.,
+                            scrolled_pos.0 + box_size - box_size * 1.5,
                             scrolled_pos.1 + size.1 / 2. + box_size / 2.,
                         );
                         if max.0 < screen_size.0 - DEFAULT_MARGIN {
@@ -276,12 +284,17 @@ impl Renderer {
                                     Rect::from_min_max(min, max),
                                     self.theme.checkbox_color,
                                 )?;
-                                self.draw_tick(min, box_size, self.theme.text_color, 4.)?;
+                                self.draw_tick(
+                                    min,
+                                    box_size,
+                                    self.theme.text_color,
+                                    2. * self.hidpi_scale * self.zoom,
+                                )?;
                             }
                             self.stroke_rectangle(
                                 Rect::from_min_max(min, max),
                                 self.theme.text_color,
-                                2.,
+                                1. * self.hidpi_scale * self.zoom,
                             )?;
                         }
                     }
@@ -292,15 +305,17 @@ impl Renderer {
                         self.zoom,
                     ) {
                         let min = (
-                            line.0
-                                 .0
-                                .clamp((screen_size.0 - DEFAULT_MARGIN).min(pos.0), pos.0),
+                            line.0 .0.clamp(
+                                DEFAULT_MARGIN,
+                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                            ),
                             line.0 .1,
                         );
                         let max = (
-                            line.1
-                                 .0
-                                .clamp((screen_size.0 - DEFAULT_MARGIN).min(pos.0), pos.0),
+                            line.1 .0.clamp(
+                                DEFAULT_MARGIN,
+                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                            ),
                             line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
@@ -308,7 +323,7 @@ impl Renderer {
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(
                             &mut self.glyph_brush,
-                            *pos,
+                            pos,
                             bounds,
                             self.zoom,
                             selection,
@@ -328,13 +343,13 @@ impl Renderer {
                 Element::Table(table) => {
                     let row_heights = table.row_heights(
                         &mut self.glyph_brush,
-                        *pos,
+                        pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
                         self.zoom,
                     );
                     let column_widths = table.column_widths(
                         &mut self.glyph_brush,
-                        *pos,
+                        pos,
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
                         self.zoom,
                     );
@@ -377,16 +392,13 @@ impl Renderer {
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
                     {
-                        let min = (
-                            scrolled_pos.0.min(screen_size.0 - DEFAULT_MARGIN),
-                            scrolled_pos.1 + y,
-                        );
+                        let min = (scrolled_pos.0.max(DEFAULT_MARGIN), scrolled_pos.1 + y);
                         let max = (
                             (scrolled_pos.0 + x).clamp(
-                                (screen_size.0 - DEFAULT_MARGIN).min(scrolled_pos.0),
-                                scrolled_pos.0,
+                                DEFAULT_MARGIN,
+                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
                             ),
-                            scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
+                            scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
                     }
@@ -431,16 +443,13 @@ impl Renderer {
                         }
                         y += height + (TABLE_COL_GAP / 2.);
                         {
-                            let min = (
-                                scrolled_pos.0.min(screen_size.0 - DEFAULT_MARGIN),
-                                scrolled_pos.1 + y,
-                            );
+                            let min = (scrolled_pos.0.max(DEFAULT_MARGIN), scrolled_pos.1 + y);
                             let max = (
                                 (scrolled_pos.0 + x).clamp(
-                                    (screen_size.0 - DEFAULT_MARGIN).min(scrolled_pos.0),
-                                    scrolled_pos.0,
+                                    DEFAULT_MARGIN,
+                                    (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
                                 ),
-                                scrolled_pos.1 + y + 3. * self.hidpi_scale * self.zoom,
+                                scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
                             let color = self.theme.code_block_color;
                             self.draw_rectangle(Rect::from_min_max(min, max), color)?;
