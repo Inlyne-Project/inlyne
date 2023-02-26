@@ -31,11 +31,11 @@ use utils::{ImageCache, MaybeImageData, Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
-use notify::op::Op;
-use notify::{raw_watcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 use winit::event::ModifiersState;
 use winit::event::{ElementState, MouseButton};
+use winit::event_loop::EventLoopBuilder;
 use winit::{
     event::{Event, KeyboardInput, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -168,14 +168,14 @@ impl Inlyne {
 
         // Create a watcher object, delivering raw events.
         // The notification back-end is selected based on the platform.
-        let mut watcher = raw_watcher(watch_tx).unwrap();
+        let mut watcher = RecommendedWatcher::new(watch_tx, notify::Config::default()).unwrap();
 
         // Add the file path to be watched.
         let event_proxy = self.event_loop.create_proxy();
         let file_path = self.args.file_path.clone();
         std::thread::spawn(move || {
             watcher
-                .watch(file_path, RecursiveMode::NonRecursive)
+                .watch(&file_path, RecursiveMode::NonRecursive)
                 .unwrap();
 
             loop {
@@ -187,7 +187,7 @@ impl Inlyne {
                     }
                 };
 
-                if event.op.unwrap().intersects(Op::WRITE) {
+                if event.unwrap().kind.is_modify() {
                     // Always reload the primary configuration file.
                     let _ = event_proxy.send_event(InlyneEvent::FileReload);
                 }
@@ -198,7 +198,7 @@ impl Inlyne {
     pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
-        let event_loop = EventLoop::<InlyneEvent>::with_user_event();
+        let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
         match root_filepath_to_vcs_dir(&args.file_path) {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),

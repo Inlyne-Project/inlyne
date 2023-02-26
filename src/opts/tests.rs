@@ -28,7 +28,7 @@ impl Opts {
 #[test]
 fn debug_assert() {
     cli::command(
-        "Factor to scale rendered file by [default: Window's scale factor]",
+        "Factor to scale rendered file by [default: Window's scale factor]".to_string(),
         ThemeType::Dark,
     )
     .debug_assert();

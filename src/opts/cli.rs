@@ -4,7 +4,8 @@ use crate::color::{self, Theme};
 
 use super::{config::Config, ThemeType};
 
-use clap::{command, value_parser, Arg, Command, PossibleValue, ValueEnum};
+use clap::builder::PossibleValue;
+use clap::{command, value_parser, Arg, Command, ValueEnum};
 
 impl ThemeType {
     pub fn as_theme(&self) -> Theme {
@@ -27,7 +28,7 @@ impl ValueEnum for ThemeType {
         &[Self::Dark, Self::Light]
     }
 
-    fn to_possible_value<'a>(&self) -> Option<PossibleValue<'a>> {
+    fn to_possible_value<'a>(&self) -> Option<PossibleValue> {
         Some(PossibleValue::new(self.as_str()))
     }
 }
@@ -39,17 +40,17 @@ pub struct Args {
     pub scale: Option<f32>,
 }
 
-pub fn command(scale_help: &str, default_theme: ThemeType) -> Command {
+pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
     let file_arg = Arg::new("file")
         .required(true)
-        .takes_value(true)
+        .number_of_values(1)
         .value_name("FILE")
         .value_parser(value_parser!(PathBuf))
         .help("Path to the markdown file");
     let theme_arg = Arg::new("theme")
         .short('t')
         .long("theme")
-        .takes_value(true)
+        .number_of_values(1)
         .value_parser(value_parser!(ThemeType))
         .default_value(default_theme.as_str())
         .help("Theme to use when rendering");
@@ -57,7 +58,7 @@ pub fn command(scale_help: &str, default_theme: ThemeType) -> Command {
     let scale_arg = Arg::new("scale")
         .short('s')
         .long("scale")
-        .takes_value(true)
+        .number_of_values(1)
         .value_parser(value_parser!(f32))
         .help(scale_help);
 
@@ -93,7 +94,7 @@ impl Args {
             }
         );
 
-        let command = command(&scale_help, config.theme);
+        let command = command(scale_help, config.theme);
         let matches = command.get_matches_from(args);
 
         let file_path = matches.get_one("file").cloned().expect("required");

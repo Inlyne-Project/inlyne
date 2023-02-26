@@ -15,7 +15,7 @@ use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use wgpu::{util::StagingBelt, TextureFormat};
+use wgpu::util::StagingBelt;
 use wgpu::{BindGroup, Buffer, IndexFormat};
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
 use winit::window::Window;
@@ -62,8 +62,15 @@ impl Renderer {
         font_opts: FontOptions,
     ) -> anyhow::Result<Self> {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+        });
+        let surface = unsafe {
+            instance
+                .create_surface(window)
+                .expect("Could not create surface")
+        };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -98,12 +105,13 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
-        let supported_formats = surface.get_supported_formats(&adapter);
-        let swapchain_format = if supported_formats.contains(&TextureFormat::Rgba16Float) {
-            TextureFormat::Rgba16Float
-        } else {
-            supported_formats[0]
-        };
+        let caps = surface.get_capabilities(&adapter);
+        let surface_format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.describe().srgb)
+            .unwrap_or(caps.formats[0]);
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -122,7 +130,7 @@ impl Renderer {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(swapchain_format.into())],
+                targets: &[Some(surface_format.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -132,18 +140,20 @@ impl Renderer {
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: swapchain_format,
+            format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: caps.present_modes[0],
+            alpha_mode: caps.alpha_modes[0],
+            view_formats: vec![],
         };
 
         surface.configure(&device, &config);
-        let image_renderer = ImageRenderer::new(&device, &swapchain_format);
+        let image_renderer = ImageRenderer::new(&device, &surface_format);
 
         let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(&font_opts)?)
             .draw_cache_position_tolerance(0.5)
-            .build(&device, swapchain_format);
+            .build(&device, surface_format);
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 

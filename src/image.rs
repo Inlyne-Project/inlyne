@@ -59,6 +59,7 @@ impl Image {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: Some("Image Texture"),
+                view_formats: &[],
             });
             queue.write_texture(
                 // Tells wgpu where to copy the pixel data
@@ -141,10 +142,9 @@ impl Image {
                     scale: true,
                 });
             } else {
-                let mut opt = usvg::Options::default();
-                opt.fontdb.load_system_fonts();
-                if let Ok(rtree) = usvg::Tree::from_data(&image_data, &opt.to_ref()) {
-                    let pixmap_size = rtree.svg_node().size.to_screen_size();
+                let opt = usvg::Options::default();
+                if let Ok(rtree) = usvg::Tree::from_data(&image_data, &opt) {
+                    let pixmap_size = rtree.size.to_screen_size();
                     let mut pixmap = tiny_skia::Pixmap::new(
                         (pixmap_size.width() as f32 * hidpi_scale) as u32,
                         (pixmap_size.height() as f32 * hidpi_scale) as u32,
@@ -277,9 +277,10 @@ impl Image {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct ImageVertex {
-    pub pos: [f32; 3],
-    pub tex_coords: [f32; 2],
+    pos: [f32; 3],
+    tex_coords: [f32; 2],
 }
+
 pub struct ImageRenderer {
     pub render_pipeline: wgpu::RenderPipeline,
     pub index_buf: wgpu::Buffer,
