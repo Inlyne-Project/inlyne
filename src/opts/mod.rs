@@ -28,6 +28,7 @@ pub struct Opts {
     pub file_path: PathBuf,
     pub theme: color::Theme,
     pub scale: Option<f32>,
+    pub page_width: Option<f32>,
     pub lines_to_scroll: f32,
     pub font_opts: FontOptions,
     pub keybindings: Keybindings,
@@ -38,6 +39,7 @@ impl Opts {
         let config::Config {
             theme: config_theme,
             scale: config_scale,
+            page_width: config_max_width,
             lines_to_scroll: config_lines_to_scroll,
             light_theme: config_light_theme,
             dark_theme: config_dark_theme,
@@ -74,6 +76,7 @@ impl Opts {
             file_path: args.file_path.clone(),
             theme,
             scale: args.scale.or(config_scale),
+            page_width: args.page_width.or(config_max_width),
             lines_to_scroll: config_lines_to_scroll.0,
             font_opts,
             keybindings,

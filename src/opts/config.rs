@@ -90,6 +90,7 @@ pub struct KeybindingsSection {
 pub struct Config {
     pub theme: ThemeType,
     pub scale: Option<f32>,
+    pub page_width: Option<f32>,
     pub lines_to_scroll: LinesToScroll,
     pub light_theme: Option<OptionalTheme>,
     pub dark_theme: Option<OptionalTheme>,

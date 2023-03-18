@@ -208,6 +208,7 @@ impl Inlyne {
             &window,
             opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
+            opts.page_width.unwrap_or(999999.0),
             opts.font_opts.clone(),
         )
         .await?;
