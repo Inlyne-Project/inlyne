@@ -2,6 +2,10 @@
 # # Default: The window's scale factor (system dependent)
 # scale = 1.5
 
+# # A maximum page width can be specified
+# # Default: Unconstrained
+# page-width = 800
+
 # # The theme can be set as well
 # # Default: "Light"
 # # Possible values: ["Light", "Dark"]

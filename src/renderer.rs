@@ -38,6 +38,7 @@ pub struct Renderer {
     pub scroll_y: f32,
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
     pub hidpi_scale: f32,
+    pub page_width: f32,
     pub image_renderer: ImageRenderer,
     pub theme: Theme,
     pub selection: Option<Selection>,
@@ -59,6 +60,7 @@ impl Renderer {
         window: &Window,
         theme: Theme,
         hidpi_scale: f32,
+        page_width: f32,
         font_opts: FontOptions,
     ) -> anyhow::Result<Self> {
         let size = window.inner_size();
@@ -157,7 +159,7 @@ impl Renderer {
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 
-        let positioner = Positioner::new(window.inner_size().into(), hidpi_scale);
+        let positioner = Positioner::new(window.inner_size().into(), hidpi_scale, page_width);
         Ok(Self {
             config,
             surface,
@@ -169,6 +171,7 @@ impl Renderer {
             scroll_y: 0.,
             lyon_buffer,
             hidpi_scale,
+            page_width,
             zoom: 1.,
             image_renderer,
             theme,
@@ -207,6 +210,8 @@ impl Renderer {
                 break;
             }
 
+            let centering = (screen_size.0 - self.page_width).max(0.) / 2.;
+
             match &element.inner {
                 Element::TextBox(text_box) => {
                     let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.)
@@ -220,7 +225,7 @@ impl Renderer {
                     }
 
                     let bounds = (
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN).max(0.),
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN - centering).max(0.),
                         f32::INFINITY,
                     );
 
@@ -237,13 +242,14 @@ impl Renderer {
 
                         let mut min = ((scrolled_pos.0 - 10.), scrolled_pos.1);
                         let max = (
-                            (min.0 + bounds.0 + 10.).min(screen_size.0 - DEFAULT_MARGIN),
+                            (min.0 + bounds.0 + 10.)
+                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
                             min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
-                        if min.0 < screen_size.0 - DEFAULT_MARGIN {
+                        if min.0 < screen_size.0 - DEFAULT_MARGIN - centering {
                             self.draw_rectangle(Rect::from_min_max(min, max), color)?;
                         }
                     }
@@ -255,12 +261,12 @@ impl Renderer {
                                     - 10.
                                     - 5. * self.hidpi_scale * self.zoom
                                     - nest_indent)
-                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                    .min(screen_size.0 - DEFAULT_MARGIN - centering),
                                 scrolled_pos.1,
                             );
                             let max = (
                                 (scrolled_pos.0 - 10. - nest_indent)
-                                    .min(screen_size.0 - DEFAULT_MARGIN),
+                                    .min(screen_size.0 - DEFAULT_MARGIN - centering),
                                 min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
                             );
                             self.draw_rectangle(
@@ -278,7 +284,7 @@ impl Renderer {
                             scrolled_pos.0 + box_size - box_size * 1.5,
                             scrolled_pos.1 + size.1 / 2. + box_size / 2.,
                         );
-                        if max.0 < screen_size.0 - DEFAULT_MARGIN {
+                        if max.0 < screen_size.0 - DEFAULT_MARGIN - centering {
                             if is_checked {
                                 self.draw_rectangle(
                                     Rect::from_min_max(min, max),
@@ -306,15 +312,17 @@ impl Renderer {
                     ) {
                         let min = (
                             line.0 .0.clamp(
-                                DEFAULT_MARGIN,
-                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                                DEFAULT_MARGIN + centering,
+                                (screen_size.0 - DEFAULT_MARGIN - centering)
+                                    .max(DEFAULT_MARGIN + centering),
                             ),
                             line.0 .1,
                         );
                         let max = (
                             line.1 .0.clamp(
-                                DEFAULT_MARGIN,
-                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                                DEFAULT_MARGIN + centering,
+                                (screen_size.0 - DEFAULT_MARGIN - centering)
+                                    .max(DEFAULT_MARGIN + centering),
                             ),
                             line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                         );
@@ -344,13 +352,19 @@ impl Renderer {
                     let row_heights = table.row_heights(
                         &mut self.glyph_brush,
                         pos,
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        (
+                            screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
+                            f32::INFINITY,
+                        ),
                         self.zoom,
                     );
                     let column_widths = table.column_widths(
                         &mut self.glyph_brush,
                         pos,
-                        (screen_size.0 - pos.0 - DEFAULT_MARGIN, f32::INFINITY),
+                        (
+                            screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
+                            f32::INFINITY,
+                        ),
                         self.zoom,
                     );
                     let mut x = 0.;
@@ -360,8 +374,8 @@ impl Renderer {
                     for (col, width) in column_widths.iter().enumerate() {
                         let text_box = table.headers.get(col).unwrap();
                         let bounds = (
-                            (screen_size.0 - pos.0 - x - DEFAULT_MARGIN)
-                                .min(screen_size.0 - DEFAULT_MARGIN),
+                            (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
+                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
                             f32::INFINITY,
                         );
                         self.glyph_brush.queue(&text_box.glyph_section(
@@ -392,11 +406,15 @@ impl Renderer {
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
                     {
-                        let min = (scrolled_pos.0.max(DEFAULT_MARGIN), scrolled_pos.1 + y);
+                        let min = (
+                            scrolled_pos.0.max(DEFAULT_MARGIN + centering),
+                            scrolled_pos.1 + y,
+                        );
                         let max = (
                             (scrolled_pos.0 + x).clamp(
-                                DEFAULT_MARGIN,
-                                (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                                DEFAULT_MARGIN + centering,
+                                (screen_size.0 - DEFAULT_MARGIN - centering)
+                                    .max(DEFAULT_MARGIN + centering),
                             ),
                             scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                         );
@@ -409,8 +427,10 @@ impl Renderer {
                         for (col, width) in column_widths.iter().enumerate() {
                             if let Some(row) = table.rows.get(row) {
                                 if let Some(text_box) = row.get(col) {
-                                    let bounds =
-                                        (screen_size.0 - pos.0 - x - DEFAULT_MARGIN, f32::INFINITY);
+                                    let bounds = (
+                                        screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering,
+                                        f32::INFINITY,
+                                    );
                                     self.glyph_brush.queue(&text_box.glyph_section(
                                         (pos.0 + x, pos.1 + y),
                                         bounds,
@@ -443,11 +463,15 @@ impl Renderer {
                         }
                         y += height + (TABLE_COL_GAP / 2.);
                         {
-                            let min = (scrolled_pos.0.max(DEFAULT_MARGIN), scrolled_pos.1 + y);
+                            let min = (
+                                scrolled_pos.0.max(DEFAULT_MARGIN + centering),
+                                scrolled_pos.1 + y,
+                            );
                             let max = (
                                 (scrolled_pos.0 + x).clamp(
-                                    DEFAULT_MARGIN,
-                                    (screen_size.0 - DEFAULT_MARGIN).max(DEFAULT_MARGIN),
+                                    DEFAULT_MARGIN + centering,
+                                    (screen_size.0 - DEFAULT_MARGIN - centering)
+                                        .max(DEFAULT_MARGIN + centering),
                                 ),
                                 scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
@@ -463,12 +487,12 @@ impl Renderer {
                         self.draw_rectangle(
                             Rect::new(
                                 (
-                                    DEFAULT_MARGIN,
+                                    DEFAULT_MARGIN + centering,
                                     scrolled_pos.1 + size.1 / 2.
                                         - 2. * self.hidpi_scale * self.zoom,
                                 ),
                                 (
-                                    screen_size.0 - 2. * DEFAULT_MARGIN,
+                                    screen_size.0 - 2. * (DEFAULT_MARGIN + centering),
                                     2. * self.hidpi_scale * self.zoom,
                                 ),
                             ),
