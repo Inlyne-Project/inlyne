@@ -40,19 +40,13 @@ jobs:
       run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        target: ${{ matrix.target }}
-
+        targets: ${{ matrix.target }}
 
     - name: Build
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --target ${{ matrix.target }} --release --locked
+      run: |
+        cargo build --target ${{ matrix.target }} --release --locked
 
     - name: Build archive
       shell: bash
