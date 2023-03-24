@@ -13,23 +13,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            use-cross: false
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            use-cross: false
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            use-cross: false
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            use-cross: false
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 1
 
@@ -44,24 +40,13 @@ jobs:
       run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        target: ${{ matrix.target }}
-
+        targets: ${{ matrix.target }}
 
     - name: Build
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: ${{ matrix.use-cross }}
-        command: build
-        args: --target ${{ matrix.target }} --release --locked
-
-    - name: Strip binary
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-      run: strip target/${{ matrix.target }}/release/inlyne
+      run: |
+        cargo build --target ${{ matrix.target }} --release --locked
 
     - name: Build archive
       shell: bash
