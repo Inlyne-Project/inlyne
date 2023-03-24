@@ -59,10 +59,6 @@ jobs:
         command: build
         args: --target ${{ matrix.target }} --release --locked
 
-    - name: Strip binary
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-      run: strip target/${{ matrix.target }}/release/inlyne
-
     - name: Build archive
       shell: bash
       run: |
