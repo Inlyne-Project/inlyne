@@ -1,6 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use super::{cli, config, Opts, ThemeType};
+use super::{cli, config, Opts, ResolvedTheme, ThemeType};
+use crate::color::{self, Theme};
 use crate::keybindings;
 use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
@@ -16,11 +17,20 @@ impl Opts {
     fn mostly_default(file_path: impl Into<PathBuf>) -> Self {
         Self {
             file_path: file_path.into(),
-            theme: ThemeType::default().as_theme(),
+            theme: ResolvedTheme::Light.as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
             keybindings: keybindings::defaults(),
+        }
+    }
+}
+
+impl ResolvedTheme {
+    fn as_theme(&self) -> Theme {
+        match &self {
+            Self::Dark => color::DARK_DEFAULT,
+            Self::Light => color::LIGHT_DEFAULT,
         }
     }
 }
@@ -58,7 +68,7 @@ fn config_overrides_default() {
             config
         ),
         Opts {
-            theme: ThemeType::Dark.as_theme(),
+            theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -87,7 +97,7 @@ fn from_cli() {
             config::Config::default()
         ),
         Opts {
-            theme: ThemeType::Dark.as_theme(),
+            theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -104,7 +114,7 @@ fn from_cli() {
             config
         ),
         Opts {
-            theme: ThemeType::Dark.as_theme(),
+            theme: ResolvedTheme::Dark.as_theme(),
             scale: Some(1.5),
             ..Opts::mostly_default("file.md")
         }
