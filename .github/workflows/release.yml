@@ -46,7 +46,7 @@ jobs:
 
     - name: Build
       run: |
-        cargo build --target ${{ matrix.target }} --release --locked
+        cargo build --target ${{ matrix.target }} --profile release-lto --locked
 
     - name: Build archive
       shell: bash

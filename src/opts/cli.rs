@@ -1,7 +1,5 @@
 use std::{env, ffi::OsString, io, path::PathBuf};
 
-use crate::color::{self, Theme};
-
 use super::{config::Config, ThemeType};
 
 use clap::builder::PossibleValue;
@@ -9,15 +7,9 @@ use clap::{command, value_parser, Arg, Command, ValueEnum, ValueHint};
 use clap_complete::{generate, Generator, Shell};
 
 impl ThemeType {
-    pub fn as_theme(&self) -> Theme {
-        match &self {
-            Self::Dark => color::DARK_DEFAULT,
-            Self::Light => color::LIGHT_DEFAULT,
-        }
-    }
-
     fn as_str(&self) -> &'static str {
         match self {
+            Self::Auto => "auto",
             Self::Dark => "dark",
             Self::Light => "light",
         }
@@ -26,7 +18,7 @@ impl ThemeType {
 
 impl ValueEnum for ThemeType {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Self::Dark, Self::Light]
+        &[Self::Auto, Self::Dark, Self::Light]
     }
 
     fn to_possible_value<'a>(&self) -> Option<PossibleValue> {
@@ -110,7 +102,7 @@ impl Args {
             }
         );
 
-        let c = command(scale_help.clone(), config.theme);
+        let c = command(scale_help, config.theme);
         let matches = c.get_matches_from(args);
 
         // Shell completions exit early so handle them first
