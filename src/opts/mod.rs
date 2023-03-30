@@ -18,9 +18,37 @@ pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeType {
+    #[default]
+    Auto,
+    Dark,
+    Light,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ResolvedTheme {
     Dark,
     #[default]
     Light,
+}
+
+impl ResolvedTheme {
+    fn detect() -> Self {
+        match dark_light::detect() {
+            dark_light::Mode::Default => Self::default(),
+            dark_light::Mode::Dark => Self::Dark,
+            dark_light::Mode::Light => Self::Light,
+        }
+    }
+}
+
+impl From<ThemeType> for ResolvedTheme {
+    fn from(theme_ty: ThemeType) -> Self {
+        match theme_ty {
+            ThemeType::Auto => Self::detect(),
+            ThemeType::Dark => Self::Dark,
+            ThemeType::Light => Self::Light,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,12 +77,13 @@ impl Opts {
                 },
         } = config;
 
-        let theme = match args.theme.unwrap_or(config_theme) {
-            ThemeType::Dark => match config_dark_theme {
+        let resolved_theme = ResolvedTheme::from(args.theme.unwrap_or(config_theme));
+        let theme = match resolved_theme {
+            ResolvedTheme::Dark => match config_dark_theme {
                 Some(config_dark_theme) => config_dark_theme.merge(color::DARK_DEFAULT),
                 None => color::DARK_DEFAULT,
             },
-            ThemeType::Light => match config_light_theme {
+            ResolvedTheme::Light => match config_light_theme {
                 Some(config_light_theme) => config_light_theme.merge(color::LIGHT_DEFAULT),
                 None => color::LIGHT_DEFAULT,
             },

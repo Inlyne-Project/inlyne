@@ -3,8 +3,8 @@
 # scale = 1.5
 
 # # The theme can be set as well
-# # Default: "Light"
-# # Possible values: ["Light", "Dark"]
+# # Default: "Auto"
+# # Possible values: ["Auto", "Light", "Dark"]
 # theme = "Dark"
 
 # # Number of lines to scroll when using a line-based scrolling device (a lot of
