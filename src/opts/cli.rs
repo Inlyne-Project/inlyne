@@ -1,4 +1,4 @@
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{env, ffi::OsString, io, path::PathBuf};
 
 use crate::color::{self, Theme};
 
@@ -6,6 +6,7 @@ use super::{config::Config, ThemeType};
 
 use clap::builder::PossibleValue;
 use clap::{command, value_parser, Arg, Command, ValueEnum};
+use clap_complete::{generate, Generator, Shell};
 
 impl ThemeType {
     pub fn as_theme(&self) -> Theme {
@@ -42,7 +43,7 @@ pub struct Args {
 
 pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
     let file_arg = Arg::new("file")
-        .required(true)
+        .required_unless_present("shell")
         .number_of_values(1)
         .value_name("FILE")
         .value_parser(value_parser!(PathBuf))
@@ -62,7 +63,17 @@ pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
         .value_parser(value_parser!(f32))
         .help(scale_help);
 
-    command!().arg(file_arg).arg(theme_arg).arg(scale_arg)
+    let gen_comp_arg = Arg::new("shell")
+        .long("gen-completions")
+        .help("Generate shell completions")
+        .number_of_values(1)
+        .value_parser(value_parser!(Shell));
+
+    command!()
+        .arg(file_arg)
+        .arg(theme_arg)
+        .arg(scale_arg)
+        .arg(gen_comp_arg)
 }
 
 impl Args {
@@ -86,16 +97,17 @@ impl Args {
     }
 
     pub fn parse_from(args: Vec<OsString>, config: &Config) -> Self {
-        let scale_help = format!(
-            "Factor to scale rendered file by [default: {}]",
-            match config.scale {
-                Some(scale) => scale.to_string(),
-                None => String::from("Window's scale factor"),
-            }
-        );
+        let scale_help = Self::scale_help(config.scale);
 
-        let command = command(scale_help, config.theme);
-        let matches = command.get_matches_from(args);
+        let c = command(scale_help.clone(), config.theme);
+        let matches = c.get_matches_from(args);
+
+        // Shell completions exit early so handle them first
+        if let Some(shell) = matches.get_one::<Shell>("shell").copied() {
+            let mut c = command(Self::scale_help(None), ThemeType::default());
+            Self::print_completions(shell, &mut c);
+            std::process::exit(0);
+        }
 
         let file_path = matches.get_one("file").cloned().expect("required");
         let theme = matches.get_one("theme").cloned();
@@ -106,5 +118,19 @@ impl Args {
             theme,
             scale,
         }
+    }
+
+    fn scale_help(maybe_scale: Option<f32>) -> String {
+        format!(
+            "Factor to scale rendered file by [default: {}]",
+            match maybe_scale {
+                Some(scale) => scale.to_string(),
+                None => String::from("Window's scale factor"),
+            }
+        )
+    }
+
+    fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+        generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
     }
 }

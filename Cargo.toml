@@ -35,6 +35,7 @@ memmap2 = "0.5.10"
 log = "0.4.17"
 env_logger = "0.10.0"
 notify = "5.1.0"
+clap_complete = "4.2.0"
 
 [profile.release]
 strip = true
