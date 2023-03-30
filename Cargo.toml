@@ -36,7 +36,11 @@ log = "0.4.17"
 env_logger = "0.10.0"
 notify = "5.1.0"
 
-[profile.release]
-strip = true
 # Uncomment for profiling
+# [profile.release]
 # debug = true
+
+[profile.release-lto]
+inherits = "release"
+strip = true
+lto = true
