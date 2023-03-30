@@ -17,7 +17,7 @@ impl Opts {
     fn mostly_default(file_path: impl Into<PathBuf>) -> Self {
         Self {
             file_path: file_path.into(),
-            theme: ResolvedTheme::Light.as_theme(),
+            theme: ResolvedTheme::from(ThemeType::default()).as_theme(),
             scale: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
@@ -59,7 +59,7 @@ fn defaults() {
 #[test]
 fn config_overrides_default() {
     let config = config::Config {
-        theme: ThemeType::Dark,
+        lines_to_scroll: LinesToScroll(12.0),
         ..Default::default()
     };
     assert_eq!(
@@ -68,10 +68,11 @@ fn config_overrides_default() {
             config
         ),
         Opts {
-            theme: ResolvedTheme::Dark.as_theme(),
+            lines_to_scroll: 12.0,
             ..Opts::mostly_default("file.md")
         }
     );
+
     let config = config::Config {
         scale: Some(1.5),
         ..Default::default()
