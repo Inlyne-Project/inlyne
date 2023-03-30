@@ -5,7 +5,7 @@ use crate::color::{self, Theme};
 use super::{config::Config, ThemeType};
 
 use clap::builder::PossibleValue;
-use clap::{command, value_parser, Arg, Command, ValueEnum};
+use clap::{command, value_parser, Arg, Command, ValueEnum, ValueHint};
 use clap_complete::{generate, Generator, Shell};
 
 impl ThemeType {
@@ -47,7 +47,9 @@ pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
         .number_of_values(1)
         .value_name("FILE")
         .value_parser(value_parser!(PathBuf))
+        .value_hint(ValueHint::AnyPath)
         .help("Path to the markdown file");
+
     let theme_arg = Arg::new("theme")
         .short('t')
         .long("theme")
@@ -77,6 +79,8 @@ pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
 }
 
 impl Args {
+    const SCALE_HELP: &str = "Factor to scale rendered file by";
+
     pub fn new(config: &Config) -> Self {
         let program_args = std::env::args_os().collect();
         Self::parse_from(program_args, config)
@@ -97,14 +101,21 @@ impl Args {
     }
 
     pub fn parse_from(args: Vec<OsString>, config: &Config) -> Self {
-        let scale_help = Self::scale_help(config.scale);
+        let scale_help = format!(
+            "{} [default: {}]",
+            Self::SCALE_HELP,
+            match config.scale {
+                Some(scale) => scale.to_string(),
+                None => String::from("Window's scale factor"),
+            }
+        );
 
         let c = command(scale_help.clone(), config.theme);
         let matches = c.get_matches_from(args);
 
         // Shell completions exit early so handle them first
         if let Some(shell) = matches.get_one::<Shell>("shell").copied() {
-            let mut c = command(Self::scale_help(None), ThemeType::default());
+            let mut c = command(Self::SCALE_HELP.to_owned(), ThemeType::default());
             Self::print_completions(shell, &mut c);
             std::process::exit(0);
         }
@@ -118,16 +129,6 @@ impl Args {
             theme,
             scale,
         }
-    }
-
-    fn scale_help(maybe_scale: Option<f32>) -> String {
-        format!(
-            "Factor to scale rendered file by [default: {}]",
-            match maybe_scale {
-                Some(scale) => scale.to_string(),
-                None => String::from("Window's scale factor"),
-            }
-        )
     }
 
     fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
