@@ -88,7 +88,7 @@ pub struct KeybindingsSection {
 #[derive(Deserialize, Debug, Default)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
-    pub theme: ThemeType,
+    pub theme: Option<ThemeType>,
     pub scale: Option<f32>,
     pub lines_to_scroll: LinesToScroll,
     pub light_theme: Option<OptionalTheme>,

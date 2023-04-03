@@ -62,8 +62,28 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn parse_and_load_from(args: &Args, config: config::Config) -> Self {
-        let config::Config {
+    pub fn parse_and_load_from(args: &Args, config: Config) -> Self {
+        #[cfg(test)]
+        {
+            // "Use" the unused params
+            let (_, _) = (args, config);
+            panic!("Use `Opts::parse_and_load_with_system_theme()`");
+        }
+        #[cfg(not(test))]
+        Self::parse_and_load_inner(args, config, ResolvedTheme::from(ThemeType::default()))
+    }
+
+    #[cfg(test)]
+    pub fn parse_and_load_with_system_theme(
+        args: &Args,
+        config: Config,
+        theme: ResolvedTheme,
+    ) -> Self {
+        Self::parse_and_load_inner(args, config, theme)
+    }
+
+    fn parse_and_load_inner(args: &Args, config: Config, fallback_theme: ResolvedTheme) -> Self {
+        let Config {
             theme: config_theme,
             scale: config_scale,
             lines_to_scroll: config_lines_to_scroll,
@@ -77,7 +97,11 @@ impl Opts {
                 },
         } = config;
 
-        let resolved_theme = ResolvedTheme::from(args.theme.unwrap_or(config_theme));
+        let resolved_theme = args
+            .theme
+            .or(config_theme)
+            .map(ResolvedTheme::from)
+            .unwrap_or(fallback_theme);
         let theme = match resolved_theme {
             ResolvedTheme::Dark => match config_dark_theme {
                 Some(config_dark_theme) => config_dark_theme.merge(color::DARK_DEFAULT),
