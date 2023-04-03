@@ -45,3 +45,6 @@ dark-light = "1.0.0"
 inherits = "release"
 strip = true
 lto = true
+
+[dev-dependencies]
+pretty_assertions = "1.3.0"
