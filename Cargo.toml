@@ -36,6 +36,9 @@ log = "0.4.17"
 env_logger = "0.10.0"
 notify = "5.1.0"
 dark-light = "1.0.0"
+# We only decompress our own compressed data, so disable `safe-decode` and
+# `checked-decode`
+lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
 
 # Uncomment for profiling
 # [profile.release]

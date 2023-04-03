@@ -8,6 +8,10 @@ use winit::window::CursorIcon;
 
 use crate::image::ImageData;
 
+pub fn usize_in_mib(num: usize) -> f32 {
+    num as f32 / 1_024.0 / 1_024.0
+}
+
 pub type Line = ((f32, f32), (f32, f32));
 pub type Selection = ((f32, f32), (f32, f32));
 pub type Point = (f32, f32);
