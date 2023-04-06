@@ -33,7 +33,7 @@ pub struct Args {
     pub scale: Option<f32>,
 }
 
-pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
+pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command {
     let file_arg = Arg::new("file")
         .required_unless_present("shell")
         .number_of_values(1)
@@ -42,13 +42,15 @@ pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
         .value_hint(ValueHint::AnyPath)
         .help("Path to the markdown file");
 
-    let theme_arg = Arg::new("theme")
+    let mut theme_arg = Arg::new("theme")
         .short('t')
         .long("theme")
         .number_of_values(1)
         .value_parser(value_parser!(ThemeType))
-        .default_value(default_theme.as_str())
         .help("Theme to use when rendering");
+    if let Some(theme) = default_theme {
+        theme_arg = theme_arg.default_value(theme.as_str());
+    }
 
     let scale_arg = Arg::new("scale")
         .short('s')
@@ -107,7 +109,7 @@ impl Args {
 
         // Shell completions exit early so handle them first
         if let Some(shell) = matches.get_one::<Shell>("shell").copied() {
-            let mut c = command(Self::SCALE_HELP.to_owned(), ThemeType::default());
+            let mut c = command(Self::SCALE_HELP.to_owned(), None);
             Self::print_completions(shell, &mut c);
             std::process::exit(0);
         }
