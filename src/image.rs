@@ -33,6 +33,7 @@ impl ImageData {
     fn new(image: RgbaImage, scale: bool) -> Self {
         let dimensions = image.dimensions();
 
+        let start = Instant::now();
         let mut frame_info = FrameInfo::new();
         // This seems to speed up decompressing considerably
         frame_info.block_size = BlockSize::Max256KB;
@@ -40,6 +41,12 @@ impl ImageData {
         lz4_enc.write_all(image.as_raw()).expect("I/O is in memory");
         let mut lz4_blob = lz4_enc.finish().expect("We control compression");
         lz4_blob.shrink_to_fit();
+        log::debug!(
+            "Compressing image: Full {:.2} MiB - Compressed {:.2} MiB - Time {:.2?}",
+            usize_in_mib(image.as_raw().len()),
+            usize_in_mib(lz4_blob.len()),
+            start.elapsed(),
+        );
 
         Self {
             dimensions,
@@ -79,14 +86,8 @@ impl Image {
             let mut lz4_dec = FrameDecoder::new(Cursor::new(&image_data.lz4_blob));
             let mut rgba_image = Vec::with_capacity(image_data.rgba_image_byte_size());
             io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
-            let elapsed = start.elapsed();
 
-            log::debug!(
-                "Decompressing image: Compressed {:.2} MiB - Full {:.2} MiB - Time {:.2?}",
-                usize_in_mib(image_data.lz4_blob.len()),
-                usize_in_mib(rgba_image.len()),
-                elapsed,
-            );
+            log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
             let texture_size = wgpu::Extent3d {
                 width: dimensions.0,
