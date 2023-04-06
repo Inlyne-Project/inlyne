@@ -93,11 +93,12 @@ impl Positioner {
                 (0., spacer.space * self.hidpi_scale * zoom),
             ),
             Element::Image(image) => {
-                let size = image.size(
-                    (self.screen_size.0.min(self.page_width), self.screen_size.1),
-                    zoom,
-                );
-
+                let size = image
+                    .size(
+                        (self.screen_size.0.min(self.page_width), self.screen_size.1),
+                        zoom,
+                    )
+                    .unwrap_or_default();
                 match image.is_aligned {
                     Some(Align::Center) => Rect::new(
                         (self.screen_size.0 / 2. - size.0 / 2., self.reserved_height),
@@ -257,7 +258,6 @@ impl Spacer {
     }
 }
 
-#[derive(Debug)]
 pub struct Row {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
@@ -272,7 +272,6 @@ impl Row {
     }
 }
 
-#[derive(Debug)]
 pub struct Section {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,

@@ -8,6 +8,7 @@ use crate::positioner::Spacer;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::table::Table;
 use crate::ImageCache;
+use crate::InlyneEvent;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
@@ -23,6 +24,7 @@ use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
 use html5ever::Attribute;
+use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
 
@@ -126,6 +128,7 @@ pub struct HtmlInterpreter {
     stopped: bool,
     first_pass: bool,
     image_cache: ImageCache,
+    event_proxy: EventLoopProxy<InlyneEvent>,
 }
 
 impl HtmlInterpreter {
@@ -136,6 +139,7 @@ impl HtmlInterpreter {
         hidpi_scale: f32,
         file_path: PathBuf,
         image_cache: ImageCache,
+        event_proxy: EventLoopProxy<InlyneEvent>,
     ) -> Self {
         Self {
             window,
@@ -152,6 +156,7 @@ impl HtmlInterpreter {
             stopped: false,
             first_pass: true,
             image_cache,
+            event_proxy,
         }
     }
 
@@ -349,12 +354,19 @@ impl TokenSink for HtmlInterpreter {
                                         )
                                         .with_align(*align),
                                         _ => Image::from_src(
-                                            src,
+                                            src.clone(),
                                             self.file_path.clone(),
                                             self.hidpi_scale,
                                         )
+                                        .unwrap()
                                         .with_align(*align),
                                     };
+                                    let image_ref = image.image.clone();
+                                    let event_proxy = self.event_proxy.clone();
+                                    tokio::spawn(async move {
+                                        image_ref.get().await;
+                                        event_proxy.send_event(InlyneEvent::Reposition).unwrap();
+                                    });
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }

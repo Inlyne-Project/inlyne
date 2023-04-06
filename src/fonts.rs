@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
     fs,
-    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -72,14 +71,14 @@ impl FontInfo {
 }
 
 impl FontCache {
-    fn new(name: &str, font_infos: &[FontInfo]) -> anyhow::Result<Self> {
+    async fn new(name: &str, font_infos: &[FontInfo]) -> anyhow::Result<Self> {
         let mut it = font_infos.iter().map(HandleCache::new);
         let cache = Self {
             name: name.to_owned(),
-            base: it.next().context("Font info missing")??,
-            italic: it.next().context("Font info missing")??,
-            bold: it.next().context("Font info missing")??,
-            bold_italic: it.next().context("Font info missing")??,
+            base: it.next().context("Font info missing")?.await?,
+            italic: it.next().context("Font info missing")?.await?,
+            bold: it.next().context("Font info missing")?.await?,
+            bold_italic: it.next().context("Font info missing")?.await?,
         };
         Ok(cache)
     }
@@ -93,7 +92,7 @@ struct HandleCache {
 }
 
 impl HandleCache {
-    fn new(font_info: &FontInfo) -> anyhow::Result<Self> {
+    async fn new(font_info: &FontInfo) -> anyhow::Result<Self> {
         let handle = match &font_info.handle {
             Handle::Path { path, font_index } => Self {
                 path: path.to_owned(),
@@ -106,8 +105,9 @@ impl HandleCache {
                     .join("inlyne");
                 let file_name = font_info.to_string();
                 let cache_file_path = inlyne_cache.join(file_name.as_str());
-                let mut cache_file = fs::File::create(cache_file_path)?;
-                cache_file.write_all(bytes)?;
+                tokio::fs::write(cache_file_path, bytes.as_ref())
+                    .await
+                    .expect("Writing to font handle cache");
                 Self {
                     path: file_name.into(),
                     binary: true,
@@ -145,7 +145,7 @@ impl TryFrom<HandleCache> for Handle {
     }
 }
 
-pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
+pub async fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
     let regular_name = &font_opts.regular_font;
     let monospace_name = &font_opts.monospace_font;
 
@@ -156,7 +156,9 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
             Some(cache_dir) => {
                 let inlyne_cache = cache_dir.join("inlyne");
                 if !inlyne_cache.exists() {
-                    let _ = fs::create_dir_all(&inlyne_cache);
+                    tokio::fs::create_dir_all(&inlyne_cache)
+                        .await
+                        .expect("Creating cache directory");
                 }
 
                 let reg_cache_path = inlyne_cache.join("font_regular.toml");
@@ -164,14 +166,16 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
                     regular_name.as_deref(),
                     FamilyName::SansSerif,
                     &reg_cache_path,
-                )?;
+                )
+                .await?;
 
                 let mono_cache_path = inlyne_cache.join("font_mono.toml");
                 let mono_handles = load_maybe_cached_fonts_by_name(
                     monospace_name.as_deref(),
                     FamilyName::Monospace,
                     &mono_cache_path,
-                )?;
+                )
+                .await?;
 
                 handles.extend(mono_handles.into_iter());
                 Ok(handles)
@@ -181,18 +185,18 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
     }
 }
 
-fn load_maybe_cached_fonts_by_name(
+async fn load_maybe_cached_fonts_by_name(
     name: Option<&str>,
     fallback_family: FamilyName,
     path: &Path,
 ) -> anyhow::Result<Vec<FontArc>> {
     let fonts = match name {
-        Some(name) => match load_cached_fonts_by_name(name, path) {
+        Some(name) => match load_cached_fonts_by_name(name, path).await {
             Some(fonts) => fonts,
             None => {
                 let handles = load_best_handles_by_name(FamilyName::Title(name.to_owned()))?;
-                if let Ok(font_cache) = FontCache::new(name, &handles) {
-                    fs::write(path, toml::to_string(&font_cache)?)?;
+                if let Ok(font_cache) = FontCache::new(name, &handles).await {
+                    tokio::fs::write(path, toml::to_string(&font_cache)?).await?;
                 }
                 handles
                     .into_iter()
@@ -250,8 +254,8 @@ fn load_best_fonts_by_name(family_name: FamilyName) -> anyhow::Result<Vec<FontAr
         .collect::<anyhow::Result<Vec<_>>>()
 }
 
-fn load_cached_fonts_by_name(desired_name: &str, path: &Path) -> Option<Vec<FontArc>> {
-    let contents = fs::read_to_string(path).ok()?;
+async fn load_cached_fonts_by_name(desired_name: &str, path: &Path) -> Option<Vec<FontArc>> {
+    let contents = tokio::fs::read_to_string(path).await.ok()?;
     let FontCache {
         name,
         base,

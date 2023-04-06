@@ -10,7 +10,6 @@ repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 
 [dependencies]
-pollster = "0.3.0"
 wgpu_glyph =  { git = "https://github.com/sconybeare/wgpu_glyph", branch = "wgpu-0.15" }
 winit = "0.28.3"
 wgpu = "0.15.1"
@@ -29,7 +28,7 @@ anyhow = "1.0.70"
 dirs = "5.0.0"
 serde = { version = "1.0.158", features = ["derive"] }
 toml = "0.7.3"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.11", features = ["blocking", "json", "stream"] }
 font-kit = "0.11.0"
 memmap2 = "0.5.10"
 log = "0.4.17"
@@ -40,6 +39,8 @@ dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
+tokio = { version = "1", features = ["full"] }
+async-once-cell = { version = "0.4.4", features = ["unpin"] }
 
 # Uncomment for profiling
 # [profile.release]
