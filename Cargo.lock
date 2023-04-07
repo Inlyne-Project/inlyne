@@ -1630,6 +1630,7 @@ dependencies = [
  "image",
  "log",
  "lyon",
+ "lz4_flex",
  "memmap2",
  "notify",
  "open",
@@ -1931,6 +1932,15 @@ dependencies = [
  "float_next_after",
  "lyon_path",
  "thiserror",
+]
+
+[[package]]
+name = "lz4_flex"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8c72594ac26bfd34f2d99dfced2edfaddfe8a476e3ff2ca0eb293d925c4f83"
+dependencies = [
+ "twox-hash",
 ]
 
 [[package]]

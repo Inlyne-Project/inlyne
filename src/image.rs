@@ -1,13 +1,15 @@
 use crate::positioner::DEFAULT_MARGIN;
-use crate::utils::{Align, Point, Size};
+use crate::utils::{usize_in_mib, Align, Point, Size};
 use crate::InlyneEvent;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 use resvg::usvg_text_layout::TreeTextToPath;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Cursor, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
@@ -22,8 +24,41 @@ pub enum ImageSize {
 
 #[derive(Debug)]
 pub struct ImageData {
-    rgba_image: RgbaImage,
+    dimensions: (u32, u32),
+    lz4_blob: Vec<u8>,
     scale: bool,
+}
+
+impl ImageData {
+    fn new(image: RgbaImage, scale: bool) -> Self {
+        let dimensions = image.dimensions();
+
+        let start = Instant::now();
+        let mut frame_info = FrameInfo::new();
+        // This seems to speed up decompressing considerably
+        frame_info.block_size = BlockSize::Max256KB;
+        let mut lz4_enc = FrameEncoder::with_frame_info(frame_info, Vec::with_capacity(8_192));
+        lz4_enc.write_all(image.as_raw()).expect("I/O is in memory");
+        let mut lz4_blob = lz4_enc.finish().expect("We control compression");
+        lz4_blob.shrink_to_fit();
+        log::debug!(
+            "Compressing image: Full {:.2} MiB - Compressed {:.2} MiB - Time {:.2?}",
+            usize_in_mib(image.as_raw().len()),
+            usize_in_mib(lz4_blob.len()),
+            start.elapsed(),
+        );
+
+        Self {
+            dimensions,
+            lz4_blob,
+            scale,
+        }
+    }
+
+    fn rgba_image_byte_size(&self) -> usize {
+        let (x, y) = self.dimensions;
+        x as usize * y as usize * 4
+    }
 }
 
 #[derive(Debug, Default)]
@@ -47,6 +82,13 @@ impl Image {
     ) {
         let dimensions = self.buffer_dimensions();
         if let Some(image_data) = self.image.lock().unwrap().as_ref() {
+            let start = Instant::now();
+            let mut lz4_dec = FrameDecoder::new(Cursor::new(&image_data.lz4_blob));
+            let mut rgba_image = Vec::with_capacity(image_data.rgba_image_byte_size());
+            io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+
+            log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
+
             let texture_size = wgpu::Extent3d {
                 width: dimensions.0,
                 height: dimensions.1,
@@ -71,7 +113,7 @@ impl Image {
                     aspect: wgpu::TextureAspect::All,
                 },
                 // The actual pixel data
-                &image_data.rgba_image,
+                &rgba_image,
                 // The layout of the texture
                 wgpu::ImageDataLayout {
                     offset: 0,
@@ -132,10 +174,7 @@ impl Image {
             };
 
             if let Ok(image) = image::load_from_memory(&image_data) {
-                *(image_clone.lock().unwrap()) = Some(ImageData {
-                    rgba_image: image.into_rgba8(),
-                    scale: true,
-                });
+                *(image_clone.lock().unwrap()) = Some(ImageData::new(image.into_rgba8(), true));
             } else {
                 let opt = usvg::Options::default();
                 if let Ok(mut rtree) = usvg::Tree::from_data(&image_data, &opt) {
@@ -155,15 +194,15 @@ impl Image {
                         pixmap.as_mut(),
                     )
                     .unwrap();
-                    *(image_clone.lock().unwrap()) = Some(ImageData {
-                        rgba_image: ImageBuffer::from_raw(
+                    *(image_clone.lock().unwrap()) = Some(ImageData::new(
+                        ImageBuffer::from_raw(
                             pixmap.width(),
                             pixmap.height(),
                             pixmap.data().into(),
                         )
                         .unwrap(),
-                        scale: false,
-                    });
+                        false,
+                    ));
                 }
             }
             if let Ok(Some(callback)) = callback_clone.try_lock().as_deref() {
@@ -224,7 +263,7 @@ impl Image {
 
     pub fn buffer_dimensions(&self) -> (u32, u32) {
         if let Ok(Some(image)) = self.image.try_lock().as_deref() {
-            image.rgba_image.dimensions()
+            image.dimensions
         } else {
             (0, 0)
         }
