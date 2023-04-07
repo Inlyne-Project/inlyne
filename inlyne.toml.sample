@@ -2,7 +2,7 @@
 # # Default: The window's scale factor (system dependent)
 # scale = 1.5
 
-# # A maximum page width can be specified
+# # A maximum page width can be specified in pixels
 # # Default: Unconstrained
 # page-width = 800
 

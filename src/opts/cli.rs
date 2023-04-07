@@ -68,7 +68,7 @@ pub fn command(scale_help: String, default_theme: ThemeType) -> Command {
         .long("page width")
         .number_of_values(1)
         .value_parser(value_parser!(f32))
-        .help("Maximum width of page");
+        .help("Maximum width of page in pixels");
 
     command!()
         .arg(file_arg)
