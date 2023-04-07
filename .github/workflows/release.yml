@@ -52,14 +52,31 @@ jobs:
       shell: bash
       run: |
         staging="inlyne-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
+        comp_out="$staging/completions"
+
         mkdir -p "$staging"
+        mkdir -p "$comp_out"
+
         cp {README.md,LICENSE,example.png,inlyne.toml.sample} "$staging/"
+
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
           cp "target/${{ matrix.target }}/release/inlyne.exe" "$staging/"
+          inlyne_bin="$staging/inlyne.exe"
+        else
+          cp "target/${{ matrix.target }}/release/inlyne" "$staging/"
+          inlyne_bin="$staging/inlyne"
+        fi
+
+        "$inlyne_bin" --gen-completions bash       > "$comp_out/inlyne.bash"
+        "$inlyne_bin" --gen-completions elvish     > "$comp_out/inlyne.elv"
+        "$inlyne_bin" --gen-completions fish       > "$comp_out/inlyne.fish"
+        "$inlyne_bin" --gen-completions powershell > "$comp_out/inlyne.ps1"
+        "$inlyne_bin" --gen-completions zsh        > "$comp_out/_inlyne"
+
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
           7z a "$staging.zip" "$staging"
           echo "ASSET=$staging.zip" >> $GITHUB_ENV
         else
-          cp "target/${{ matrix.target }}/release/inlyne" "$staging/"
           tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
         fi
