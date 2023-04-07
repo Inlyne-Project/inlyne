@@ -258,7 +258,7 @@ impl Inlyne {
         })
     }
 
-    pub async fn run(mut self) {
+    pub fn run(mut self) {
         let mut pending_resize = None;
         let mut scrollbar_held = None;
         let mut mouse_down = false;
@@ -719,7 +719,7 @@ async fn main() -> anyhow::Result<()> {
     let inlyne = Inlyne::new(&opts, args).await?;
 
     inlyne.spawn_watcher();
-    inlyne.run().await;
+    inlyne.run();
 
     Ok(())
 }
