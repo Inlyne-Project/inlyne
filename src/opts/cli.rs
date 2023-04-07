@@ -73,7 +73,6 @@ pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command 
         .value_parser(value_parser!(f32))
         .help("Maximum width of page in pixels");
 
-
     command!()
         .arg(file_arg)
         .arg(theme_arg)

@@ -16,6 +16,8 @@ use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
 
+use crate::image::ImageData;
+use async_once_cell::unpin::Lazy;
 use keybindings::{Action, Key, KeyCombos, ModifiedKey};
 use opts::Args;
 use opts::Config;
@@ -27,7 +29,8 @@ use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
 use text::TextBox;
-use utils::{ImageCache, MaybeImageData, Point, Rect, Size};
+use tokio::task;
+use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -44,6 +47,7 @@ use winit::{
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
@@ -54,11 +58,16 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[derive(Debug)]
 pub enum InlyneEvent {
-    LoadedImage(String, MaybeImageData),
+    LoadedImage(String, Arc<Lazy<anyhow::Result<ImageData>>>),
     FileReload,
     Reposition,
+}
+
+impl Debug for InlyneEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Inlyne Event")
+    }
 }
 
 pub enum Hoverable<'a> {
@@ -67,7 +76,6 @@ pub enum Hoverable<'a> {
     Summary(&'a Section),
 }
 
-#[derive(Debug)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
@@ -223,12 +231,14 @@ impl Inlyne {
             renderer.hidpi_scale,
             args.file_path.clone(),
             image_cache.clone(),
+            event_loop.create_proxy(),
         );
 
         let (interpreter_sender, interpreter_reciever) = channel();
         let interpreter_should_queue = interpreter.should_queue.clone();
-        std::thread::spawn(move || interpreter.intepret_md(interpreter_reciever));
-        let md_string = std::fs::read_to_string(&opts.file_path)
+        task::spawn_blocking(|| interpreter.intepret_md(interpreter_reciever));
+        let md_string = tokio::fs::read_to_string(&opts.file_path)
+            .await
             .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
         interpreter_sender.send(md_string)?;
 
@@ -295,21 +305,7 @@ impl Inlyne {
                             .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
                     };
                     if let Ok(queue) = queue {
-                        for mut element in queue {
-                            // Adds callback for when image is loaded to reposition and redraw
-                            match element {
-                                Element::Image(ref mut image) => {
-                                    image.add_callback(event_loop_proxy.clone());
-                                }
-                                Element::Row(ref mut row) => {
-                                    for element in &mut row.elements {
-                                        if let Element::Image(ref mut image) = element.inner {
-                                            image.add_callback(event_loop_proxy.clone());
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
+                        for element in queue {
                             // Position element and add it to elements
                             let mut positioned_element = Positioned::new(element);
                             self.renderer
@@ -700,14 +696,15 @@ impl Inlyne {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match Config::load() {
+    let config = match Config::load().await {
         Ok(config) => config,
         Err(err) => {
             log::warn!(
@@ -719,7 +716,7 @@ fn main() -> anyhow::Result<()> {
     };
     let args = Args::new(&config);
     let opts = Opts::parse_and_load_from(&args, config);
-    let inlyne = pollster::block_on(Inlyne::new(&opts, args))?;
+    let inlyne = Inlyne::new(&opts, args).await?;
 
     inlyne.spawn_watcher();
     inlyne.run();
