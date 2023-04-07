@@ -31,6 +31,7 @@ pub struct Args {
     pub file_path: PathBuf,
     pub theme: Option<ThemeType>,
     pub scale: Option<f32>,
+    pub page_width: Option<f32>,
 }
 
 pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command {
@@ -65,11 +66,20 @@ pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command 
         .number_of_values(1)
         .value_parser(value_parser!(Shell));
 
+    let page_width_arg = Arg::new("page_width")
+        .short('w')
+        .long("page width")
+        .number_of_values(1)
+        .value_parser(value_parser!(f32))
+        .help("Maximum width of page in pixels");
+
+
     command!()
         .arg(file_arg)
         .arg(theme_arg)
         .arg(scale_arg)
         .arg(gen_comp_arg)
+        .arg(page_width_arg)
 }
 
 impl Args {
@@ -117,11 +127,13 @@ impl Args {
         let file_path = matches.get_one("file").cloned().expect("required");
         let theme = matches.get_one("theme").cloned();
         let scale = matches.get_one("scale").cloned();
+        let page_width = matches.get_one("page_width").cloned();
 
         Self {
             file_path,
             theme,
             scale,
+            page_width,
         }
     }
 

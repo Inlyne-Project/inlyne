@@ -21,6 +21,7 @@ impl Opts {
             file_path: file_path.into(),
             theme: ResolvedTheme::Light.as_theme(),
             scale: None,
+            page_width: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
             keybindings: keybindings::defaults(),
