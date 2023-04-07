@@ -357,16 +357,12 @@ impl TokenSink for HtmlInterpreter {
                                             src.clone(),
                                             self.file_path.clone(),
                                             self.hidpi_scale,
+                                            self.event_proxy.clone(),
                                         )
                                         .unwrap()
                                         .with_align(*align),
                                     };
-                                    let image_ref = image.image.clone();
-                                    let event_proxy = self.event_proxy.clone();
-                                    tokio::spawn(async move {
-                                        image_ref.get().await;
-                                        event_proxy.send_event(InlyneEvent::Reposition).unwrap();
-                                    });
+
                                     if let Some(link) = self.state.text_options.link.last() {
                                         image.set_link((*link).clone())
                                     }

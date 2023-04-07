@@ -1,5 +1,6 @@
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
+use crate::InlyneEvent;
 use anyhow::Context;
 use async_once_cell::unpin::Lazy;
 use bytemuck::{Pod, Zeroable};
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, TextureFormat};
+use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
 
@@ -61,7 +63,7 @@ impl ImageData {
 }
 
 pub struct Image {
-    pub image: Arc<Lazy<anyhow::Result<ImageData>>>,
+    pub data: Arc<Lazy<anyhow::Result<ImageData>>>,
     pub is_aligned: Option<Align>,
     pub size: Option<ImageSize>,
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
@@ -72,7 +74,7 @@ pub struct Image {
 impl Default for Image {
     fn default() -> Self {
         Self {
-            image: Arc::new(Lazy::new(Box::pin(async { Ok(ImageData::default()) }))),
+            data: Arc::new(Lazy::new(Box::pin(async { Ok(ImageData::default()) }))),
             is_aligned: Default::default(),
             size: Default::default(),
             bind_group: Default::default(),
@@ -90,7 +92,7 @@ impl Image {
         sampler: &wgpu::Sampler,
         bindgroup_layout: &wgpu::BindGroupLayout,
     ) {
-        if let Ok(image) = self.image.get().await {
+        if let Ok(image) = self.data.get().await {
             let dimensions = self.buffer_dimensions().unwrap();
             let start = Instant::now();
             let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
@@ -152,8 +154,13 @@ impl Image {
         }
     }
 
-    pub fn from_src(src: String, file_path: PathBuf, hidpi_scale: f32) -> anyhow::Result<Image> {
-        let image = async move {
+    pub fn from_src(
+        src: String,
+        file_path: PathBuf,
+        hidpi_scale: f32,
+        event_proxy: EventLoopProxy<InlyneEvent>,
+    ) -> anyhow::Result<Image> {
+        let image_data = async move {
             let mut src_path = PathBuf::from(&src);
             if src_path.is_relative() {
                 if let Some(parent_dir) = file_path.parent() {
@@ -168,7 +175,7 @@ impl Image {
             };
 
             if let Ok(image) = image::load_from_memory(&image_data) {
-                Ok(ImageData::new(image.into_rgba8(), true))
+                anyhow::Result::Ok(ImageData::new(image.into_rgba8(), true))
             } else {
                 let opt = usvg::Options::default();
                 let mut rtree = usvg::Tree::from_data(&image_data, &opt)?;
@@ -179,13 +186,15 @@ impl Image {
                 let mut pixmap = tiny_skia::Pixmap::new(
                     (pixmap_size.width() as f32 * hidpi_scale) as u32,
                     (pixmap_size.height() as f32 * hidpi_scale) as u32,
-                ).context("Couldn't create svg pixmap")?;
+                )
+                .context("Couldn't create svg pixmap")?;
                 resvg::render(
                     &rtree,
                     usvg::FitTo::Zoom(hidpi_scale),
                     tiny_skia::Transform::default(),
                     pixmap.as_mut(),
-                ).context("Svg failed to render")?;
+                )
+                .context("Svg failed to render")?;
                 Ok(ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")?,
@@ -193,12 +202,21 @@ impl Image {
                 ))
             }
         };
-
-        Ok(Image {
-            image: Arc::new(Lazy::new(Box::pin(image))),
+        let image = Image {
+            data: Arc::new(Lazy::new(Box::pin(image_data))),
             hidpi_scale,
             ..Default::default()
-        })
+        };
+
+        // Load image in background
+        let image_ref = image.data.clone();
+        tokio::spawn(async move {
+            image_ref.get().await;
+            event_proxy.send_event(InlyneEvent::Reposition).unwrap();
+            dbg!("Loaded image");
+        });
+
+        Ok(image)
     }
 
     pub fn from_image_data(
@@ -206,7 +224,7 @@ impl Image {
         hidpi_scale: f32,
     ) -> Image {
         Image {
-            image: image_data,
+            data: image_data,
             hidpi_scale,
             ..Default::default()
         }
@@ -242,13 +260,13 @@ impl Image {
     }
 
     fn buffer_dimensions(&self) -> Option<(u32, u32)> {
-        Some(self.image.try_get()?.as_ref().ok()?.dimensions)
+        Some(self.data.try_get()?.as_ref().ok()?.dimensions)
     }
 
     fn dimensions(&self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
         let buffer_size = self.buffer_dimensions()?;
         let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
-        if let Some(Ok(image)) = self.image.try_get() {
+        if let Some(Ok(image)) = self.data.try_get() {
             if image.scale {
                 buffer_size.0 *= self.hidpi_scale;
                 buffer_size.1 *= self.hidpi_scale;
