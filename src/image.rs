@@ -1,5 +1,6 @@
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
+use anyhow::Context;
 use async_once_cell::unpin::Lazy;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
@@ -89,8 +90,8 @@ impl Image {
         sampler: &wgpu::Sampler,
         bindgroup_layout: &wgpu::BindGroupLayout,
     ) {
-        let dimensions = self.buffer_dimensions().unwrap();
         if let Ok(image) = self.image.get().await {
+            let dimensions = self.buffer_dimensions().unwrap();
             let start = Instant::now();
             let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
             let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
@@ -178,18 +179,16 @@ impl Image {
                 let mut pixmap = tiny_skia::Pixmap::new(
                     (pixmap_size.width() as f32 * hidpi_scale) as u32,
                     (pixmap_size.height() as f32 * hidpi_scale) as u32,
-                )
-                .unwrap();
+                ).context("Couldn't create svg pixmap")?;
                 resvg::render(
                     &rtree,
                     usvg::FitTo::Zoom(hidpi_scale),
                     tiny_skia::Transform::default(),
                     pixmap.as_mut(),
-                )
-                .unwrap();
+                ).context("Svg failed to render")?;
                 Ok(ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
-                        .unwrap(),
+                        .context("Svg buffer has invalid dimensions")?,
                     false,
                 ))
             }
