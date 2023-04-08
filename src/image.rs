@@ -213,7 +213,6 @@ impl Image {
         tokio::spawn(async move {
             image_ref.get().await;
             event_proxy.send_event(InlyneEvent::Reposition).unwrap();
-            dbg!("Loaded image");
         });
 
         Ok(image)
