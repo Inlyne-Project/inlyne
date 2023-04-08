@@ -14,8 +14,6 @@ use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::sync::Arc;
-use tokio::runtime::Handle;
-use tokio::task;
 use wgpu::util::DeviceExt;
 use wgpu::util::StagingBelt;
 use wgpu::{BindGroup, Buffer, IndexFormat};
@@ -626,7 +624,7 @@ impl Renderer {
         Ok(())
     }
 
-    async fn image_bindgroups(
+    fn image_bindgroups(
         &mut self,
         elements: &mut [Positioned<Element>],
     ) -> Vec<(Arc<BindGroup>, Buffer)> {
@@ -642,7 +640,7 @@ impl Renderer {
             }
             match &mut element.inner {
                 Element::Image(ref mut image) => {
-                    if image.bind_group.is_none() {
+                    if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                         image
                             .create_bind_group(
                                 &self.device,
@@ -650,9 +648,8 @@ impl Renderer {
                                 &self.image_renderer.sampler,
                                 &self.image_renderer.bindgroup_layout,
                             )
-                            .await;
-                    }
-                    if let Some(ref bind_group) = image.bind_group {
+                            .ok()
+                    }) {
                         let vertex_buf =
                             ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
                         bind_groups.push((bind_group.clone(), vertex_buf));
@@ -663,7 +660,7 @@ impl Renderer {
                         let Rect { pos, size } = element.bounds.as_ref().unwrap();
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
-                            if image.bind_group.is_none() {
+                            if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                                 image
                                     .create_bind_group(
                                         &self.device,
@@ -671,9 +668,8 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .await;
-                            }
-                            if let Some(ref bind_group) = image.bind_group {
+                                    .ok()
+                            }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
                                     pos,
@@ -693,7 +689,7 @@ impl Renderer {
                         let Rect { pos, size } = element.bounds.as_ref().unwrap();
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
-                            if image.bind_group.is_none() {
+                            if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                                 image
                                     .create_bind_group(
                                         &self.device,
@@ -701,9 +697,8 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .await;
-                            }
-                            if let Some(ref bind_group) = image.bind_group {
+                                    .ok()
+                            }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
                                     pos,
@@ -754,8 +749,7 @@ impl Renderer {
             });
 
         // Prepare image bind groups for drawing
-        let image_bindgroups =
-            task::block_in_place(|| Handle::current().block_on(self.image_bindgroups(elements)));
+        let image_bindgroups = self.image_bindgroups(elements);
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -17,7 +17,6 @@ use crate::table::Table;
 use crate::text::Text;
 
 use crate::image::ImageData;
-use async_once_cell::unpin::Lazy;
 use keybindings::{Action, Key, KeyCombos, ModifiedKey};
 use opts::Args;
 use opts::Config;
@@ -29,7 +28,7 @@ use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
 use text::TextBox;
-use tokio::task;
+use tokio::runtime::Runtime;
 use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
@@ -59,7 +58,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 pub enum InlyneEvent {
-    LoadedImage(String, Arc<Lazy<anyhow::Result<ImageData>>>),
+    LoadedImage(String, Arc<ImageData>),
     FileReload,
     Reposition,
 }
@@ -204,7 +203,7 @@ impl Inlyne {
         });
     }
 
-    pub async fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
+    pub fn new(opts: &Opts, args: Args, rt: Arc<Runtime>) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
@@ -213,18 +212,21 @@ impl Inlyne {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
-        let renderer = Renderer::new(
+        let renderer = rt.block_on(Renderer::new(
             &window,
             opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
             opts.page_width.unwrap_or(std::f32::MAX),
             opts.font_opts.clone(),
-        )
-        .await?;
+        ))?;
         let clipboard = ClipboardContext::new().unwrap();
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
+        let md_string = rt
+            .block_on(tokio::fs::read_to_string(&opts.file_path))
+            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+
         let interpreter = HtmlInterpreter::new(
             window.clone(),
             element_queue.clone(),
@@ -233,14 +235,13 @@ impl Inlyne {
             args.file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
+            rt.clone(),
         );
 
         let (interpreter_sender, interpreter_reciever) = channel();
         let interpreter_should_queue = interpreter.should_queue.clone();
-        task::spawn_blocking(|| interpreter.intepret_md(interpreter_reciever));
-        let md_string = tokio::fs::read_to_string(&opts.file_path)
-            .await
-            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+        rt.spawn_blocking(|| interpreter.intepret_md(interpreter_reciever));
+
         interpreter_sender.send(md_string)?;
 
         Ok(Self {
@@ -703,15 +704,20 @@ impl Inlyne {
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    let rt = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_io()
+            .enable_time()
+            .build()?,
+    );
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match Config::load().await {
+    let config = match rt.block_on(Config::load()) {
         Ok(config) => config,
         Err(err) => {
             log::warn!(
@@ -723,7 +729,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let args = Args::new(&config);
     let opts = Opts::parse_and_load_from(&args, config);
-    let inlyne = Inlyne::new(&opts, args).await?;
+    let inlyne = Inlyne::new(&opts, args, rt)?;
 
     inlyne.spawn_watcher();
     inlyne.run();

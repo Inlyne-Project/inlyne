@@ -89,10 +89,17 @@ impl Table {
         let mut widths = Vec::with_capacity(max_row_len);
 
         for i in 0..max_row_len {
-            let mut max_width: f32 = self.headers.get(i).map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0).unwrap_or_default();
+            let mut max_width: f32 = self
+                .headers
+                .get(i)
+                .map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0)
+                .unwrap_or_default();
 
             for row in &self.rows {
-                let width = row.get(i).map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0).unwrap_or_default();
+                let width = row
+                    .get(i)
+                    .map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0)
+                    .unwrap_or_default();
                 if width > max_width {
                     max_width = width;
                 }
