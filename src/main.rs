@@ -134,6 +134,7 @@ pub struct Inlyne {
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
+    need_repositioning: bool,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -255,6 +256,7 @@ impl Inlyne {
             interpreter_should_queue,
             image_cache,
             keycombos,
+            need_repositioning: false,
         })
     }
 
@@ -294,8 +296,7 @@ impl Inlyne {
                         self.interpreter_sender.send(md_string).unwrap();
                     }
                     InlyneEvent::Reposition => {
-                        self.renderer.reposition(&mut self.elements).unwrap();
-                        self.window.request_redraw()
+                        self.need_repositioning = true;
                     }
                 },
                 Event::RedrawRequested(_) => {
@@ -609,6 +610,12 @@ impl Inlyne {
                         self.renderer
                             .set_scroll_y(self.renderer.scroll_y * (new_reserved / old_reserved));
                         self.window.request_redraw();
+                    }
+
+                    if self.need_repositioning {
+                        self.renderer.reposition(&mut self.elements).unwrap();
+                        self.window.request_redraw();
+                        self.need_repositioning = false;
                     }
                 }
                 _ => {}
