@@ -5,8 +5,8 @@ use anyhow::Context;
 use async_once_cell::unpin::Lazy;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use usvg::{TreeTextToPath, TreeParsing};
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
-use resvg::usvg_text_layout::TreeTextToPath;
 use std::io::{self, Cursor, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -179,7 +179,7 @@ impl Image {
             } else {
                 let opt = usvg::Options::default();
                 let mut rtree = usvg::Tree::from_data(&image_data, &opt)?;
-                let mut fontdb = resvg::usvg_text_layout::fontdb::Database::new();
+                let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
                 rtree.convert_text(&fontdb);
                 let pixmap_size = rtree.size.to_screen_size();
