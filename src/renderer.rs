@@ -374,37 +374,38 @@ impl Renderer {
 
                     let header_height = row_heights.first().unwrap();
                     for (col, width) in column_widths.iter().enumerate() {
-                        let text_box = table.headers.get(col).unwrap();
-                        let bounds = (
-                            (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
-                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
-                            f32::INFINITY,
-                        );
-                        self.glyph_brush.queue(&text_box.glyph_section(
-                            (pos.0 + x, pos.1 + y),
-                            bounds,
-                            self.zoom,
-                        ));
-                        if let Some(selection) = self.selection {
-                            let (selection_rects, selection_text) = text_box.render_selection(
-                                &mut self.glyph_brush,
+                        if let Some(text_box) = table.headers.get(col) {
+                            let bounds = (
+                                (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
+                                    .min(screen_size.0 - DEFAULT_MARGIN - centering),
+                                f32::INFINITY,
+                            );
+                            self.glyph_brush.queue(&text_box.glyph_section(
                                 (pos.0 + x, pos.1 + y),
                                 bounds,
                                 self.zoom,
-                                selection,
-                            );
-                            self.selection_text.push_str(&selection_text);
-                            for rect in selection_rects {
-                                self.draw_rectangle(
-                                    Rect::from_min_max(
-                                        (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                        (rect.max().0, rect.max().1 - self.scroll_y),
-                                    ),
-                                    self.theme.select_color,
-                                )?;
+                            ));
+                            if let Some(selection) = self.selection {
+                                let (selection_rects, selection_text) = text_box.render_selection(
+                                    &mut self.glyph_brush,
+                                    (pos.0 + x, pos.1 + y),
+                                    bounds,
+                                    self.zoom,
+                                    selection,
+                                );
+                                self.selection_text.push_str(&selection_text);
+                                for rect in selection_rects {
+                                    self.draw_rectangle(
+                                        Rect::from_min_max(
+                                            (rect.pos.0, rect.pos.1 - self.scroll_y),
+                                            (rect.max().0, rect.max().1 - self.scroll_y),
+                                        ),
+                                        self.theme.select_color,
+                                    )?;
+                                }
                             }
+                            x += width + TABLE_COL_GAP;
                         }
-                        x += width + TABLE_COL_GAP;
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
                     {
