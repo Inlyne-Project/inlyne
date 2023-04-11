@@ -43,8 +43,8 @@ tokio = { version = "1", features = ["full"] }
 async-once-cell = { version = "0.4.4", features = ["unpin"] }
 
 # Uncomment for profiling
-# [profile.release]
-# debug = true
+[profile.release]
+debug = true
 
 [profile.release-lto]
 inherits = "release"
