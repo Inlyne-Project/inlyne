@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use async_once_cell::unpin::Lazy;
 use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
@@ -17,7 +16,7 @@ pub type Line = ((f32, f32), (f32, f32));
 pub type Selection = ((f32, f32), (f32, f32));
 pub type Point = (f32, f32);
 pub type Size = (f32, f32);
-pub type ImageCache = Arc<Mutex<HashMap<String, Arc<Lazy<anyhow::Result<ImageData>>>>>>;
+pub type ImageCache = Arc<Mutex<HashMap<String, Arc<ImageData>>>>;
 
 #[derive(Debug, Clone)]
 pub struct Rect {

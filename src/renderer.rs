@@ -14,8 +14,6 @@ use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::sync::Arc;
-use tokio::runtime::Handle;
-use tokio::task;
 use wgpu::util::DeviceExt;
 use wgpu::util::StagingBelt;
 use wgpu::{BindGroup, Buffer, IndexFormat};
@@ -374,37 +372,38 @@ impl Renderer {
 
                     let header_height = row_heights.first().unwrap();
                     for (col, width) in column_widths.iter().enumerate() {
-                        let text_box = table.headers.get(col).unwrap();
-                        let bounds = (
-                            (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
-                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
-                            f32::INFINITY,
-                        );
-                        self.glyph_brush.queue(&text_box.glyph_section(
-                            (pos.0 + x, pos.1 + y),
-                            bounds,
-                            self.zoom,
-                        ));
-                        if let Some(selection) = self.selection {
-                            let (selection_rects, selection_text) = text_box.render_selection(
-                                &mut self.glyph_brush,
+                        if let Some(text_box) = table.headers.get(col) {
+                            let bounds = (
+                                (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
+                                    .min(screen_size.0 - DEFAULT_MARGIN - centering),
+                                f32::INFINITY,
+                            );
+                            self.glyph_brush.queue(&text_box.glyph_section(
                                 (pos.0 + x, pos.1 + y),
                                 bounds,
                                 self.zoom,
-                                selection,
-                            );
-                            self.selection_text.push_str(&selection_text);
-                            for rect in selection_rects {
-                                self.draw_rectangle(
-                                    Rect::from_min_max(
-                                        (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                        (rect.max().0, rect.max().1 - self.scroll_y),
-                                    ),
-                                    self.theme.select_color,
-                                )?;
+                            ));
+                            if let Some(selection) = self.selection {
+                                let (selection_rects, selection_text) = text_box.render_selection(
+                                    &mut self.glyph_brush,
+                                    (pos.0 + x, pos.1 + y),
+                                    bounds,
+                                    self.zoom,
+                                    selection,
+                                );
+                                self.selection_text.push_str(&selection_text);
+                                for rect in selection_rects {
+                                    self.draw_rectangle(
+                                        Rect::from_min_max(
+                                            (rect.pos.0, rect.pos.1 - self.scroll_y),
+                                            (rect.max().0, rect.max().1 - self.scroll_y),
+                                        ),
+                                        self.theme.select_color,
+                                    )?;
+                                }
                             }
+                            x += width + TABLE_COL_GAP;
                         }
-                        x += width + TABLE_COL_GAP;
                     }
                     y += header_height + (TABLE_ROW_GAP / 2.);
                     {
@@ -625,7 +624,7 @@ impl Renderer {
         Ok(())
     }
 
-    async fn image_bindgroups(
+    fn image_bindgroups(
         &mut self,
         elements: &mut [Positioned<Element>],
     ) -> Vec<(Arc<BindGroup>, Buffer)> {
@@ -641,7 +640,7 @@ impl Renderer {
             }
             match &mut element.inner {
                 Element::Image(ref mut image) => {
-                    if image.bind_group.is_none() {
+                    if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                         image
                             .create_bind_group(
                                 &self.device,
@@ -649,9 +648,8 @@ impl Renderer {
                                 &self.image_renderer.sampler,
                                 &self.image_renderer.bindgroup_layout,
                             )
-                            .await;
-                    }
-                    if let Some(ref bind_group) = image.bind_group {
+                            .ok()
+                    }) {
                         let vertex_buf =
                             ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
                         bind_groups.push((bind_group.clone(), vertex_buf));
@@ -662,7 +660,7 @@ impl Renderer {
                         let Rect { pos, size } = element.bounds.as_ref().unwrap();
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
-                            if image.bind_group.is_none() {
+                            if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                                 image
                                     .create_bind_group(
                                         &self.device,
@@ -670,9 +668,8 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .await;
-                            }
-                            if let Some(ref bind_group) = image.bind_group {
+                                    .ok()
+                            }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
                                     pos,
@@ -692,7 +689,7 @@ impl Renderer {
                         let Rect { pos, size } = element.bounds.as_ref().unwrap();
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
-                            if image.bind_group.is_none() {
+                            if let Some(bind_group) = image.bind_group.clone().or_else(|| {
                                 image
                                     .create_bind_group(
                                         &self.device,
@@ -700,9 +697,8 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .await;
-                            }
-                            if let Some(ref bind_group) = image.bind_group {
+                                    .ok()
+                            }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
                                     pos,
@@ -753,8 +749,7 @@ impl Renderer {
             });
 
         // Prepare image bind groups for drawing
-        let image_bindgroups =
-            task::block_in_place(|| Handle::current().block_on(self.image_bindgroups(elements)));
+        let image_bindgroups = self.image_bindgroups(elements);
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

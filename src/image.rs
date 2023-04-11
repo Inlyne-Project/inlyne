@@ -2,22 +2,23 @@ use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
 use crate::InlyneEvent;
 use anyhow::Context;
-use async_once_cell::unpin::Lazy;
 use bytemuck::{Pod, Zeroable};
-use image::GenericImageView;
 use image::{
     codecs::{jpeg::JpegDecoder, png::PngDecoder},
-    ColorType, ImageBuffer, ImageDecoder, ImageFormat, RgbaImage,
+    ColorType, GenericImageView, ImageBuffer, ImageDecoder, ImageFormat, RgbaImage,
 };
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
-use resvg::usvg_text_layout::TreeTextToPath;
+use std::cell::Cell;
 use std::cmp;
 use std::io::{self, Cursor, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::runtime::Runtime;
+use tokio::task::JoinHandle;
+use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
-use wgpu::{Device, TextureFormat};
+use wgpu::{BindGroup, Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
@@ -249,8 +250,20 @@ impl ImageData {
     }
 }
 
+pub enum DataStage {
+    Processing((Arc<Runtime>, JoinHandle<anyhow::Result<Arc<ImageData>>>)),
+    Finished(Arc<ImageData>),
+}
+
+impl Default for DataStage {
+    fn default() -> Self {
+        Self::Finished(Default::default())
+    }
+}
+
+#[derive(Default)]
 pub struct Image {
-    pub data: Arc<Lazy<anyhow::Result<ImageData>>>,
+    pub data: Cell<DataStage>,
     pub is_aligned: Option<Align>,
     pub size: Option<ImageSize>,
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
@@ -258,87 +271,107 @@ pub struct Image {
     pub hidpi_scale: f32,
 }
 
-impl Default for Image {
-    fn default() -> Self {
-        Self {
-            data: Arc::new(Lazy::new(Box::pin(async { Ok(ImageData::default()) }))),
-            is_aligned: Default::default(),
-            size: Default::default(),
-            bind_group: Default::default(),
-            is_link: Default::default(),
-            hidpi_scale: Default::default(),
+impl Image {
+    pub fn get_data(&self) -> anyhow::Result<Arc<ImageData>> {
+        match self.data.take() {
+            DataStage::Finished(data) => {
+                self.data.set(DataStage::Finished(data.clone()));
+                Ok(data)
+            }
+            DataStage::Processing((rt, data_future)) => {
+                let data = rt.block_on(data_future)??;
+                self.data.set(DataStage::Finished(data.clone()));
+                Ok(data)
+            }
         }
     }
-}
 
-impl Image {
-    pub async fn create_bind_group(
+    pub fn try_get_data(&mut self) -> Option<anyhow::Result<Arc<ImageData>>> {
+        match *self.data.get_mut() {
+            DataStage::Finished(_) => Some(self.get_data()),
+            DataStage::Processing((_, ref future)) => {
+                if future.is_finished() {
+                    Some(self.get_data())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn create_bind_group(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         sampler: &wgpu::Sampler,
         bindgroup_layout: &wgpu::BindGroupLayout,
-    ) {
-        if let Ok(image) = self.data.get().await {
-            let dimensions = self.buffer_dimensions().unwrap();
-            let start = Instant::now();
-            let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
-            let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
-            io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
-
-            log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
-
-            let texture_size = wgpu::Extent3d {
-                width: dimensions.0,
-                height: dimensions.1,
-                depth_or_array_layers: 1,
-            };
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                size: texture_size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                label: Some("Image Texture"),
-                view_formats: &[],
-            });
-            queue.write_texture(
-                // Tells wgpu where to copy the pixel data
-                wgpu::ImageCopyTexture {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                // The actual pixel data
-                &rgba_image,
-                // The layout of the texture
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-                    rows_per_image: std::num::NonZeroU32::new(dimensions.1),
-                },
-                texture_size,
-            );
-
-            let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: bindgroup_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                ],
-                label: Some("Image Bind Group"),
-            });
-            self.bind_group = Some(Arc::new(bind_group));
+    ) -> anyhow::Result<Arc<BindGroup>> {
+        let image = self.get_data()?;
+        let dimensions = self
+            .buffer_dimensions()
+            .context("Could not get buffer dimensions")?;
+        if dimensions.0 == 0 || dimensions.1 == 0 {
+            return Err(anyhow::Error::msg("Invalid buffer dimensions"));
         }
+        let start = Instant::now();
+        let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
+        let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
+        io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+
+        log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
+
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("Image Texture"),
+            view_formats: &[],
+        });
+        queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            &rgba_image,
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
+                rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+            },
+            texture_size,
+        );
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: bindgroup_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+            ],
+            label: Some("Image Bind Group"),
+        });
+        let bind_group = Arc::new(bind_group);
+        self.bind_group = Some(bind_group.clone());
+        Ok(bind_group)
     }
 
     pub fn from_src(
@@ -346,6 +379,7 @@ impl Image {
         file_path: PathBuf,
         hidpi_scale: f32,
         event_proxy: EventLoopProxy<InlyneEvent>,
+        rt: Arc<Runtime>,
     ) -> anyhow::Result<Image> {
         let image_data = async move {
             let mut src_path = PathBuf::from(&src);
@@ -361,12 +395,12 @@ impl Image {
                 reqwest::get(&src).await?.bytes().await?.to_vec()
             };
 
-            if let Ok(image) = ImageData::load(&image_data, true) {
-                Ok(image)
+            let image = if let Ok(image) = ImageData::load(&image_data, true) {
+                Ok(Arc::new(image))
             } else {
                 let opt = usvg::Options::default();
                 let mut rtree = usvg::Tree::from_data(&image_data, &opt)?;
-                let mut fontdb = resvg::usvg_text_layout::fontdb::Database::new();
+                let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
                 rtree.convert_text(&fontdb);
                 let pixmap_size = rtree.size.to_screen_size();
@@ -377,41 +411,41 @@ impl Image {
                 .context("Couldn't create svg pixmap")?;
                 resvg::render(
                     &rtree,
-                    usvg::FitTo::Zoom(hidpi_scale),
+                    resvg::FitTo::Zoom(hidpi_scale),
                     tiny_skia::Transform::default(),
                     pixmap.as_mut(),
                 )
                 .context("Svg failed to render")?;
-                Ok(ImageData::new(
+                Ok(Arc::new(ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")?,
                     false,
-                ))
-            }
+                )))
+            };
+            event_proxy.send_event(InlyneEvent::Reposition).unwrap();
+            image
         };
         let image = Image {
-            data: Arc::new(Lazy::new(Box::pin(image_data))),
+            data: Cell::new(DataStage::Processing((rt.clone(), rt.spawn(image_data)))),
             hidpi_scale,
             ..Default::default()
         };
 
         // Load image in background
-        let image_ref = image.data.clone();
-        tokio::spawn(async move {
+        //let image_ref = image.data.clone();
+        /*
+        rt.spawn(async move {
             image_ref.get().await;
             event_proxy.send_event(InlyneEvent::Reposition).unwrap();
-            dbg!("Loaded image");
         });
+        */
 
         Ok(image)
     }
 
-    pub fn from_image_data(
-        image_data: Arc<Lazy<anyhow::Result<ImageData>>>,
-        hidpi_scale: f32,
-    ) -> Image {
+    pub fn from_image_data(image_data: Arc<ImageData>, hidpi_scale: f32) -> Image {
         Image {
-            data: image_data,
+            data: Cell::new(DataStage::Finished(image_data)),
             hidpi_scale,
             ..Default::default()
         }
@@ -431,7 +465,7 @@ impl Image {
         self
     }
 
-    pub fn dimensions_from_image_size(&self, size: &ImageSize) -> Option<(u32, u32)> {
+    pub fn dimensions_from_image_size(&mut self, size: &ImageSize) -> Option<(u32, u32)> {
         let image_dimensions = self.buffer_dimensions()?;
         match size {
             ImageSize::PxWidth(px_width) => Some((
@@ -446,14 +480,14 @@ impl Image {
         }
     }
 
-    fn buffer_dimensions(&self) -> Option<(u32, u32)> {
-        Some(self.data.try_get()?.as_ref().ok()?.dimensions)
+    fn buffer_dimensions(&mut self) -> Option<(u32, u32)> {
+        Some(self.try_get_data()?.ok()?.dimensions)
     }
 
-    fn dimensions(&self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
+    fn dimensions(&mut self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
         let buffer_size = self.buffer_dimensions()?;
         let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
-        if let Some(Ok(image)) = self.data.try_get() {
+        if let Some(Ok(image)) = self.try_get_data() {
             if image.scale {
                 buffer_size.0 *= self.hidpi_scale;
                 buffer_size.1 *= self.hidpi_scale;

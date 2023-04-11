@@ -10,25 +10,25 @@ repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 
 [dependencies]
-wgpu_glyph =  { git = "https://github.com/sconybeare/wgpu_glyph", branch = "wgpu-0.15" }
+wgpu_glyph =  "0.19"
 winit = "0.28.3"
 wgpu = "0.15.1"
 bytemuck = "1.13.1"
 lyon = "1.0.1"
-comrak = { version = "0.16.0", default-features = false, features = ["syntect"] }
+comrak = { version = "0.18.0", default-features = false, features = ["syntect"] }
 open = "4.0.1"
 html5ever = "0.26.0"
-image = "0.24.5"
-clap = { version = "4.1.13", features = ["cargo"] }
+image = "0.24.6"
+clap = { version = "4.2.1", features = ["cargo"] }
 copypasta = "0.8.2"
-resvg = "0.29.0"
-usvg = "0.29.0"
+resvg = "0.30.0"
+usvg = "0.30.0"
 tiny-skia = "0.8.3"
 anyhow = "1.0.70"
 dirs = "5.0.0"
 serde = { version = "1.0.158", features = ["derive"] }
 toml = "0.7.3"
-reqwest = { version = "0.11", features = ["blocking", "json", "stream"] }
+reqwest = { version = "0.11.16", features = ["blocking", "json", "stream"] }
 font-kit = "0.11.0"
 memmap2 = "0.5.10"
 log = "0.4.17"
@@ -39,7 +39,7 @@ dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.27", features = ["full"] }
 async-once-cell = { version = "0.4.4", features = ["unpin"] }
 
 # Uncomment for profiling

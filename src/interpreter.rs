@@ -24,6 +24,7 @@ use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
 use html5ever::Attribute;
+use tokio::runtime::Runtime;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
@@ -129,6 +130,7 @@ pub struct HtmlInterpreter {
     first_pass: bool,
     image_cache: ImageCache,
     event_proxy: EventLoopProxy<InlyneEvent>,
+    rt: Arc<Runtime>,
 }
 
 impl HtmlInterpreter {
@@ -140,6 +142,7 @@ impl HtmlInterpreter {
         file_path: PathBuf,
         image_cache: ImageCache,
         event_proxy: EventLoopProxy<InlyneEvent>,
+        rt: Arc<Runtime>,
     ) -> Self {
         Self {
             window,
@@ -157,6 +160,7 @@ impl HtmlInterpreter {
             first_pass: true,
             image_cache,
             event_proxy,
+            rt,
         }
     }
 
@@ -358,6 +362,7 @@ impl TokenSink for HtmlInterpreter {
                                             self.file_path.clone(),
                                             self.hidpi_scale,
                                             self.event_proxy.clone(),
+                                            self.rt.clone(),
                                         )
                                         .unwrap()
                                         .with_align(*align),

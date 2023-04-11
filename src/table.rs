@@ -82,21 +82,32 @@ impl Table {
         bounds: Size,
         zoom: f32,
     ) -> Vec<f32> {
-        let mut widths = Vec::with_capacity(self.headers.len());
-        for (i, header_text_box) in self.headers.iter().enumerate() {
-            let mut max_width = header_text_box
-                .size(glyph_brush, screen_position, bounds, zoom)
-                .0;
+        let mut max_row_len = self.headers.len();
+        for row in &self.rows {
+            max_row_len = std::cmp::max(max_row_len, row.len());
+        }
+        let mut widths = Vec::with_capacity(max_row_len);
+
+        for i in 0..max_row_len {
+            let mut max_width: f32 = self
+                .headers
+                .get(i)
+                .map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0)
+                .unwrap_or_default();
+
             for row in &self.rows {
-                if let Some(text_box) = row.get(i) {
-                    let width = text_box.size(glyph_brush, screen_position, bounds, zoom).0;
-                    if width > max_width {
-                        max_width = width;
-                    }
+                let width = row
+                    .get(i)
+                    .map(|h| h.size(glyph_brush, screen_position, bounds, zoom).0)
+                    .unwrap_or_default();
+                if width > max_width {
+                    max_width = width;
                 }
             }
+
             widths.push(max_width);
         }
+
         widths
     }
 
