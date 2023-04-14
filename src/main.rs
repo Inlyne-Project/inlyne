@@ -231,6 +231,7 @@ impl Inlyne {
             window.clone(),
             element_queue.clone(),
             renderer.theme.clone(),
+            renderer.surface_format,
             renderer.hidpi_scale,
             args.file_path.clone(),
             image_cache.clone(),

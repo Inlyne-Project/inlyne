@@ -1,4 +1,4 @@
-use crate::color::Theme;
+use crate::color::{native_color, Theme};
 use crate::fonts;
 use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::util::StagingBelt;
-use wgpu::{BindGroup, Buffer, IndexFormat};
+use wgpu::{BindGroup, Buffer, IndexFormat, TextureFormat};
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
 use winit::window::Window;
 
@@ -30,6 +30,7 @@ pub struct Vertex {
 pub struct Renderer {
     pub config: wgpu::SurfaceConfiguration,
     pub surface: wgpu::Surface,
+    pub surface_format: TextureFormat,
     pub device: wgpu::Device,
     pub render_pipeline: wgpu::RenderPipeline,
     pub queue: wgpu::Queue,
@@ -163,6 +164,7 @@ impl Renderer {
         Ok(Self {
             config,
             surface,
+            surface_format,
             device,
             render_pipeline,
             queue,
@@ -235,9 +237,9 @@ impl Renderer {
                         let color = if let Some(bg_color) = text_box.background_color {
                             bg_color
                         } else if text_box.is_code_block {
-                            self.theme.code_block_color
+                            native_color(self.theme.code_block_color, &self.surface_format)
                         } else {
-                            self.theme.quote_block_color
+                            native_color(self.theme.quote_block_color, &self.surface_format)
                         };
 
                         let mut min = ((scrolled_pos.0 - 10.), scrolled_pos.1);
@@ -271,7 +273,7 @@ impl Renderer {
                             );
                             self.draw_rectangle(
                                 Rect::from_min_max(min, max),
-                                self.theme.select_color,
+                                native_color(self.theme.select_color, &self.surface_format),
                             )?;
                         }
                     }
@@ -288,18 +290,18 @@ impl Renderer {
                             if is_checked {
                                 self.draw_rectangle(
                                     Rect::from_min_max(min, max),
-                                    self.theme.checkbox_color,
+                                    native_color(self.theme.checkbox_color, &self.surface_format),
                                 )?;
                                 self.draw_tick(
                                     min,
                                     box_size,
-                                    self.theme.text_color,
+                                    native_color(self.theme.text_color, &self.surface_format),
                                     2. * self.hidpi_scale * self.zoom,
                                 )?;
                             }
                             self.stroke_rectangle(
                                 Rect::from_min_max(min, max),
-                                self.theme.text_color,
+                                native_color(self.theme.text_color, &self.surface_format),
                                 1. * self.hidpi_scale * self.zoom,
                             )?;
                         }
@@ -326,7 +328,10 @@ impl Renderer {
                             ),
                             line.1 .1 + 2. * self.hidpi_scale * self.zoom,
                         );
-                        self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
+                        self.draw_rectangle(
+                            Rect::from_min_max(min, max),
+                            native_color(self.theme.text_color, &self.surface_format),
+                        )?;
                     }
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(
@@ -343,7 +348,7 @@ impl Renderer {
                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
                                     (rect.max().0, rect.max().1 - self.scroll_y),
                                 ),
-                                self.theme.select_color,
+                                native_color(self.theme.select_color, &self.surface_format),
                             )?;
                         }
                     }
@@ -398,7 +403,7 @@ impl Renderer {
                                             (rect.pos.0, rect.pos.1 - self.scroll_y),
                                             (rect.max().0, rect.max().1 - self.scroll_y),
                                         ),
-                                        self.theme.select_color,
+                                        native_color(self.theme.select_color, &self.surface_format),
                                     )?;
                                 }
                             }
@@ -419,7 +424,10 @@ impl Renderer {
                             ),
                             scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                         );
-                        self.draw_rectangle(Rect::from_min_max(min, max), self.theme.text_color)?;
+                        self.draw_rectangle(
+                            Rect::from_min_max(min, max),
+                            native_color(self.theme.text_color, &self.surface_format),
+                        )?;
                     }
 
                     y += TABLE_ROW_GAP / 2.;
@@ -454,7 +462,10 @@ impl Renderer {
                                                     (rect.pos.0, rect.pos.1 - self.scroll_y),
                                                     (rect.max().0, rect.max().1 - self.scroll_y),
                                                 ),
-                                                self.theme.select_color,
+                                                native_color(
+                                                    self.theme.select_color,
+                                                    &self.surface_format,
+                                                ),
                                             )?;
                                         }
                                     }
@@ -476,8 +487,10 @@ impl Renderer {
                                 ),
                                 scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
-                            let color = self.theme.code_block_color;
-                            self.draw_rectangle(Rect::from_min_max(min, max), color)?;
+                            self.draw_rectangle(
+                                Rect::from_min_max(min, max),
+                                native_color(self.theme.code_block_color, &self.surface_format),
+                            )?;
                         }
                         y += TABLE_ROW_GAP / 2.;
                     }
@@ -497,7 +510,7 @@ impl Renderer {
                                     2. * self.hidpi_scale * self.zoom,
                                 ),
                             ),
-                            self.theme.text_color,
+                            native_color(self.theme.text_color, &self.surface_format),
                         )?;
                     }
                 }
@@ -511,7 +524,7 @@ impl Renderer {
                                 bounds.pos.1 + bounds.size.1 / 2. - self.scroll_y,
                             ),
                             10.,
-                            self.theme.text_color,
+                            native_color(self.theme.text_color, &self.surface_format),
                             *section.hidden.borrow(),
                         )?;
                         self.render_elements(std::slice::from_ref(summary))?
@@ -752,13 +765,22 @@ impl Renderer {
         let image_bindgroups = self.image_bindgroups(elements);
 
         {
+            let background_color = {
+                let c = native_color(self.theme.background_color, &self.surface_format);
+                wgpu::Color {
+                    r: c[0] as f64,
+                    g: c[1] as f64,
+                    b: c[2] as f64,
+                    a: c[3] as f64,
+                }
+            };
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.theme.background_color),
+                        load: wgpu::LoadOp::Clear(background_color),
                         store: true,
                     },
                 })],

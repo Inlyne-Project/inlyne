@@ -1,8 +1,9 @@
 use serde::Deserialize;
+use wgpu::TextureFormat;
 
-pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
+fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
     let f = |xu: u32| {
-        let x = (xu & 0xFF) as f32 / 255.0;
+        let x = (xu & 0xff) as f32 / 255.0;
         if x > 0.04045 {
             ((x + 0.055) / 1.055).powf(2.4)
         } else {
@@ -12,45 +13,50 @@ pub fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
     [f(c >> 16), f(c >> 8), f(c), 1.0]
 }
 
+pub fn native_color(c: u32, format: &TextureFormat) -> [f32; 4] {
+    use wgpu::TextureFormat::*;
+    let f = |xu: u32| (xu & 0xff) as f32 / 255.0;
+
+    match format {
+        Rgba8UnormSrgb | Bgra8UnormSrgb => hex_to_linear_rgba(c),
+        _ => [f(c >> 16), f(c >> 8), f(c), 1.0],
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
-    pub text_color: [f32; 4],
-    pub background_color: wgpu::Color,
-    pub code_color: [f32; 4],
-    pub code_block_color: [f32; 4],
-    pub quote_block_color: [f32; 4],
-    pub link_color: [f32; 4],
-    pub select_color: [f32; 4],
-    pub checkbox_color: [f32; 4],
+    pub text_color: u32,
+    pub background_color: u32,
+    pub code_color: u32,
+    pub code_block_color: u32,
+    pub quote_block_color: u32,
+    pub link_color: u32,
+    pub select_color: u32,
+    pub checkbox_color: u32,
     pub code_highlighter: SyntaxTheme,
 }
 
 pub const DARK_DEFAULT: Theme = Theme {
-    text_color: [0.5841, 0.6376, 0.6939, 1.0],
-    background_color: wgpu::Color {
-        r: 0.0040,
-        g: 0.0056,
-        b: 0.0086,
-        a: 1.0,
-    },
-    code_color: [0.2542, 0.4508, 0.4621, 1.0],
-    code_block_color: [0.0080 * 1.5, 0.0110 * 1.5, 0.0156 * 1.5, 1.0],
-    quote_block_color: [0.0080, 0.0110, 0.0156, 1.0],
-    link_color: [0.0976, 0.3813, 1.0, 1.0],
-    select_color: [0.17, 0.22, 0.3, 1.0],
-    checkbox_color: [0.1, 0.3, 0.1, 1.0],
+    text_color: 0x9DACBB,
+    background_color: 0x1A1D22,
+    code_color: 0xB38FAC,
+    code_block_color: 0x181C21,
+    quote_block_color: 0x1D2025,
+    link_color: 0x4182EB,
+    select_color: 0x3675CB,
+    checkbox_color: 0x0A5301,
     code_highlighter: SyntaxTheme::Base16OceanDark,
 };
 
 pub const LIGHT_DEFAULT: Theme = Theme {
-    text_color: [0., 0., 0., 1.0],
-    background_color: wgpu::Color::WHITE,
-    code_color: [0.3864, 0.0123, 0.1095, 1.0],
-    code_block_color: [0.92, 0.92, 0.92, 1.0],
-    quote_block_color: [0.5841 * 1.5, 0.6376 * 1.5, 0.6939 * 1.5, 1.0],
-    link_color: [0.0975, 0.1813, 1.0, 1.0],
-    select_color: [0.67, 0.85, 0.9, 1.0],
-    checkbox_color: [0.37, 0.85, 0.5, 1.0],
+    text_color: 0x000000,
+    background_color: 0xFFFFFF,
+    code_color: 0x95114E,
+    code_block_color: 0xEAEDF3,
+    quote_block_color: 0xEEF9FE,
+    link_color: 0x5466FF,
+    select_color: 0xCDE8F0,
+    checkbox_color: 0x96ECAE,
     code_highlighter: SyntaxTheme::Base16OceanLight,
 };
 
