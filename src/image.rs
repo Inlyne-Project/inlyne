@@ -127,7 +127,7 @@ impl<'img> io::Read for Rgba8Adapter<'img> {
             Self::Rgb8 { source, scratch } => {
                 // Step 1.
                 if scratch.len() > buf.len() {
-                    buf.copy_from_slice(&scratch);
+                    buf.copy_from_slice(&scratch[..buf.len()]);
                     scratch.copy_within(buf.len().., 0);
                     scratch.truncate(scratch.len() - buf.len());
                     return Ok(buf.len());
