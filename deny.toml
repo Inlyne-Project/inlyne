@@ -13,7 +13,7 @@ allow = [
 exceptions = [
     # We will no longer depend on this dependency after `copypasta` updates
     # `clipboard-win`. Keeping it separate as a reminder to drop eventually
-    { allow = ["BSL-1.0"], name = "lazy-bytes-cast" }
+    { allow = ["BSL-1.0"], name = "lazy-bytes-cast" },
 
     # Not a recommended library for source code. Try to limit dependecies that
     # use this
