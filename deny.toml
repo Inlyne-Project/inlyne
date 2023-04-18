@@ -1,0 +1,26 @@
+[licenses]
+allow = [
+    "MIT",
+
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+    "Zlib",
+]
+
+exceptions = [
+    # We will no longer depend on this dependency after `copypasta` updates
+    # `clipboard-win`. Keeping it separate as a reminder to drop eventually
+    { allow = ["BSL-1.0"], name = "lazy-bytes-cast" }
+
+    # Not a recommended library for source code. Try to limit dependecies that
+    # use this
+    { allow = ["CC0-1.0"], name = "hexf-parse" },
+    { allow = ["CC0-1.0"], name = "notify" },
+
+    # This crate gets used by most of the ecosystem. If we're in trouble then,
+    # so is everyone else ¯\_(ツ)_/¯
+    { allow = ["Unicode-DFS-2016"], name = "unicode-ident" },
+]
