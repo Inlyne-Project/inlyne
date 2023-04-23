@@ -1,7 +1,6 @@
 <h1 align="center">Inlyne - a GPU powered, browserless, markdown + html viewer</h1>
 
 <p align="center">
-<a href="https://crates.io/crates/inlyne" target="_blank"><img height=25 src="https://img.shields.io/crates/v/inlyne.svg" /></a>
 </p>
 
 ```bash
@@ -45,7 +44,6 @@ the document where you left off. It's designed to work seamlessly and allow you 
 | Favourite band    | Nickleback         |
 
 #### Sizable images
-<img src="https://i.redd.it/hwurhp7crzf81.png" width = "300" align="center"></img>
 
 #### Code Blocks (with syntect highlighting)
 ```rust

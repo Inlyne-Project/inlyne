@@ -154,7 +154,7 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &surface_format);
 
-        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(&font_opts).await?)
+        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(&font_opts)?)
             .draw_cache_position_tolerance(0.5)
             .build(&device, surface_format);
 
@@ -661,7 +661,6 @@ impl Renderer {
                                 &self.image_renderer.sampler,
                                 &self.image_renderer.bindgroup_layout,
                             )
-                            .ok()
                     }) {
                         let vertex_buf =
                             ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
@@ -681,7 +680,6 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .ok()
                             }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
@@ -710,7 +708,6 @@ impl Renderer {
                                         &self.image_renderer.sampler,
                                         &self.image_renderer.bindgroup_layout,
                                     )
-                                    .ok()
                             }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,

@@ -28,7 +28,6 @@ use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
 use text::TextBox;
-use tokio::runtime::Runtime;
 use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
@@ -47,6 +46,7 @@ use winit::{
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
@@ -58,7 +58,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 pub enum InlyneEvent {
-    LoadedImage(String, Arc<ImageData>),
+    LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
     Reposition,
 }
@@ -75,6 +75,7 @@ pub enum Hoverable<'a> {
     Summary(&'a Section),
 }
 
+#[derive(Debug)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
@@ -203,7 +204,7 @@ impl Inlyne {
         });
     }
 
-    pub fn new(opts: &Opts, args: Args, rt: Arc<Runtime>) -> anyhow::Result<Self> {
+    pub fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
@@ -212,7 +213,7 @@ impl Inlyne {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
-        let renderer = rt.block_on(Renderer::new(
+        let renderer = pollster::block_on(Renderer::new(
             &window,
             opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
@@ -223,9 +224,7 @@ impl Inlyne {
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
-        let md_string = rt
-            .block_on(tokio::fs::read_to_string(&opts.file_path))
-            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+        let md_string = read_to_string(&opts.file_path).with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),
@@ -236,12 +235,11 @@ impl Inlyne {
             args.file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
-            rt.clone(),
         );
 
         let (interpreter_sender, interpreter_reciever) = channel();
         let interpreter_should_queue = interpreter.should_queue.clone();
-        rt.spawn_blocking(|| interpreter.intepret_md(interpreter_reciever));
+        std::thread::spawn(move || interpreter.intepret_md(interpreter_reciever));
 
         interpreter_sender.send(md_string)?;
 
@@ -278,8 +276,7 @@ impl Inlyne {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::LoadedImage(src, image_data) => {
                         self.image_cache.lock().unwrap().insert(src, image_data);
-                        self.renderer.reposition(&mut self.elements).unwrap();
-                        self.window.request_redraw()
+                        self.need_repositioning = true;
                     }
                     InlyneEvent::FileReload => {
                         self.interpreter_should_queue
@@ -289,7 +286,7 @@ impl Inlyne {
                         self.renderer.positioner.reserved_height =
                             DEFAULT_PADDING * self.renderer.hidpi_scale;
                         self.renderer.positioner.anchors.clear();
-                        let md_string = std::fs::read_to_string(&self.args.file_path)
+                        let md_string = read_to_string(&self.args.file_path)
                             .with_context(|| {
                                 format!("Could not read file at {:?}", self.args.file_path)
                             })
@@ -706,19 +703,13 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
-    let rt = Arc::new(
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_io()
-            .enable_time()
-            .build()?,
-    );
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match rt.block_on(Config::load()) {
+    let config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
             log::warn!(
@@ -730,7 +721,7 @@ fn main() -> anyhow::Result<()> {
     };
     let args = Args::new(&config);
     let opts = Opts::parse_and_load_from(&args, config);
-    let inlyne = Inlyne::new(&opts, args, rt)?;
+    let inlyne = Inlyne::new(&opts, args)?;
 
     inlyne.spawn_watcher();
     inlyne.run();

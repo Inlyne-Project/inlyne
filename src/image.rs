@@ -5,13 +5,11 @@ use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
-use std::cell::Cell;
+use std::fs;
 use std::io::{self, Cursor, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::runtime::Runtime;
-use tokio::task::JoinHandle;
 use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
@@ -64,20 +62,9 @@ impl ImageData {
     }
 }
 
-pub enum DataStage {
-    Processing((Arc<Runtime>, JoinHandle<anyhow::Result<Arc<ImageData>>>)),
-    Finished(Arc<ImageData>),
-}
-
-impl Default for DataStage {
-    fn default() -> Self {
-        Self::Finished(Default::default())
-    }
-}
-
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Image {
-    pub data: Cell<DataStage>,
+    pub image_data: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,
     pub size: Option<ImageSize>,
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
@@ -86,51 +73,29 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn get_data(&self) -> anyhow::Result<Arc<ImageData>> {
-        match self.data.take() {
-            DataStage::Finished(data) => {
-                self.data.set(DataStage::Finished(data.clone()));
-                Ok(data)
-            }
-            DataStage::Processing((rt, data_future)) => {
-                let data = rt.block_on(data_future)??;
-                self.data.set(DataStage::Finished(data.clone()));
-                Ok(data)
-            }
-        }
-    }
-
-    pub fn try_get_data(&mut self) -> Option<anyhow::Result<Arc<ImageData>>> {
-        match *self.data.get_mut() {
-            DataStage::Finished(_) => Some(self.get_data()),
-            DataStage::Processing((_, ref future)) => {
-                if future.is_finished() {
-                    Some(self.get_data())
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
     pub fn create_bind_group(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         sampler: &wgpu::Sampler,
         bindgroup_layout: &wgpu::BindGroupLayout,
-    ) -> anyhow::Result<Arc<BindGroup>> {
-        let image = self.get_data()?;
+    ) -> Option<Arc<BindGroup>> {
         let dimensions = self
-            .buffer_dimensions()
-            .context("Could not get buffer dimensions")?;
+            .buffer_dimensions()?;
         if dimensions.0 == 0 || dimensions.1 == 0 {
-            return Err(anyhow::Error::msg("Invalid buffer dimensions"));
+            log::warn!("Invalid buffer dimensions");
+            return None;
         }
         let start = Instant::now();
-        let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
-        let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
-        io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+        let rgba_image = {
+            let image_lock = self.image_data.lock().unwrap();
+            let image = image_lock.as_ref()?;
+
+            let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
+            let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
+            io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+            rgba_image
+        };
 
         log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
@@ -185,7 +150,7 @@ impl Image {
         });
         let bind_group = Arc::new(bind_group);
         self.bind_group = Some(bind_group.clone());
-        Ok(bind_group)
+        Some(bind_group)
     }
 
     pub fn from_src(
@@ -193,9 +158,11 @@ impl Image {
         file_path: PathBuf,
         hidpi_scale: f32,
         event_proxy: EventLoopProxy<InlyneEvent>,
-        rt: Arc<Runtime>,
     ) -> anyhow::Result<Image> {
-        let image_data = async move {
+        let image_data = Arc::new(Mutex::new(None));
+        let image_data_clone = image_data.clone(); 
+
+        std::thread::spawn(move || {
             let mut src_path = PathBuf::from(&src);
             if src_path.is_relative() {
                 if let Some(parent_dir) = file_path.parent() {
@@ -203,17 +170,22 @@ impl Image {
                 }
             }
 
-            let image_data = if let Ok(img_file) = tokio::fs::read(&src_path).await {
+            let image_data = if let Ok(img_file) = fs::read(&src_path) {
                 img_file
             } else {
-                reqwest::get(&src).await?.bytes().await?.to_vec()
+                if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
+                    bytes.to_vec()
+                } else {
+                    log::warn!("Reqwest for image from {} failed", src_path.display());
+                    return
+                }
             };
 
             let image = if let Ok(image) = image::load_from_memory(&image_data) {
-                anyhow::Result::Ok(Arc::new(ImageData::new(image.into_rgba8(), true)))
+                ImageData::new(image.into_rgba8(), true)
             } else {
                 let opt = usvg::Options::default();
-                let mut rtree = usvg::Tree::from_data(&image_data, &opt)?;
+                let mut rtree = usvg::Tree::from_data(&image_data, &opt).unwrap();
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
                 rtree.convert_text(&fontdb);
@@ -222,44 +194,37 @@ impl Image {
                     (pixmap_size.width() as f32 * hidpi_scale) as u32,
                     (pixmap_size.height() as f32 * hidpi_scale) as u32,
                 )
-                .context("Couldn't create svg pixmap")?;
+                .context("Couldn't create svg pixmap").unwrap();
                 resvg::render(
                     &rtree,
                     resvg::FitTo::Zoom(hidpi_scale),
                     tiny_skia::Transform::default(),
                     pixmap.as_mut(),
                 )
-                .context("Svg failed to render")?;
-                Ok(Arc::new(ImageData::new(
+                .context("Svg failed to render").unwrap();
+                ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
-                        .context("Svg buffer has invalid dimensions")?,
+                        .context("Svg buffer has invalid dimensions").unwrap(),
                     false,
-                )))
+                )
             };
-            event_proxy.send_event(InlyneEvent::Reposition).unwrap();
-            image
-        };
+
+            *image_data_clone.lock().unwrap() = Some(image);
+            event_proxy.send_event(InlyneEvent::LoadedImage(src, image_data_clone)).unwrap();
+        });
+
         let image = Image {
-            data: Cell::new(DataStage::Processing((rt.clone(), rt.spawn(image_data)))),
+            image_data,
             hidpi_scale,
             ..Default::default()
         };
 
-        // Load image in background
-        //let image_ref = image.data.clone();
-        /*
-        rt.spawn(async move {
-            image_ref.get().await;
-            event_proxy.send_event(InlyneEvent::Reposition).unwrap();
-        });
-        */
-
         Ok(image)
     }
 
-    pub fn from_image_data(image_data: Arc<ImageData>, hidpi_scale: f32) -> Image {
+    pub fn from_image_data(image_data: Arc<Mutex<Option<ImageData>>>, hidpi_scale: f32) -> Image {
         Image {
-            data: Cell::new(DataStage::Finished(image_data)),
+            image_data,
             hidpi_scale,
             ..Default::default()
         }
@@ -294,14 +259,14 @@ impl Image {
         }
     }
 
-    fn buffer_dimensions(&mut self) -> Option<(u32, u32)> {
-        Some(self.try_get_data()?.ok()?.dimensions)
+    fn buffer_dimensions(&self) -> Option<(u32, u32)> {
+        Some(self.image_data.lock().unwrap().as_ref()?.dimensions.clone())
     }
 
     fn dimensions(&mut self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
         let buffer_size = self.buffer_dimensions()?;
         let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
-        if let Some(Ok(image)) = self.try_get_data() {
+        if let Some(image) = self.image_data.lock().as_deref().unwrap() {
             if image.scale {
                 buffer_size.0 *= self.hidpi_scale;
                 buffer_size.1 *= self.hidpi_scale;
