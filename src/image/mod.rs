@@ -19,6 +19,8 @@ use winit::event_loop::EventLoopProxy;
 use std::borrow::Cow;
 
 mod decode;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub enum ImageSize {
