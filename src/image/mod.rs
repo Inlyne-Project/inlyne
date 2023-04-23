@@ -588,7 +588,7 @@ impl ImageRenderer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shaders/image.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/image.wgsl"))),
         });
         let image_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
