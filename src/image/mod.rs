@@ -10,7 +10,7 @@ use image::{
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 use std::cell::Cell;
 use std::cmp;
-use std::io::{self, Cursor, Write};
+use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -22,9 +22,6 @@ use wgpu::{BindGroup, Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
-
-// TODO: create test images that are at least 3_000 or so pixels, so that it actually tests the
-// reads buffering
 
 #[derive(Debug, Clone)]
 pub enum ImageSize {
@@ -50,7 +47,7 @@ fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u32))>
     match maybe_streamed {
         Some(streamed) => Ok(streamed),
         None => {
-            println!("Falling back to full decode");
+            log::debug!("Falling back to full decode");
             fallback_decode_and_compress(&contents)
         }
     }
@@ -180,9 +177,9 @@ fn fallback_decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u3
     let image = image::load_from_memory(contents)?;
     let dimensions = image.dimensions();
     let image_data = image.into_rgba8().into_raw();
-    println!(
+    log::debug!(
         "Decoded full image in memory {:.3} MiB",
-        image_data.len() as f32 / 1_024.0 / 1_024.0
+        usize_in_mib(image_data.len()),
     );
     lz4_compress(&mut io::Cursor::new(image_data)).map(|lz4_blob| (lz4_blob, dimensions))
 }
@@ -199,14 +196,20 @@ fn lz4_compress<R: io::Read>(reader: &mut R) -> anyhow::Result<Vec<u8>> {
     Ok(lz4_blob)
 }
 
+fn lz4_decompress(blob: &[u8], size: usize) -> anyhow::Result<Vec<u8>> {
+    let mut lz4_dec = FrameDecoder::new(io::Cursor::new(blob));
+    let mut decompressed = Vec::with_capacity(size);
+    io::copy(&mut lz4_dec, &mut decompressed)?;
+    decompressed.truncate(size);
+    Ok(decompressed)
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct ImageData {
     lz4_blob: Vec<u8>,
     scale: bool,
     dimensions: (u32, u32),
 }
-
-// TODO: create a writer for the byte data? Probably leave that for another PR
 
 impl ImageData {
     fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
@@ -218,20 +221,20 @@ impl ImageData {
         })
     }
 
+    fn to_bytes(&self) -> Vec<u8> {
+        let rgba_image = lz4_decompress(&self.lz4_blob, self.rgba_image_byte_size())
+            .expect("Size matches and I/O is in memory");
+        rgba_image
+    }
+
     fn new(image: RgbaImage, scale: bool) -> Self {
         let dimensions = image.dimensions();
 
         let start = Instant::now();
-        let mut frame_info = FrameInfo::new();
-        // This seems to speed up decompressing considerably
-        frame_info.block_size = BlockSize::Max256KB;
-        let mut lz4_enc = FrameEncoder::with_frame_info(frame_info, Vec::with_capacity(8_192));
-        lz4_enc.write_all(image.as_raw()).expect("I/O is in memory");
-        let mut lz4_blob = lz4_enc.finish().expect("We control compression");
-        lz4_blob.shrink_to_fit();
-        // TODO: update this log message
+        let lz4_blob =
+            lz4_compress(&mut io::Cursor::new(image.as_raw())).expect("I/O is in memory");
         log::debug!(
-            "Compressing image: Full {:.2} MiB - Compressed {:.2} MiB - Time {:.2?}",
+            "Compressing SVG image:\n- Full {:.2} MiB\n- Compressed {:.2} MiB\n- Time {:.2?}",
             usize_in_mib(image.as_raw().len()),
             usize_in_mib(lz4_blob.len()),
             start.elapsed(),
@@ -314,9 +317,7 @@ impl Image {
             return Err(anyhow::Error::msg("Invalid buffer dimensions"));
         }
         let start = Instant::now();
-        let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
-        let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
-        io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+        let rgba_image = image.to_bytes();
 
         log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
