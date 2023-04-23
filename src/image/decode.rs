@@ -45,10 +45,7 @@ pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u3
 
     match maybe_streamed {
         Some(streamed) => Ok(streamed),
-        None => {
-            log::debug!("Falling back to full decode");
-            fallback_decode_and_compress(&contents)
-        }
+        None => fallback_decode_and_compress(&contents),
     }
 }
 
