@@ -45,7 +45,7 @@ pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u3
 
     match maybe_streamed {
         Some(streamed) => Ok(streamed),
-        None => fallback_decode_and_compress(&contents),
+        None => fallback_decode_and_compress(contents),
     }
 }
 
@@ -128,7 +128,7 @@ impl<'img> io::Read for Rgba8Adapter<'img> {
 
                 let (left, right) = buf.split_at_mut(scratch.len());
 
-                left.copy_from_slice(&scratch);
+                left.copy_from_slice(scratch);
 
                 // Step 2.
                 let num_pixels = right.len() / 3 + 1;
@@ -144,8 +144,8 @@ impl<'img> io::Read for Rgba8Adapter<'img> {
                 let mut rgb_end = n - 1;
                 let mut rgba_end = bytes_transformed - 1;
                 loop {
-                    scratch[rgba_end - 0] = u8::MAX;
-                    scratch[rgba_end - 1] = scratch[rgb_end - 0];
+                    scratch[rgba_end] = u8::MAX;
+                    scratch[rgba_end - 1] = scratch[rgb_end];
                     scratch[rgba_end - 2] = scratch[rgb_end - 1];
                     scratch[rgba_end - 3] = scratch[rgb_end - 2];
 
