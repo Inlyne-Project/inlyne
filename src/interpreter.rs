@@ -1,4 +1,4 @@
-use crate::color::hex_to_linear_rgba;
+use crate::color::native_color;
 use crate::image::Image;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
@@ -25,6 +25,7 @@ use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
 use html5ever::Attribute;
 use tokio::runtime::Runtime;
+use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 use Token::{CharacterTokens, EOFToken};
@@ -120,6 +121,7 @@ pub struct HtmlInterpreter {
     current_textbox: TextBox,
     hidpi_scale: f32,
     theme: Theme,
+    surface_format: TextureFormat,
     window: Arc<Window>,
     state: State,
     file_path: PathBuf,
@@ -138,6 +140,7 @@ impl HtmlInterpreter {
         window: Arc<Window>,
         element_queue: Arc<Mutex<VecDeque<Element>>>,
         theme: Theme,
+        surface_format: TextureFormat,
         hidpi_scale: f32,
         file_path: PathBuf,
         image_cache: ImageCache,
@@ -149,8 +152,9 @@ impl HtmlInterpreter {
             element_queue,
             current_textbox: TextBox::new(Vec::new(), hidpi_scale),
             hidpi_scale,
+            surface_format,
             state: State {
-                span_color: theme.code_color,
+                span_color: native_color(theme.code_color, &surface_format),
                 ..Default::default()
             },
             theme,
@@ -178,7 +182,7 @@ impl HtmlInterpreter {
             self.theme.code_highlighter.as_syntect_name(),
         );
         plugins.render.codefence_syntax_highlighter = Some(&adapter);
-        let span_color = self.theme.code_color;
+        let span_color = native_color(self.theme.code_color, &self.surface_format);
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in reciever {
@@ -495,7 +499,7 @@ impl TokenSink for HtmlInterpreter {
                                         .find_map(|style| style.strip_prefix("background-color:#"))
                                     {
                                         if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
-                                            let bg_color = hex_to_linear_rgba(hex);
+                                            let bg_color = native_color(hex, &self.surface_format);
                                             self.current_textbox
                                                 .set_background_color(Some(bg_color));
                                         }
@@ -521,7 +525,8 @@ impl TokenSink for HtmlInterpreter {
                                         .find_map(|style| style.strip_prefix("color:#"))
                                     {
                                         if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
-                                            self.state.span_color = hex_to_linear_rgba(hex);
+                                            self.state.span_color =
+                                                native_color(hex, &self.surface_format);
                                         }
                                     }
                                 }
@@ -669,7 +674,10 @@ impl TokenSink for HtmlInterpreter {
                                 self.push_spacer();
                             }
                         }
-                        "span" => self.state.span_color = self.theme.code_color,
+                        "span" => {
+                            self.state.span_color =
+                                native_color(self.theme.code_color, &self.surface_format)
+                        }
                         "details" => {
                             self.push_current_textbox();
                             if let Some(html::Element::Details(section)) =
@@ -711,7 +719,7 @@ impl TokenSink for HtmlInterpreter {
                                 self.current_textbox.texts.push(Text::new(
                                     " ".to_string(),
                                     self.hidpi_scale,
-                                    self.theme.text_color,
+                                    native_color(self.theme.text_color, &self.surface_format),
                                 ));
                             }
                         }
@@ -731,7 +739,7 @@ impl TokenSink for HtmlInterpreter {
                                 self.current_textbox.texts.push(Text::new(
                                     " ".to_string(),
                                     self.hidpi_scale,
-                                    self.theme.text_color,
+                                    native_color(self.theme.text_color, &self.surface_format),
                                 ));
                             }
                         }
@@ -743,7 +751,11 @@ impl TokenSink for HtmlInterpreter {
                         str = str.trim_start().to_owned();
                     }
 
-                    let mut text = Text::new(str, self.hidpi_scale, self.theme.text_color);
+                    let mut text = Text::new(
+                        str,
+                        self.hidpi_scale,
+                        native_color(self.theme.text_color, &self.surface_format),
+                    );
                     if let Some(html::Element::ListItem) = self.state.element_stack.last() {
                         let mut list = None;
                         for element in self.state.element_stack.iter_mut().rev() {
@@ -763,7 +775,7 @@ impl TokenSink for HtmlInterpreter {
                                     Text::new(
                                         format!("{}. ", index),
                                         self.hidpi_scale,
-                                        self.theme.text_color,
+                                        native_color(self.theme.text_color, &self.surface_format),
                                     )
                                     .make_bold(true),
                                 );
@@ -777,7 +789,7 @@ impl TokenSink for HtmlInterpreter {
                                     Text::new(
                                         "· ".to_string(),
                                         self.hidpi_scale,
-                                        self.theme.text_color,
+                                        native_color(self.theme.text_color, &self.surface_format),
                                     )
                                     .make_bold(true),
                                 )
@@ -804,7 +816,8 @@ impl TokenSink for HtmlInterpreter {
                     }
                     if let Some(link) = self.state.text_options.link.last() {
                         text = text.with_link((*link).clone());
-                        text = text.with_color(self.theme.link_color);
+                        text = text
+                            .with_color(native_color(self.theme.link_color, &self.surface_format));
                     }
                     if self.state.text_options.bold >= 1 {
                         text = text.make_bold(true);
