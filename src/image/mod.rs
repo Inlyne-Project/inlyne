@@ -4,9 +4,8 @@ use crate::InlyneEvent;
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
-use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 use std::cell::Cell;
-use std::io::{self, Cursor, Write};
+use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,6 +17,10 @@ use wgpu::{BindGroup, Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
+
+mod decode;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub enum ImageSize {
@@ -33,19 +36,28 @@ pub struct ImageData {
 }
 
 impl ImageData {
+    fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
+        let (lz4_blob, dimensions) = decode::decode_and_compress(bytes)?;
+        Ok(Self {
+            lz4_blob,
+            scale,
+            dimensions,
+        })
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        decode::lz4_decompress(&self.lz4_blob, self.rgba_image_byte_size())
+            .expect("Size matches and I/O is in memory")
+    }
+
     fn new(image: RgbaImage, scale: bool) -> Self {
         let dimensions = image.dimensions();
 
         let start = Instant::now();
-        let mut frame_info = FrameInfo::new();
-        // This seems to speed up decompressing considerably
-        frame_info.block_size = BlockSize::Max256KB;
-        let mut lz4_enc = FrameEncoder::with_frame_info(frame_info, Vec::with_capacity(8_192));
-        lz4_enc.write_all(image.as_raw()).expect("I/O is in memory");
-        let mut lz4_blob = lz4_enc.finish().expect("We control compression");
-        lz4_blob.shrink_to_fit();
+        let lz4_blob =
+            decode::lz4_compress(&mut io::Cursor::new(image.as_raw())).expect("I/O is in memory");
         log::debug!(
-            "Compressing image: Full {:.2} MiB - Compressed {:.2} MiB - Time {:.2?}",
+            "Compressing SVG image:\n- Full {:.2} MiB\n- Compressed {:.2} MiB\n- Time {:.2?}",
             usize_in_mib(image.as_raw().len()),
             usize_in_mib(lz4_blob.len()),
             start.elapsed(),
@@ -128,9 +140,7 @@ impl Image {
             return Err(anyhow::Error::msg("Invalid buffer dimensions"));
         }
         let start = Instant::now();
-        let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
-        let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
-        io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
+        let rgba_image = image.to_bytes();
 
         log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
@@ -209,8 +219,8 @@ impl Image {
                 reqwest::get(&src).await?.bytes().await?.to_vec()
             };
 
-            let image = if let Ok(image) = image::load_from_memory(&image_data) {
-                anyhow::Result::Ok(Arc::new(ImageData::new(image.into_rgba8(), true)))
+            let image = if let Ok(image) = ImageData::load(&image_data, true) {
+                Ok(Arc::new(image))
             } else {
                 let opt = usvg::Options::default();
                 let mut rtree = usvg::Tree::from_data(&image_data, &opt)?;
@@ -402,7 +412,7 @@ impl ImageRenderer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shaders/image.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/image.wgsl"))),
         });
         let image_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
