@@ -86,15 +86,15 @@ pub fn defaults() -> Keybindings {
         (
             Action::Quit,
             KeyCombo(vec![
-                ModifiedKey::from(VirtKey::Z),
-                ModifiedKey::from(VirtKey::Z),
+                ModifiedKey(Key::from(VirtKey::Z), ModifiersState::SHIFT),
+                ModifiedKey(Key::from(VirtKey::Z), ModifiersState::SHIFT),
             ]),
         ),
         (
             Action::Quit,
             KeyCombo(vec![
-                ModifiedKey::from(VirtKey::Z),
-                ModifiedKey::from(VirtKey::Q),
+                ModifiedKey(Key::from(VirtKey::Z), ModifiersState::SHIFT),
+                ModifiedKey(Key::from(VirtKey::Q), ModifiersState::SHIFT),
             ]),
         ),
     ]
