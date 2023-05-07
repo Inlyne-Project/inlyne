@@ -180,7 +180,7 @@ impl Image {
             } else if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
                 bytes.to_vec()
             } else {
-                log::warn!("Reqwest for image from {} failed", src_path.display());
+                log::warn!("Request for image from {} failed", src_path.display());
                 return
             };
 
