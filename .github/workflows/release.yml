@@ -60,10 +60,10 @@ jobs:
         cp {README.md,LICENSE,example.png,inlyne.toml.sample} "$staging/"
 
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          cp "target/${{ matrix.target }}/release/inlyne.exe" "$staging/"
+          cp "target/${{ matrix.target }}/release-lto/inlyne.exe" "$staging/"
           inlyne_bin="$staging/inlyne.exe"
         else
-          cp "target/${{ matrix.target }}/release/inlyne" "$staging/"
+          cp "target/${{ matrix.target }}/release-lto/inlyne" "$staging/"
           inlyne_bin="$staging/inlyne"
         fi
 
