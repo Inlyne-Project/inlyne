@@ -113,7 +113,7 @@ impl Renderer {
             .formats
             .iter()
             .copied()
-            .find(|f| f.describe().srgb)
+            .find(|f| f.is_srgb())
             .unwrap_or(caps.formats[0]);
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
