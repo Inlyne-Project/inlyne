@@ -317,16 +317,11 @@ impl Text {
 
     fn font_id(&self) -> FontId {
         let base = self.font * 4;
-        let font = if self.is_bold {
-            if self.is_italic {
-                base + 3
-            } else {
-                base + 2
-            }
-        } else if self.is_italic {
-            base + 1
-        } else {
-            base
+        let font = base + match (self.is_bold, self.is_italic) {
+            (false, false) => 0,
+            (false, true) => 1,
+            (true, false) => 2,
+            (true, true) => 3,
         };
         FontId(font)
     }
