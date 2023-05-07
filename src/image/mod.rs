@@ -4,9 +4,8 @@ use crate::InlyneEvent;
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
-use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 use std::fs;
-use std::io::{self, Cursor, Write};
+use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -16,6 +15,10 @@ use wgpu::{BindGroup, Device, TextureFormat};
 use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
+
+mod decode;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub enum ImageSize {
@@ -31,19 +34,28 @@ pub struct ImageData {
 }
 
 impl ImageData {
+    fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
+        let (lz4_blob, dimensions) = decode::decode_and_compress(bytes)?;
+        Ok(Self {
+            lz4_blob,
+            scale,
+            dimensions,
+        })
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        decode::lz4_decompress(&self.lz4_blob, self.rgba_image_byte_size())
+            .expect("Size matches and I/O is in memory")
+    }
+
     fn new(image: RgbaImage, scale: bool) -> Self {
         let dimensions = image.dimensions();
 
         let start = Instant::now();
-        let mut frame_info = FrameInfo::new();
-        // This seems to speed up decompressing considerably
-        frame_info.block_size = BlockSize::Max256KB;
-        let mut lz4_enc = FrameEncoder::with_frame_info(frame_info, Vec::with_capacity(8_192));
-        lz4_enc.write_all(image.as_raw()).expect("I/O is in memory");
-        let mut lz4_blob = lz4_enc.finish().expect("We control compression");
-        lz4_blob.shrink_to_fit();
+        let lz4_blob =
+            decode::lz4_compress(&mut io::Cursor::new(image.as_raw())).expect("I/O is in memory");
         log::debug!(
-            "Compressing image: Full {:.2} MiB - Compressed {:.2} MiB - Time {:.2?}",
+            "Compressing SVG image:\n- Full {:.2} MiB\n- Compressed {:.2} MiB\n- Time {:.2?}",
             usize_in_mib(image.as_raw().len()),
             usize_in_mib(lz4_blob.len()),
             start.elapsed(),
@@ -86,16 +98,9 @@ impl Image {
             log::warn!("Invalid buffer dimensions");
             return None;
         }
+        
         let start = Instant::now();
-        let rgba_image = {
-            let image_lock = self.image_data.lock().unwrap();
-            let image = image_lock.as_ref()?;
-
-            let mut lz4_dec = FrameDecoder::new(Cursor::new(&image.lz4_blob));
-            let mut rgba_image = Vec::with_capacity(image.rgba_image_byte_size());
-            io::copy(&mut lz4_dec, &mut rgba_image).expect("I/O is in memory");
-            rgba_image
-        };
+        let rgba_image = self.image_data.lock().unwrap().as_ref().map(|image| image.to_bytes())?;
 
         log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
@@ -172,17 +177,15 @@ impl Image {
 
             let image_data = if let Ok(img_file) = fs::read(&src_path) {
                 img_file
+            } else if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
+                bytes.to_vec()
             } else {
-                if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
-                    bytes.to_vec()
-                } else {
-                    log::warn!("Reqwest for image from {} failed", src_path.display());
-                    return
-                }
+                log::warn!("Reqwest for image from {} failed", src_path.display());
+                return
             };
 
-            let image = if let Ok(image) = image::load_from_memory(&image_data) {
-                ImageData::new(image.into_rgba8(), true)
+            let image = if let Ok(image) = ImageData::load(&image_data, true) {
+                image
             } else {
                 let opt = usvg::Options::default();
                 let mut rtree = usvg::Tree::from_data(&image_data, &opt).unwrap();
@@ -260,7 +263,7 @@ impl Image {
     }
 
     fn buffer_dimensions(&self) -> Option<(u32, u32)> {
-        Some(self.image_data.lock().unwrap().as_ref()?.dimensions.clone())
+        Some(self.image_data.lock().unwrap().as_ref()?.dimensions)
     }
 
     fn dimensions(&mut self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
@@ -367,7 +370,7 @@ impl ImageRenderer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shaders/image.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/image.wgsl"))),
         });
         let image_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
