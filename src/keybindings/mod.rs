@@ -129,6 +129,12 @@ impl KeyCombo {
     }
 }
 
+impl From<VirtualKeyCode> for KeyCombo {
+    fn from(key_code: VirtualKeyCode) -> Self {
+        KeyCombo(vec![ModifiedKey::from(key_code)])
+    }
+}
+
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     ToTop,
