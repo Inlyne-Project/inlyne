@@ -71,5 +71,61 @@ pub fn defaults() -> Keybindings {
             Action::ToBottom,
             KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::End)]),
         ),
+        // Quit: Esc
+        (
+            Action::Quit,
+            KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::Escape)]),
+        ),
+        // vim-like bindings
+        // Copy: y
+        (
+            Action::Copy,
+            KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::Y)]),
+        ),
+        // Scroll up: k
+        (
+            Action::ScrollUp,
+            KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::K)]),
+        ),
+        // Scroll down: j
+        (
+            Action::ScrollDown,
+            KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::J)]),
+        ),
+        // Go to top of doc: gg
+        (
+            Action::ToTop,
+            KeyCombo(vec![
+                ModifiedKey::from(VirtualKeyCode::G),
+                ModifiedKey::from(VirtualKeyCode::G),
+            ]),
+        ),
+        // Go to bottom of doc: G
+        (
+            Action::ToBottom,
+            KeyCombo(vec![ModifiedKey(
+                Key::from(VirtualKeyCode::G),
+                ModifiersState::SHIFT,
+            )]),
+        ),
+        // Quit: q / ZZ / ZQ
+        (
+            Action::Quit,
+            KeyCombo(vec![ModifiedKey::from(VirtualKeyCode::Q)]),
+        ),
+        (
+            Action::Quit,
+            KeyCombo(vec![
+                ModifiedKey::from(VirtualKeyCode::Z),
+                ModifiedKey::from(VirtualKeyCode::Z),
+            ]),
+        ),
+        (
+            Action::Quit,
+            KeyCombo(vec![
+                ModifiedKey::from(VirtualKeyCode::Z),
+                ModifiedKey::from(VirtualKeyCode::Q),
+            ]),
+        ),
     ]
 }
