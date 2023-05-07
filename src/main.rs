@@ -224,7 +224,8 @@ impl Inlyne {
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
-        let md_string = read_to_string(&opts.file_path).with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+        let md_string = read_to_string(&opts.file_path)
+            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),

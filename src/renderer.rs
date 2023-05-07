@@ -654,13 +654,12 @@ impl Renderer {
             match &mut element.inner {
                 Element::Image(ref mut image) => {
                     if let Some(bind_group) = image.bind_group.clone().or_else(|| {
-                        image
-                            .create_bind_group(
-                                &self.device,
-                                &self.queue,
-                                &self.image_renderer.sampler,
-                                &self.image_renderer.bindgroup_layout,
-                            )
+                        image.create_bind_group(
+                            &self.device,
+                            &self.queue,
+                            &self.image_renderer.sampler,
+                            &self.image_renderer.bindgroup_layout,
+                        )
                     }) {
                         let vertex_buf =
                             ImageRenderer::vertex_buf(&self.device, pos, *size, screen_size);
@@ -673,13 +672,12 @@ impl Renderer {
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
                             if let Some(bind_group) = image.bind_group.clone().or_else(|| {
-                                image
-                                    .create_bind_group(
-                                        &self.device,
-                                        &self.queue,
-                                        &self.image_renderer.sampler,
-                                        &self.image_renderer.bindgroup_layout,
-                                    )
+                                image.create_bind_group(
+                                    &self.device,
+                                    &self.queue,
+                                    &self.image_renderer.sampler,
+                                    &self.image_renderer.bindgroup_layout,
+                                )
                             }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,
@@ -701,13 +699,12 @@ impl Renderer {
                         let pos = (pos.0, pos.1 - self.scroll_y);
                         if let Element::Image(ref mut image) = &mut element.inner {
                             if let Some(bind_group) = image.bind_group.clone().or_else(|| {
-                                image
-                                    .create_bind_group(
-                                        &self.device,
-                                        &self.queue,
-                                        &self.image_renderer.sampler,
-                                        &self.image_renderer.bindgroup_layout,
-                                    )
+                                image.create_bind_group(
+                                    &self.device,
+                                    &self.queue,
+                                    &self.image_renderer.sampler,
+                                    &self.image_renderer.bindgroup_layout,
+                                )
                             }) {
                                 let vertex_buf = ImageRenderer::vertex_buf(
                                     &self.device,

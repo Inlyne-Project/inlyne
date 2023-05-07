@@ -92,15 +92,19 @@ impl Image {
         sampler: &wgpu::Sampler,
         bindgroup_layout: &wgpu::BindGroupLayout,
     ) -> Option<Arc<BindGroup>> {
-        let dimensions = self
-            .buffer_dimensions()?;
+        let dimensions = self.buffer_dimensions()?;
         if dimensions.0 == 0 || dimensions.1 == 0 {
             log::warn!("Invalid buffer dimensions");
             return None;
         }
-        
+
         let start = Instant::now();
-        let rgba_image = self.image_data.lock().unwrap().as_ref().map(|image| image.to_bytes())?;
+        let rgba_image = self
+            .image_data
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|image| image.to_bytes())?;
 
         log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
@@ -165,7 +169,7 @@ impl Image {
         event_proxy: EventLoopProxy<InlyneEvent>,
     ) -> anyhow::Result<Image> {
         let image_data = Arc::new(Mutex::new(None));
-        let image_data_clone = image_data.clone(); 
+        let image_data_clone = image_data.clone();
 
         std::thread::spawn(move || {
             let mut src_path = PathBuf::from(&src);
@@ -181,7 +185,7 @@ impl Image {
                 bytes.to_vec()
             } else {
                 log::warn!("Request for image from {} failed", src_path.display());
-                return
+                return;
             };
 
             let image = if let Ok(image) = ImageData::load(&image_data, true) {
@@ -197,23 +201,28 @@ impl Image {
                     (pixmap_size.width() as f32 * hidpi_scale) as u32,
                     (pixmap_size.height() as f32 * hidpi_scale) as u32,
                 )
-                .context("Couldn't create svg pixmap").unwrap();
+                .context("Couldn't create svg pixmap")
+                .unwrap();
                 resvg::render(
                     &rtree,
                     resvg::FitTo::Zoom(hidpi_scale),
                     tiny_skia::Transform::default(),
                     pixmap.as_mut(),
                 )
-                .context("Svg failed to render").unwrap();
+                .context("Svg failed to render")
+                .unwrap();
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
-                        .context("Svg buffer has invalid dimensions").unwrap(),
+                        .context("Svg buffer has invalid dimensions")
+                        .unwrap(),
                     false,
                 )
             };
 
             *image_data_clone.lock().unwrap() = Some(image);
-            event_proxy.send_event(InlyneEvent::LoadedImage(src, image_data_clone)).unwrap();
+            event_proxy
+                .send_event(InlyneEvent::LoadedImage(src, image_data_clone))
+                .unwrap();
         });
 
         let image = Image {

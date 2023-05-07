@@ -105,8 +105,7 @@ impl HandleCache {
                     .join("inlyne");
                 let file_name = font_info.to_string();
                 let cache_file_path = inlyne_cache.join(file_name.as_str());
-                fs::write(cache_file_path, bytes.as_ref())
-                    .expect("Writing to font handle cache");
+                fs::write(cache_file_path, bytes.as_ref()).expect("Writing to font handle cache");
                 Self {
                     path: file_name.into(),
                     binary: true,
@@ -155,8 +154,7 @@ pub fn get_fonts(font_opts: &FontOptions) -> anyhow::Result<Vec<FontArc>> {
             Some(cache_dir) => {
                 let inlyne_cache = cache_dir.join("inlyne");
                 if !inlyne_cache.exists() {
-                    fs::create_dir_all(&inlyne_cache)
-                        .expect("Creating cache directory");
+                    fs::create_dir_all(&inlyne_cache).expect("Creating cache directory");
                 }
 
                 let reg_cache_path = inlyne_cache.join("font_regular.toml");
