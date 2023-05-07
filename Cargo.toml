@@ -39,8 +39,7 @@ dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
-tokio = { version = "1.27", features = ["full"] }
-async-once-cell = { version = "0.4.4", features = ["unpin"] }
+pollster = "0.3.0"
 
 # Uncomment for profiling
 # [profile.release]

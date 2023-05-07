@@ -258,6 +258,7 @@ impl Spacer {
     }
 }
 
+#[derive(Debug)]
 pub struct Row {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
@@ -272,6 +273,7 @@ impl Row {
     }
 }
 
+#[derive(Debug)]
 pub struct Section {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
