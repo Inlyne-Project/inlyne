@@ -72,7 +72,7 @@ self.glyph_brush.queue(&text_box.glyph_section(*pos, bounds));
 <details>
 <summary>Click me to show text</summary>
 
-You weren't suppost to see this!
+You weren't supposed to see this!
 </details>
 
 #### Alignment

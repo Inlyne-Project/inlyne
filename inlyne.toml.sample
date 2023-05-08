@@ -59,7 +59,7 @@
 
 # # Custom keybinds for actions
 # #
-# # HOT TIP: If you want to understand the key events recieved and actions that
+# # HOT TIP: If you want to understand the key events received and actions that
 # #     are emitted then you can run `inlyne` with the `INLYNE_LOG` env var set
 # #     to "inlyne::keybindings=debug"
 # #

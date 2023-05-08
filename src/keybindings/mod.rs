@@ -265,7 +265,7 @@ impl KeyCombos {
             }
         }
 
-        log::debug!("Recieved key: {modified_key}");
+        log::debug!("Received key: {modified_key}");
 
         let maybe_action = self.munch_(modified_key);
 

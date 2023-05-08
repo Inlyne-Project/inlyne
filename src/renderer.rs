@@ -497,7 +497,7 @@ impl Renderer {
                 }
                 Element::Image(_) => {}
                 Element::Spacer(spacer) => {
-                    if spacer.visibile {
+                    if spacer.visible {
                         self.draw_rectangle(
                             Rect::new(
                                 (
