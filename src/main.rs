@@ -225,7 +225,7 @@ impl Inlyne {
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
         let md_string = read_to_string(&opts.file_path)
-            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+            .with_context(|| format!("Could not read file at '{}'", opts.file_path.display()))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),
@@ -291,7 +291,10 @@ impl Inlyne {
                         self.renderer.positioner.anchors.clear();
                         let md_string = read_to_string(&self.opts.file_path)
                             .with_context(|| {
-                                format!("Could not read file at {:?}", self.opts.file_path)
+                                format!(
+                                    "Could not read file at '{}'",
+                                    self.opts.file_path.display()
+                                )
                             })
                             .unwrap();
                         self.interpreter_should_queue.store(true, Ordering::Relaxed);
