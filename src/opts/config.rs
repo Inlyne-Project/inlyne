@@ -84,14 +84,20 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> anyhow::Result<Self> {
-        let config_dir = dirs::config_dir().context("Failed detecting config dir")?;
+        let config_dir =
+            dirs::config_dir().context("Failed to find the configuration directory")?;
+
         let config_path = config_dir.join("inlyne").join("inlyne.toml");
-        if config_path.is_file() {
-            let text = read_to_string(&config_path).context("Failed reading config file")?;
-            let config = toml::from_str(&text)?;
-            Ok(config)
-        } else {
-            Ok(Self::default())
+
+        if !config_path.is_file() {
+            return Ok(Self::default());
         }
+
+        let config_content = read_to_string(&config_path).context(format!(
+            "Failed to read configuration file at '{path}'",
+            path = config_path.display()
+        ))?;
+
+        Ok(toml::from_str(&config_content)?)
     }
 }
