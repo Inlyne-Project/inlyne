@@ -10,7 +10,7 @@ const SCALE_HELP: &str =
     "Factor to scale rendered file by [default: OS defined window scale factor]";
 
 impl ThemeType {
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::Dark => "dark",
@@ -94,20 +94,6 @@ impl Args {
     pub fn new() -> Self {
         let program_args = std::env::args_os().collect();
         Self::parse_from(program_args)
-    }
-
-    pub fn program_args(&self) -> Vec<String> {
-        let mut args = Vec::new();
-        args.push(self.file_path.as_os_str().to_str().unwrap().to_string());
-        if let Some(theme) = self.theme {
-            args.push("--theme".to_owned());
-            args.push(theme.as_str().to_owned());
-        }
-        if let Some(scale) = self.scale {
-            args.push("--scale".to_owned());
-            args.push(scale.to_string());
-        }
-        args
     }
 
     pub fn parse_from(args: Vec<OsString>) -> Self {

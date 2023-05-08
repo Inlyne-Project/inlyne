@@ -58,6 +58,12 @@ impl OptionalTheme {
 #[derive(Deserialize, Debug)]
 pub struct LinesToScroll(pub f32);
 
+impl From<LinesToScroll> for f32 {
+    fn from(value: LinesToScroll) -> Self {
+        value.0
+    }
+}
+
 impl Default for LinesToScroll {
     fn default() -> Self {
         Self(3.0)
