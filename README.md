@@ -17,7 +17,7 @@ inlyne README.md --theme dark/light
 Markdown files are a wonderful tool to get formatted, visually appealing, information to people in a minimal way.
 Except 9 times out of 10 you need an entire web browser to quickly open a file...
 
-Introducing **Inlyne**, a GPU powered yet browsless tool to help you quickly
+Introducing **Inlyne**, a GPU powered yet browserless tool to help you quickly
 view markdown files in the blink of an eye.
 
 ## Install
