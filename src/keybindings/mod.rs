@@ -18,6 +18,13 @@ pub enum Key {
     ScanCode(ScanCode),
 }
 
+impl Keybindings {
+    #[inline]
+    pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
+        Self(bindings)
+    }
+}
+
 impl Extend<(Action, KeyCombo)> for Keybindings {
     fn extend<I: IntoIterator<Item = (Action, KeyCombo)>>(&mut self, iter: I) {
         self.0.extend(iter)
