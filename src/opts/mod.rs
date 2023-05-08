@@ -3,12 +3,9 @@ mod config;
 #[cfg(test)]
 mod tests;
 
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
-use crate::{
-    color,
-    keybindings::{self, Keybindings},
-};
+use crate::{color, keybindings::Keybindings};
 
 use serde::Deserialize;
 
@@ -103,10 +100,7 @@ impl Opts {
         let font_opts = config.font_options.unwrap_or_default();
         let page_width = args.page_width.or(config.page_width);
         let lines_to_scroll = config.lines_to_scroll.into();
-        let mut keybindings = config
-            .keybindings
-            .base
-            .unwrap_or_else(keybindings::defaults);
+        let mut keybindings = config.keybindings.base.unwrap_or_default();
         if let Some(extra) = config.keybindings.extra {
             keybindings.extend(extra.into_iter());
         }
