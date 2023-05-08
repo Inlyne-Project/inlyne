@@ -43,15 +43,13 @@ pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command 
         .value_hint(ValueHint::AnyPath)
         .help("Path to the markdown file");
 
-    let mut theme_arg = Arg::new("theme")
+    let theme_arg = Arg::new("theme")
         .short('t')
         .long("theme")
         .number_of_values(1)
         .value_parser(value_parser!(ThemeType))
-        .help("Theme to use when rendering");
-    if let Some(theme) = default_theme {
-        theme_arg = theme_arg.default_value(theme.as_str());
-    }
+        .help("Theme to use when rendering")
+        .default_value(default_theme.map(|t| t.as_str()));
 
     let scale_arg = Arg::new("scale")
         .short('s')
