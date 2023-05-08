@@ -710,17 +710,17 @@ fn main() -> anyhow::Result<()> {
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match Config::load() {
-        Ok(config) => config,
-        Err(err) => {
+    let args = Args::new();
+    let config = match &args.config {
+        Some(config_path) => Config::load_from_file(config_path)?,
+        None => Config::load_from_system().unwrap_or_else(|err| {
             log::warn!(
                 "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
             Config::default()
-        }
+        }),
     };
-    let args = Args::new(&config);
     let opts = Opts::parse_and_load_from(&args, config);
     let inlyne = Inlyne::new(&opts, args)?;
 

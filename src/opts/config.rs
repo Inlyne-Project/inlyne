@@ -1,4 +1,5 @@
 use std::fs::read_to_string;
+use std::path::Path;
 
 use super::ThemeType;
 use crate::{color, keybindings::Keybindings};
@@ -83,7 +84,16 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> anyhow::Result<Self> {
+    pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+        let config_content = read_to_string(path).context(format!(
+            "Failed to read configuration file at '{path}'",
+            path = path.display()
+        ))?;
+
+        Ok(toml::from_str(&config_content)?)
+    }
+
+    pub fn load_from_system() -> anyhow::Result<Self> {
         let config_dir =
             dirs::config_dir().context("Failed to find the configuration directory")?;
 
@@ -93,11 +103,6 @@ impl Config {
             return Ok(Self::default());
         }
 
-        let config_content = read_to_string(&config_path).context(format!(
-            "Failed to read configuration file at '{path}'",
-            path = config_path.display()
-        ))?;
-
-        Ok(toml::from_str(&config_content)?)
+        Self::load_from_file(&config_path)
     }
 }
