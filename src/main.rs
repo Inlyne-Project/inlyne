@@ -155,7 +155,7 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 
         match full_path.file_name() {
             Some(name) => parts.push(name.to_owned()),
-            // We've seached the full path and didn't find a vcs dir
+            // We've searched the full path and didn't find a vcs dir
             None => return Some(path.to_owned()),
         }
         if is_vcs_dir {
@@ -238,9 +238,9 @@ impl Inlyne {
             event_loop.create_proxy(),
         );
 
-        let (interpreter_sender, interpreter_reciever) = channel();
+        let (interpreter_sender, interpreter_receiver) = channel();
         let interpreter_should_queue = interpreter.should_queue.clone();
-        std::thread::spawn(move || interpreter.intepret_md(interpreter_reciever));
+        std::thread::spawn(move || interpreter.interpret_md(interpreter_receiver));
 
         interpreter_sender.send(md_string)?;
 
@@ -595,7 +595,7 @@ impl Inlyne {
                 },
                 Event::MainEventsCleared => {
                     // We lazily store the size and only reposition elements and request a redraw when
-                    // we recieve a `MainEventsCleared`.  This prevents us from clogging up the queue
+                    // we receive a `MainEventsCleared`.  This prevents us from clogging up the queue
                     // with a bunch of costly resizes. (https://github.com/trimental/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
                         self.renderer.config.width = size.width;

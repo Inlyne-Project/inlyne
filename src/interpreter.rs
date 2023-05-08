@@ -126,7 +126,7 @@ pub struct HtmlInterpreter {
     file_path: PathBuf,
     // Whether the interpreters is allowed to queue elements
     pub should_queue: Arc<AtomicBool>,
-    // Whether interpreter should stop queuing till next recieved file
+    // Whether interpreter should stop queuing till next received file
     stopped: bool,
     first_pass: bool,
     image_cache: ImageCache,
@@ -164,7 +164,7 @@ impl HtmlInterpreter {
         }
     }
 
-    pub fn intepret_md(self, reciever: mpsc::Receiver<String>) {
+    pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
         let mut input = BufferQueue::new();
         let mut options = ComrakOptions::default();
         options.extension.table = true;
@@ -181,7 +181,7 @@ impl HtmlInterpreter {
         let span_color = native_color(self.theme.code_color, &self.surface_format);
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
-        for md_string in reciever {
+        for md_string in receiver {
             if tok
                 .sink
                 .should_queue
