@@ -24,6 +24,12 @@ view markdown files in the blink of an eye.
 
 To install just use `cargo install inlyne`, everything comes pre-bundled.
 
+On NetBSD, a pre-compiled binary, including an example configuration file, is available from the official repositories. To install it, simply run:
+
+```bash
+pkgin install inlyne
+```
+
 ## Features
 
 Over time the features of this application will continue to grow. However there are a few
