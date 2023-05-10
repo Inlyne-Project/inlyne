@@ -18,7 +18,7 @@ Markdown files are a wonderful tool to get formatted, visually appealing, inform
 Except 9 times out of 10 you need an entire web browser to quickly open a file...
 
 Introducing **Inlyne**, a GPU powered yet browserless tool to help you quickly
-view markdown files in the blink of an eye.
+view markdown files in the blink of an eye 👀.
 
 ## Install
 
