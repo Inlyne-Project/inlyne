@@ -81,27 +81,44 @@ impl Opts {
     }
 
     fn parse_and_load_inner(args: Args, config: Config, fallback_theme: ResolvedTheme) -> Self {
-        let file_path = args.file_path;
-        let resolved_theme = args
-            .theme
-            .or(config.theme)
+        let Config {
+            theme: config_theme,
+            scale: config_scale,
+            page_width: config_page_width,
+            lines_to_scroll,
+            light_theme,
+            dark_theme,
+            font_options,
+            keybindings: config_keybindings,
+        } = config;
+
+        let Args {
+            file_path,
+            theme: args_theme,
+            scale: args_scale,
+            config: _,
+            page_width: args_page_width,
+        } = args;
+
+        let file_path = file_path;
+        let resolved_theme = args_theme
+            .or(config_theme)
             .map_or(fallback_theme, ResolvedTheme::from);
         let theme = match resolved_theme {
-            ResolvedTheme::Dark => config.dark_theme.map_or(color::DARK_DEFAULT, |dark_theme| {
+            ResolvedTheme::Dark => dark_theme.map_or(color::DARK_DEFAULT, |dark_theme| {
                 dark_theme.merge(color::DARK_DEFAULT)
             }),
-            ResolvedTheme::Light => config
-                .light_theme
+            ResolvedTheme::Light => light_theme
                 .map_or(color::LIGHT_DEFAULT, |light_theme| {
                     light_theme.merge(color::LIGHT_DEFAULT)
                 }),
         };
-        let scale = args.scale.or(config.scale);
-        let font_opts = config.font_options.unwrap_or_default();
-        let page_width = args.page_width.or(config.page_width);
-        let lines_to_scroll = config.lines_to_scroll.into();
-        let mut keybindings = config.keybindings.base.unwrap_or_default();
-        if let Some(extra) = config.keybindings.extra {
+        let scale = args_scale.or(config_scale);
+        let font_opts = font_options.unwrap_or_default();
+        let page_width = args_page_width.or(config_page_width);
+        let lines_to_scroll = lines_to_scroll.into();
+        let mut keybindings = config_keybindings.base.unwrap_or_default();
+        if let Some(extra) = config_keybindings.extra {
             keybindings.extend(extra.into_iter());
         }
 
