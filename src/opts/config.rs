@@ -92,8 +92,8 @@ pub struct Config {
 impl Config {
     pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let config_content = read_to_string(path).context(format!(
-            "Failed to read configuration file at '{path}'",
-            path = path.display()
+            "Failed to read configuration file at '{}'",
+            path.display()
         ))?;
 
         Ok(toml::from_str(&config_content)?)
