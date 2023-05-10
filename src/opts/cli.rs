@@ -68,7 +68,7 @@ pub fn command(scale_help: String, default_theme: Option<ThemeType>) -> Command 
 
     let page_width_arg = Arg::new("page_width")
         .short('w')
-        .long("page width")
+        .long("page-width")
         .number_of_values(1)
         .value_parser(value_parser!(f32))
         .help("Maximum width of page in pixels");
