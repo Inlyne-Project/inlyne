@@ -74,7 +74,7 @@ pub fn command() -> Command {
         .value_parser(value_parser!(PathBuf))
         .help("Configuration file to use");
 
-    let page_width_arg = Arg::new("page width")
+    let page_width_arg = Arg::new("page_width")
         .short('w')
         .long("page-width")
         .number_of_values(1)
@@ -111,7 +111,7 @@ impl Args {
         let theme = matches.get_one("theme").cloned();
         let scale = matches.get_one("scale").cloned();
         let config = matches.get_one("config").cloned();
-        let page_width = matches.get_one("page width").cloned();
+        let page_width = matches.get_one("page_width").cloned();
 
         Self {
             file_path,
