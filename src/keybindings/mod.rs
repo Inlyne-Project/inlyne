@@ -19,7 +19,6 @@ pub enum Key {
 }
 
 impl Keybindings {
-    #[inline]
     pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
         Self(bindings)
     }
