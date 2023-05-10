@@ -39,6 +39,12 @@ impl IntoIterator for Keybindings {
     }
 }
 
+impl Default for Keybindings {
+    fn default() -> Self {
+        Self(defaults::defaults())
+    }
+}
+
 impl Key {
     pub fn new(resolved: Option<VirtualKeyCode>, scan_code: ScanCode) -> Self {
         match resolved {
