@@ -1,12 +1,24 @@
-use crate::utils::{Align, Line, Point, Rect, Selection, Size};
-use wgpu_glyph::{
-    ab_glyph::{Font, FontArc, PxScale},
-    Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
+use std::{
+    borrow::BorrowMut,
+    collections::hash_map,
+    hash::{BuildHasher, Hash, Hasher},
 };
+
+use fxhash::{FxHashMap, FxHashSet};
+use glyphon::{
+    cosmic_text::Align as TextAlign, Attrs, AttrsList, BufferLine, Color, FamilyOwned, FontSystem,
+    Style, SwashCache, TextArea, TextBounds, Weight,
+};
+
+use crate::utils::{Align, Line, Point, Rect, Selection, Size};
+
+type KeyHash = u64;
+type HashBuilder = twox_hash::RandomXxHashBuilder64;
 
 #[derive(Clone, Debug, Default)]
 pub struct TextBox {
     pub indent: f32,
+    pub font_size: f32,
     pub texts: Vec<Text>,
     pub is_code_block: bool,
     pub is_quote_block: Option<usize>,
@@ -18,11 +30,32 @@ pub struct TextBox {
     pub background_color: Option<[f32; 4]>,
 }
 
+pub struct CachedTextArea {
+    key: KeyHash,
+    left: i32,
+    top: i32,
+    bounds: TextBounds,
+    default_color: Color,
+}
+
+impl CachedTextArea {
+    pub fn text_area<'a>(&self, cache: &'a TextCache) -> TextArea<'a> {
+        TextArea {
+            buffer: cache.get(&self.key).expect("Get cached buffer"),
+            left: self.left,
+            top: self.top,
+            bounds: self.bounds,
+            default_color: self.default_color,
+        }
+    }
+}
+
 impl TextBox {
     pub fn new(texts: Vec<Text>, hidpi_scale: f32) -> TextBox {
         TextBox {
             texts,
             hidpi_scale,
+            font_size: 16.,
             ..Default::default()
         }
     }
@@ -56,89 +89,107 @@ impl TextBox {
         self.align = align;
     }
 
-    pub fn find_hoverable<'a, T: GlyphCruncher>(
+    pub fn line_height(&self, zoom: f32) -> f32 {
+        self.font_size * 1.1 * self.hidpi_scale * zoom
+    }
+
+    pub fn key(&self, bounds: Size, zoom: f32) -> Key<'_> {
+        let lines = vec![self
+            .texts
+            .iter()
+            .enumerate()
+            .map(|(n, t)| t.section_key(n))
+            .collect()];
+
+        let align = match self.align {
+            Align::Left => TextAlign::Left,
+            Align::Center => TextAlign::Center,
+            Align::Right => TextAlign::Right,
+        };
+
+        Key {
+            lines,
+            size: self.font_size * self.hidpi_scale * zoom,
+            line_height: self.line_height(zoom),
+            bounds,
+            align,
+        }
+    }
+
+    pub fn find_hoverable<'a>(
         &'a self,
-        glyph_brush: &'a mut T,
+        text_system: &mut TextSystem,
         loc: Point,
         screen_position: Point,
         bounds: Size,
         zoom: f32,
     ) -> Option<&'a Text> {
-        let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        glyph_brush
-            .glyphs(&self.glyph_section(screen_position, bounds, zoom))
-            .find(|glyph| {
-                let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
-                bounds.contains(loc)
-            })
-            .map(|glyph| &self.texts[glyph.section_index])
-    }
-
-    pub fn glyph_bounds<T: GlyphCruncher>(
-        &self,
-        glyph_brush: &mut T,
-        screen_position: Point,
-        bounds: Size,
-        zoom: f32,
-    ) -> Vec<(Rect, SectionGlyph)> {
-        let mut glyph_bounds = Vec::new();
-        let fonts: Vec<FontArc> = glyph_brush.fonts().to_vec();
-        for glyph in glyph_brush.glyphs(&self.glyph_section(screen_position, bounds, zoom)) {
-            let bounds = Rect::from((fonts[glyph.font_id.0]).glyph_bounds(&glyph.glyph));
-            glyph_bounds.push((bounds, glyph.clone()));
+        if screen_position.1 > loc.1 || screen_position.1 + bounds.1 < loc.1 {
+            return None;
         }
-        glyph_bounds
+        let cache = text_system.text_cache.borrow_mut();
+
+        let (_, buffer) =
+            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+
+        if let Some(cursor) = buffer.hit(loc.0 - screen_position.0, loc.1 - screen_position.1) {
+            let line = &buffer.lines[cursor.line];
+            let text = &self.texts[line.attrs_list().get_span(cursor.index).metadata];
+            Some(text)
+        } else {
+            None
+        }
     }
 
-    pub fn size<T: GlyphCruncher>(
-        &self,
-        glyph_brush: &mut T,
-        screen_position: Point,
-        bounds: Size,
-        zoom: f32,
-    ) -> Size {
+    pub fn size(&self, text_system: &mut TextSystem, bounds: Size, zoom: f32) -> Size {
         if self.texts.is_empty() {
             return (0., self.padding_height * self.hidpi_scale * zoom);
         }
 
-        if let Some(bounds) =
-            glyph_brush.glyph_bounds(&self.glyph_section(screen_position, bounds, zoom))
-        {
-            (
-                bounds.width(),
-                bounds.height() + self.padding_height * self.hidpi_scale * zoom,
-            )
-        } else {
-            (0., self.padding_height * self.hidpi_scale * zoom)
-        }
+        let cache = text_system.text_cache.borrow_mut();
+
+        let line_height = self.line_height(zoom);
+
+        let (_, paragraph) =
+            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+
+        let (total_lines, max_width) = paragraph
+            .layout_runs()
+            .enumerate()
+            .fold((0, 0.0), |(_, max), (i, buffer)| {
+                (i + 1, buffer.line_w.max(max))
+            });
+
+        (
+            max_width,
+            total_lines as f32 * line_height + self.padding_height * self.hidpi_scale * zoom,
+        )
     }
 
-    pub fn glyph_section(&self, mut screen_position: Point, bounds: Size, zoom: f32) -> Section {
-        let texts = self.texts.iter().map(|t| t.wgpu_text(zoom)).collect();
-
-        let horizontal_align = match self.align {
-            Align::Center => {
-                screen_position = (screen_position.0 + bounds.0 / 2., screen_position.1);
-                HorizontalAlign::Center
-            }
-            Align::Left => HorizontalAlign::Left,
-            Align::Right => {
-                screen_position = (bounds.0 + screen_position.0, screen_position.1);
-                HorizontalAlign::Right
-            }
-        };
-        Section {
-            screen_position,
-            bounds,
-            text: texts,
-            ..wgpu_glyph::Section::default()
-                .with_layout(Layout::default().h_align(horizontal_align))
-        }
-    }
-
-    pub fn render_lines<T: GlyphCruncher>(
+    pub fn text_areas(
         &self,
-        glyph_brush: &mut T,
+        text_system: &mut TextSystem,
+        screen_position: Point,
+        bounds: Size,
+        zoom: f32,
+        scroll_y: f32,
+    ) -> CachedTextArea {
+        let cache = text_system.text_cache.borrow_mut();
+
+        let (key, _) = cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+
+        CachedTextArea {
+            key,
+            left: screen_position.0 as i32,
+            top: (screen_position.1 - scroll_y) as i32,
+            bounds: TextBounds::default(),
+            default_color: Color::rgb(255, 255, 255),
+        }
+    }
+
+    pub fn render_lines(
+        &self,
+        text_system: &mut TextSystem,
         screen_position: Point,
         bounds: Size,
         zoom: f32,
@@ -153,113 +204,110 @@ impl TextBox {
         if !has_lines {
             return Vec::new();
         }
+
+        let line_height = self.line_height(zoom);
         let mut lines = Vec::new();
-        for (glyph_bounds, glyph) in self.glyph_bounds(glyph_brush, screen_position, bounds, zoom) {
-            if self.texts[glyph.section_index].is_underlined {
-                lines.push((
-                    (glyph_bounds.pos.0, glyph_bounds.max().1),
-                    (glyph_bounds.max().0, glyph_bounds.max().1),
-                ));
+
+        let cache = text_system.text_cache.borrow_mut();
+
+        let (_, buffer) =
+            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+
+        let mut y = screen_position.1 + line_height;
+        for line in buffer.layout_runs() {
+            for glyph in line.glyphs {
+                let text = &self.texts[glyph.metadata];
+                let x = screen_position.0 + glyph.x_int as f32;
+                if text.is_underlined {
+                    lines.push(((x, y), (x + glyph.w, y)))
+                }
+                if text.is_striked {
+                    let y = y - (line_height / 2.);
+                    lines.push(((x, y), (x + glyph.w, y)))
+                }
             }
-            if self.texts[glyph.section_index].is_striked {
-                let mid_height = glyph_bounds.pos.1 + glyph_bounds.size.1 / 2.;
-                lines.push((
-                    (glyph_bounds.pos.0, mid_height),
-                    (glyph_bounds.max().0, mid_height),
-                ));
-            }
+            y += line_height;
         }
 
         lines
     }
 
-    pub fn render_selection<T: GlyphCruncher>(
+    pub fn render_selection(
         &self,
-        glyph_brush: &mut T,
+        text_system: &mut TextSystem,
         screen_position: Point,
         bounds: Size,
         zoom: f32,
-        mut selection: Selection,
+        selection: Selection,
     ) -> (Vec<Rect>, String) {
-        let mut selection_rects = Vec::new();
-        let mut selection_text = String::new();
-        if selection.0 == selection.1 {
-            return (selection_rects, selection_text);
+        let (mut select_start, mut select_end) = selection;
+        if select_start.1 > select_end.1 {
+            std::mem::swap(&mut select_start, &mut select_end);
         }
-        if selection.0 .1 > selection.1 .1 {
-            std::mem::swap(&mut selection.0, &mut selection.1);
+        if screen_position.1 > select_end.1 || screen_position.1 + bounds.1 < select_start.1 {
+            return (vec![], String::new());
         }
-        let rect = Rect::new(screen_position, bounds);
-        if rect.contains(selection.0) {
-            for (glyph_bounds, glyph) in
-                self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
-            {
-                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max().1 <= selection.1 .1)
-                    || (glyph_bounds.max().1 <= selection.1 .1
-                        && glyph_bounds.max().1 >= selection.0 .1
-                        && glyph_bounds.max().0 >= selection.0 .0)
-                    || (glyph_bounds.max().1 >= selection.1 .1
-                        && glyph_bounds.pos.1 <= selection.0 .1
-                        && glyph_bounds.pos.0 <= selection.0 .0.max(selection.1 .0)
-                        && glyph_bounds.max().0 >= selection.0 .0.min(selection.1 .0))
-                {
-                    selection_rects.push(glyph_bounds);
-                    if let Some(char) = self.texts[glyph.section_index]
-                        .text
-                        .chars()
-                        .nth(glyph.byte_index)
-                    {
-                        selection_text.push(char);
+
+        let mut rects = Vec::new();
+        let mut selected_text = String::new();
+
+        let line_height = self.line_height(zoom);
+        let cache = text_system.text_cache.borrow_mut();
+
+        let (_, buffer) =
+            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+
+        if let Some(start_cusor) = buffer.hit(
+            select_start.0 - screen_position.0,
+            select_start.1 - screen_position.1,
+        ) {
+            if let Some(end_cusor) = buffer.hit(
+                select_end.0 - screen_position.0,
+                select_end.1 - screen_position.1,
+            ) {
+                let mut y = screen_position.1;
+                let mut glyph_num = 0;
+                for line in buffer.layout_runs() {
+                    for glyph in line.glyphs {
+                        let x = screen_position.0 + glyph.x_int as f32;
+                        if glyph_num >= start_cusor.index && glyph_num < end_cusor.index {
+                            rects.push(Rect::from_min_max(
+                                (x - 1., y),
+                                (x + glyph.w + 1., y + line_height),
+                            ));
+                        }
+                        glyph_num += 1;
+                    }
+                    y += line_height;
+                    glyph_num += 1;
+                }
+
+                let mut i = 0;
+                for text in &self.texts {
+                    for c in text.text.chars() {
+                        if i >= start_cusor.index && i < end_cusor.index {
+                            selected_text.push(c);
+                        }
+                        i += 1;
                     }
                 }
             }
-            selection_text.push('\n');
         }
-        if rect.pos.1 >= selection.0 .1.min(selection.1 .1)
-            && rect.max().1 <= selection.0 .1.max(selection.1 .1)
-        {
-            selection_rects.push(rect.clone());
-            for text in &self.texts {
-                selection_text.push_str(&text.text);
-            }
-            selection_text.push('\n');
-        }
-        if rect.contains(selection.1) {
-            for (glyph_bounds, glyph) in
-                self.glyph_bounds(glyph_brush, screen_position, bounds, zoom)
-            {
-                if (glyph_bounds.pos.1 >= selection.0 .1 && glyph_bounds.max().1 <= selection.1 .1)
-                    || (glyph_bounds.pos.1 <= selection.1 .1
-                        && glyph_bounds.pos.1 >= selection.0 .1
-                        && glyph_bounds.pos.0 <= selection.1 .0)
-                {
-                    selection_rects.push(glyph_bounds);
-                    if let Some(char) = self.texts[glyph.section_index]
-                        .text
-                        .chars()
-                        .nth(glyph.byte_index)
-                    {
-                        selection_text.push(char);
-                    }
-                }
-            }
-            selection_text.push('\n');
-        }
-        (selection_rects, selection_text)
+
+        (rects, selected_text)
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Text {
     pub text: String,
-    pub size: f32,
     pub color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
     pub is_italic: bool,
     pub is_underlined: bool,
     pub is_striked: bool,
-    pub font: usize,
+    pub font_family: FamilyOwned,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
 }
@@ -268,16 +316,16 @@ impl Text {
     pub fn new(text: String, hidpi_scale: f32, default_text_color: [f32; 4]) -> Self {
         Self {
             text,
-            size: 16.,
             hidpi_scale,
             default_color: default_text_color,
-            ..Default::default()
+            color: None,
+            link: None,
+            is_bold: false,
+            is_italic: false,
+            is_underlined: false,
+            is_striked: false,
+            font_family: FamilyOwned::SansSerif,
         }
-    }
-
-    pub fn with_size(mut self, size: f32) -> Self {
-        self.size = size;
-        self
     }
 
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
@@ -310,39 +358,171 @@ impl Text {
         self
     }
 
-    pub fn with_font(mut self, font_index: usize) -> Self {
-        self.font = font_index;
+    pub fn with_family(mut self, family: FamilyOwned) -> Self {
+        self.font_family = family;
         self
     }
 
-    fn font_id(&self) -> FontId {
-        let base = self.font * 4;
-        let font = base + match (self.is_bold, self.is_italic) {
-            (false, false) => 0,
-            (false, true) => 1,
-            (true, false) => 2,
-            (true, true) => 3,
-        };
-        FontId(font)
-    }
-
     fn color(&self) -> [f32; 4] {
-        if let Some(color) = self.color {
-            color
+        self.color.unwrap_or(self.default_color)
+    }
+
+    fn style(&self) -> Style {
+        if self.is_italic {
+            Style::Italic
         } else {
-            self.default_color
+            Style::Normal
         }
     }
 
-    pub fn wgpu_text(&self, zoom: f32) -> wgpu_glyph::Text {
-        wgpu_glyph::Text {
-            text: &self.text,
-            scale: PxScale::from(self.size * self.hidpi_scale * zoom),
-            font_id: self.font_id(),
-            extra: Extra {
-                color: self.color(),
-                z: 0.0,
-            },
+    fn weight(&self) -> Weight {
+        if self.is_bold {
+            Weight::BOLD
+        } else {
+            Weight::NORMAL
         }
     }
+
+    pub fn attrs(&self) -> Attrs {
+        let color = self.color();
+        let attrs = Attrs::new()
+            .color(Color::rgba(
+                (color[0] * 255.) as u8,
+                (color[1] * 255.) as u8,
+                (color[2] * 255.) as u8,
+                (color[3] * 255.) as u8,
+            ))
+            .style(self.style())
+            .weight(self.weight());
+        attrs
+    }
+
+    pub fn section_key(&self, index: usize) -> SectionKey<'_> {
+        let color = self.color();
+        SectionKey {
+            content: &self.text,
+            font: Font {
+                family: self.font_family.as_family(),
+                weight: self.weight(),
+            },
+            color: Color::rgba(
+                (color[0] * 255.) as u8,
+                (color[1] * 255.) as u8,
+                (color[2] * 255.) as u8,
+                (color[3] * 255.) as u8,
+            ),
+            index,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash)]
+struct Font<'a> {
+    family: glyphon::Family<'a>,
+    weight: glyphon::Weight,
+}
+
+#[derive(Clone, Copy, Hash)]
+pub struct SectionKey<'a> {
+    content: &'a str,
+    font: Font<'a>,
+    color: Color,
+    index: usize,
+}
+
+#[derive(Clone)]
+pub struct Key<'a> {
+    lines: Vec<Vec<SectionKey<'a>>>,
+    size: f32,
+    line_height: f32,
+    bounds: Size,
+    align: TextAlign,
+}
+
+#[derive(Default)]
+pub struct TextCache {
+    entries: FxHashMap<KeyHash, glyphon::Buffer>,
+    recently_used: FxHashSet<KeyHash>,
+    hasher: HashBuilder,
+}
+
+impl TextCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get(&self, key: &KeyHash) -> Option<&glyphon::Buffer> {
+        self.entries.get(key)
+    }
+
+    fn allocate(
+        &mut self,
+        font_system: &mut glyphon::FontSystem,
+        key: Key<'_>,
+    ) -> (KeyHash, &mut glyphon::Buffer) {
+        let hash = {
+            let mut hasher = self.hasher.build_hasher();
+
+            key.lines.hash(&mut hasher);
+            key.size.to_bits().hash(&mut hasher);
+            key.line_height.to_bits().hash(&mut hasher);
+            key.bounds.0.to_bits().hash(&mut hasher);
+            key.bounds.1.to_bits().hash(&mut hasher);
+
+            hasher.finish()
+        };
+
+        if let hash_map::Entry::Vacant(entry) = self.entries.entry(hash) {
+            let metrics = glyphon::Metrics::new(key.size, key.line_height);
+            let mut buffer = glyphon::Buffer::new(font_system, metrics);
+
+            buffer.set_size(font_system, key.bounds.0, key.bounds.1.max(key.line_height));
+
+            buffer.lines.clear();
+
+            for line in key.lines {
+                let mut line_str = String::new();
+                let mut attrs_list = AttrsList::new(Attrs::new());
+                for section in line {
+                    let start = line_str.len();
+                    line_str.push_str(section.content);
+                    let end = line_str.len();
+                    attrs_list.add_span(
+                        start..end,
+                        Attrs::new()
+                            .family(section.font.family)
+                            .weight(section.font.weight)
+                            .color(section.color)
+                            .metadata(section.index),
+                    )
+                }
+                let mut buffer_line = BufferLine::new(line_str, attrs_list);
+                buffer_line.set_align(Some(key.align));
+                buffer.lines.push(buffer_line);
+            }
+
+            buffer.shape_until_scroll(font_system);
+
+            let _ = entry.insert(buffer);
+        }
+
+        let _ = self.recently_used.insert(hash);
+
+        (hash, self.entries.get_mut(&hash).unwrap())
+    }
+
+    pub fn trim(&mut self) {
+        self.entries
+            .retain(|key, _| self.recently_used.contains(key));
+
+        self.recently_used.clear();
+    }
+}
+
+pub struct TextSystem {
+    pub font_system: FontSystem,
+    pub text_renderer: glyphon::TextRenderer,
+    pub text_atlas: glyphon::TextAtlas,
+    pub text_cache: TextCache,
+    pub swash_cache: SwashCache,
 }

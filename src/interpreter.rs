@@ -16,6 +16,7 @@ use crate::utils::Align;
 use crate::Element;
 
 use comrak::{markdown_to_html_with_plugins, ComrakOptions};
+use glyphon::FamilyOwned;
 use html5ever::local_name;
 use html5ever::tendril::*;
 use html5ever::tokenizer::BufferQueue;
@@ -798,14 +799,13 @@ impl TokenSink for HtmlInterpreter {
                     if self.state.text_options.code >= 1 {
                         text = text
                             .with_color(self.state.span_color)
-                            .with_font(1)
-                            .with_size(18.)
+                            .with_family(FamilyOwned::Monospace)
+                        //.with_size(18.)
                     }
                     for elem in self.state.element_stack.iter().rev() {
                         if let html::Element::Header(header) = elem {
-                            text = text
-                                .with_size(header.header_type.text_size())
-                                .make_bold(true);
+                            self.current_textbox.font_size = header.header_type.text_size();
+                            text = text.make_bold(true);
                             break;
                         }
                     }
@@ -827,7 +827,9 @@ impl TokenSink for HtmlInterpreter {
                         text = text.make_striked(true);
                     }
                     if self.state.text_options.small >= 1 {
-                        text = text.with_size(12.);
+                        self.current_textbox.font_size = 12.;
+                        //text = text.with_size(12.);
+                        //FIXME
                     }
                     self.current_textbox.texts.push(text);
                 }

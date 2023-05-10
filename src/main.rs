@@ -28,6 +28,7 @@ use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
 use text::TextBox;
+use text::TextSystem;
 use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
@@ -312,7 +313,7 @@ impl Inlyne {
                             self.renderer
                                 .positioner
                                 .position(
-                                    &mut self.renderer.glyph_brush,
+                                    &mut self.renderer.text_system,
                                     &mut positioned_element,
                                     self.renderer.zoom,
                                 )
@@ -354,8 +355,8 @@ impl Inlyne {
                         );
 
                         let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
+                            &mut self.renderer.text_system,
                             &self.elements,
-                            &mut self.renderer.glyph_brush,
                             loc,
                             screen_size,
                             self.renderer.zoom,
@@ -442,8 +443,8 @@ impl Inlyne {
                             // Try to click a link
                             let screen_size = self.renderer.screen_size();
                             if let Some(hoverable) = Self::find_hoverable(
+                                &mut self.renderer.text_system,
                                 &self.elements,
-                                &mut self.renderer.glyph_brush,
                                 last_loc,
                                 screen_size,
                                 self.renderer.zoom,
@@ -598,18 +599,21 @@ impl Inlyne {
                     // we receive a `MainEventsCleared`.  This prevents us from clogging up the queue
                     // with a bunch of costly resizes. (https://github.com/trimental/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
-                        self.renderer.config.width = size.width;
-                        self.renderer.config.height = size.height;
-                        self.renderer.positioner.screen_size = size.into();
-                        self.renderer
-                            .surface
-                            .configure(&self.renderer.device, &self.renderer.config);
-                        let old_reserved = self.renderer.positioner.reserved_height;
-                        self.renderer.reposition(&mut self.elements).unwrap();
-                        let new_reserved = self.renderer.positioner.reserved_height;
-                        self.renderer
-                            .set_scroll_y(self.renderer.scroll_y * (new_reserved / old_reserved));
-                        self.window.request_redraw();
+                        if size.width > 0 && size.height > 0 {
+                            self.renderer.config.width = size.width;
+                            self.renderer.config.height = size.height;
+                            self.renderer.positioner.screen_size = size.into();
+                            self.renderer
+                                .surface
+                                .configure(&self.renderer.device, &self.renderer.config);
+                            let old_reserved = self.renderer.positioner.reserved_height;
+                            self.renderer.reposition(&mut self.elements).unwrap();
+                            let new_reserved = self.renderer.positioner.reserved_height;
+                            self.renderer.set_scroll_y(
+                                self.renderer.scroll_y * (new_reserved / old_reserved),
+                            );
+                            self.window.request_redraw();
+                        }
                     }
 
                     if self.need_repositioning {
@@ -638,9 +642,9 @@ impl Inlyne {
         window.request_redraw();
     }
 
-    fn find_hoverable<'a, T: wgpu_glyph::GlyphCruncher>(
+    fn find_hoverable<'a>(
+        text_system: &mut TextSystem,
         elements: &'a [Positioned<Element>],
-        glyph_brush: &'a mut T,
         loc: Point,
         screen_size: Size,
         zoom: f32,
@@ -660,7 +664,7 @@ impl Inlyne {
                     let bounds = element.bounds.as_ref().unwrap();
                     text_box
                         .find_hoverable(
-                            glyph_brush,
+                            text_system,
                             loc,
                             bounds.pos,
                             screen_pos(screen_size, bounds.pos.0),
@@ -672,7 +676,7 @@ impl Inlyne {
                     let bounds = element.bounds.as_ref().unwrap();
                     table
                         .find_hoverable(
-                            glyph_brush,
+                            text_system,
                             loc,
                             bounds.pos,
                             screen_pos(screen_size, bounds.pos.0),
@@ -683,7 +687,7 @@ impl Inlyne {
                 Element::Image(image) => Some(Hoverable::Image(image)),
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
                 Element::Row(row) => {
-                    Self::find_hoverable(&row.elements, glyph_brush, loc, screen_size, zoom)
+                    Self::find_hoverable(text_system, &row.elements, loc, screen_size, zoom)
                 }
                 Element::Section(section) => {
                     if let Some(ref summary) = *section.summary {
@@ -694,7 +698,7 @@ impl Inlyne {
                         }
                     }
                     if !*section.hidden.borrow() {
-                        Self::find_hoverable(&section.elements, glyph_brush, loc, screen_size, zoom)
+                        Self::find_hoverable(text_system, &section.elements, loc, screen_size, zoom)
                     } else {
                         None
                     }

@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
 use crate::image::ImageData;
@@ -42,16 +41,6 @@ impl Rect {
 
     pub fn contains(&self, loc: Point) -> bool {
         self.pos.0 <= loc.0 && loc.0 <= self.max().0 && self.pos.1 <= loc.1 && loc.1 <= self.max().1
-    }
-}
-
-impl From<ab_glyph::Rect> for Rect {
-    fn from(other_rect: ab_glyph::Rect) -> Self {
-        let ab_glyph::Rect {
-            min: ab_glyph::Point { x: min_x, y: min_y },
-            max: ab_glyph::Point { x: max_x, y: max_y },
-        } = other_rect;
-        Self::from_min_max((min_x, min_y), (max_x, max_y))
     }
 }
 

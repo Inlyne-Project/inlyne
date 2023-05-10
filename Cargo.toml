@@ -10,10 +10,9 @@ repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 
 [dependencies]
-wgpu_glyph =  "0.20"
 winit = "0.28.5"
 wgpu = "0.16"
-bytemuck = "1.13.1"
+bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
 comrak = { version = "0.18.0", default-features = false, features = ["syntect"] }
 open = "4.1.0"
@@ -29,7 +28,6 @@ dirs = "5.0.1"
 serde = { version = "1.0.162", features = ["derive"] }
 toml = "0.7.3"
 reqwest = { version = "0.11.17", features = ["blocking", "json", "stream"] }
-font-kit = "0.11.0"
 memmap2 = "0.5.10"
 log = "0.4.17"
 env_logger = "0.10.0"
@@ -40,6 +38,13 @@ dark-light = "1.0.0"
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
 pollster = "0.3.0"
+fxhash = "0.2.1"
+twox-hash = "1.6.3"
+
+[dependencies.glyphon]
+version = "0.2"
+git = "https://github.com/hecrj/glyphon.git"
+rev = "80e8465af6a1e6896ff45de715212568ccdef47a"
 
 # Uncomment for profiling
 # [profile.release]
