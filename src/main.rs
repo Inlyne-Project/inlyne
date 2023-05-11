@@ -486,11 +486,14 @@ impl Inlyne {
                                                 .file_path
                                                 .parent()
                                                 .expect("no current parent");
-                                            let link_without_prefix: &Path = path
+                                            let mut normalized_link = path.as_path();
+                                            if let Ok(stripped) = normalized_link
                                                 .strip_prefix(std::path::Component::CurDir)
-                                                .expect("no CurDir prefix");
+                                            {
+                                                normalized_link = stripped;
+                                            }
                                             let mut link = current_parent.to_path_buf();
-                                            link.push(link_without_prefix);
+                                            link.push(normalized_link);
                                             link
                                         } else {
                                             path
