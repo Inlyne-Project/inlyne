@@ -56,6 +56,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
@@ -189,16 +190,32 @@ impl Inlyne {
 
             loop {
                 let event = match watch_rx.recv() {
-                    Ok(event) => event,
+                    Ok(Ok(event)) => event,
+                    Ok(Err(err)) => {
+                        log::warn!("File watcher error: {}", err);
+                        continue;
+                    }
                     Err(err) => {
-                        log::warn!("Config watcher channel dropped unexpectedly: {}", err);
+                        log::warn!("File watcher channel dropped unexpectedly: {}", err);
                         break;
                     }
                 };
 
-                if event.unwrap().kind.is_modify() {
-                    // Always reload the primary configuration file.
+                log::debug!("File event: {:#?}", event);
+                if event.kind.is_modify() {
                     let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                } else if event.kind.is_remove() {
+                    // Some editors may remove/rename the file as a part of saving.
+                    // Reregister file watching in this case
+                    std::thread::sleep(Duration::from_millis(10));
+                    log::info!(
+                        "File may have been renamed/removed. Attempting to re-register file watcher"
+                    );
+
+                    let _ = watcher.unwatch(&file_path);
+                    if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
+                        log::warn!("Unable to watch file. No longer reloading: {}", err);
+                    }
                 }
             }
         });
