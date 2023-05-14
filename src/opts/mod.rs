@@ -9,17 +9,9 @@ use crate::{color, keybindings::Keybindings};
 
 use serde::Deserialize;
 
-pub use self::cli::Args;
+pub use self::cli::{Args, ThemeType};
 pub use self::config::Config;
 pub use self::config::FontOptions;
-
-#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ThemeType {
-    #[default]
-    Auto,
-    Dark,
-    Light,
-}
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {
@@ -108,10 +100,9 @@ impl Opts {
             ResolvedTheme::Dark => dark_theme.map_or(color::DARK_DEFAULT, |dark_theme| {
                 dark_theme.merge(color::DARK_DEFAULT)
             }),
-            ResolvedTheme::Light => light_theme
-                .map_or(color::LIGHT_DEFAULT, |light_theme| {
-                    light_theme.merge(color::LIGHT_DEFAULT)
-                }),
+            ResolvedTheme::Light => light_theme.map_or(color::LIGHT_DEFAULT, |light_theme| {
+                light_theme.merge(color::LIGHT_DEFAULT)
+            }),
         };
         let scale = args_scale.or(config_scale);
         let font_opts = font_options.unwrap_or_default();

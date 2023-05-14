@@ -1,0 +1,44 @@
+#compdef inlyne
+
+autoload -U is-at-least
+
+_inlyne() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" \
+'-t+[Theme to use when rendering]: :(auto dark light)' \
+'--theme=[Theme to use when rendering]: :(auto dark light)' \
+'-s+[Factor to scale rendered file by \[default\: OS defined window scale factor\]]: : ' \
+'--scale=[Factor to scale rendered file by \[default\: OS defined window scale factor\]]: : ' \
+'-c+[Configuration file to use]: :_files' \
+'--config=[Configuration file to use]: :_files' \
+'-w+[Maximum width of page in pixels]: : ' \
+'--page-width=[Maximum width of page in pixels]: : ' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'::file -- Path to the markdown file:_files' \
+&& ret=0
+}
+
+(( $+functions[_inlyne_commands] )) ||
+_inlyne_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_inlyne" ]; then
+    _inlyne "$@"
+else
+    compdef _inlyne inlyne
+fi
