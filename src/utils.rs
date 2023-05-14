@@ -3,10 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
-use crate::image::ImageData;
+use crate::{color::SyntaxTheme, image::ImageData};
 
 pub fn usize_in_mib(num: usize) -> f32 {
     num as f32 / 1_024.0 / 1_024.0
@@ -76,4 +77,23 @@ impl From<CursorIcon> for HoverInfo {
             ..Default::default()
         }
     }
+}
+
+pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
+    let mut options = ComrakOptions::default();
+    options.extension.table = true;
+    options.extension.strikethrough = true;
+    options.extension.tasklist = true;
+    options.extension.footnotes = true;
+    options.extension.front_matter_delimiter = Some("---".to_owned());
+    options.parse.smart = true;
+    options.render.unsafe_ = true;
+
+    let mut plugins = comrak::ComrakPlugins::default();
+    let adapter = comrak::plugins::syntect::SyntectAdapter::new(syntax_theme.as_syntect_name());
+    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+
+    let htmlified = markdown_to_html_with_plugins(&md, &options, &plugins);
+
+    htmlified
 }
