@@ -183,9 +183,6 @@ impl HtmlInterpreter {
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
                 let htmlified = markdown_to_html(&md_string, code_highlighter);
-                // let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
-
-                println!("{htmlified}");
 
                 input.push_back(
                     Tendril::from_str(&htmlified)
