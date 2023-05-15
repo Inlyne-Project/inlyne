@@ -88,6 +88,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     options.extension.tasklist = true;
     options.extension.footnotes = true;
     options.extension.front_matter_delimiter = Some("---".to_owned());
+    options.extension.shortcodes = true;
     options.parse.smart = true;
     options.render.unsafe_ = true;
 
