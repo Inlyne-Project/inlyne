@@ -167,6 +167,8 @@ pub enum Action {
     ToBottom,
     ScrollUp,
     ScrollDown,
+    PageUp,
+    PageDown,
     ZoomIn,
     ZoomOut,
     ZoomReset,

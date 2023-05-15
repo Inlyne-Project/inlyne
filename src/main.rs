@@ -592,6 +592,23 @@ impl Inlyne {
                                         lines,
                                     )
                                 }
+                                a_page @ (Action::PageUp | Action::PageDown) => {
+                                    // Move 90% of current page height
+                                    let scroll_amount = self.renderer.config.height as f32 * 0.9;
+                                    let scroll_with_direction = match a_page {
+                                        Action::PageUp => scroll_amount,
+                                        Action::PageDown => -scroll_amount,
+                                        _ => unreachable!(
+                                            "This arm is only for page up/down actions"
+                                        ),
+                                    };
+
+                                    Self::scroll_pixels(
+                                        &mut self.renderer,
+                                        &self.window,
+                                        scroll_with_direction,
+                                    );
+                                }
                                 a_zoom @ (Action::ZoomIn | Action::ZoomOut | Action::ZoomReset) => {
                                     let zoom = match a_zoom {
                                         Action::ZoomIn => self.renderer.zoom * 1.1,
