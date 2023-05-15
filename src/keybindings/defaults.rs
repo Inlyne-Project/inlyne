@@ -52,6 +52,10 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
         (Action::ScrollUp, KeyCombo::from(VirtKey::Up)),
         // Scroll down: Down-arrow
         (Action::ScrollDown, KeyCombo::from(VirtKey::Down)),
+        // Page up: PageUp
+        (Action::PageUp, KeyCombo::from(VirtKey::PageUp)),
+        // Page down: PageDown
+        (Action::PageDown, KeyCombo::from(VirtKey::PageDown)),
         // Go to top of doc: Home
         (Action::ToTop, KeyCombo::from(VirtKey::Home)),
         // Go to bottom of doc: End
