@@ -217,7 +217,7 @@ impl TextBox {
         for line in buffer.layout_runs() {
             for glyph in line.glyphs {
                 let text = &self.texts[glyph.metadata];
-                let x = screen_position.0 + glyph.x_int as f32;
+                let x = screen_position.0 + glyph.x;
                 if text.is_underlined {
                     lines.push(((x, y), (x + glyph.w, y)))
                 }
@@ -269,12 +269,9 @@ impl TextBox {
                 let mut glyph_num = 0;
                 for line in buffer.layout_runs() {
                     for glyph in line.glyphs {
-                        let x = screen_position.0 + glyph.x_int as f32;
+                        let x = screen_position.0 + glyph.x;
                         if glyph_num >= start_cusor.index && glyph_num < end_cusor.index {
-                            rects.push(Rect::from_min_max(
-                                (x - 1., y),
-                                (x + glyph.w + 1., y + line_height),
-                            ));
+                            rects.push(Rect::from_min_max((x, y), (x + glyph.w, y + line_height)));
                         }
                         glyph_num += 1;
                     }
