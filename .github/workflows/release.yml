@@ -57,7 +57,7 @@ jobs:
         mkdir -p "$staging"
         mkdir -p "$comp_out"
 
-        cp {README.md,LICENSE,example.png,inlyne.toml.sample} "$staging/"
+        cp {README.md,LICENSE,example.png,inlyne.sample.toml} "$staging/"
 
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
           cp "target/${{ matrix.target }}/release-lto/inlyne.exe" "$staging/"
