@@ -1,16 +1,22 @@
-use serde::Deserialize;
-
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    ToTop,
-    ToBottom,
-    ScrollUp,
-    ScrollDown,
-    PageUp,
-    PageDown,
-    ZoomIn,
-    ZoomOut,
-    ZoomReset,
+    ToEdge(VertDirection),
+    Scroll(VertDirection),
+    Page(VertDirection),
+    Zoom(Zoom),
     Copy,
     Quit,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VertDirection {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Zoom {
+    In,
+    Out,
+    Reset,
 }

@@ -17,7 +17,10 @@ use crate::table::Table;
 use crate::text::Text;
 
 use crate::image::ImageData;
-use keybindings::{action::Action, Key, KeyCombos, ModifiedKey};
+use keybindings::{
+    action::{Action, VertDirection, Zoom},
+    Key, KeyCombos, ModifiedKey,
+};
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
@@ -570,19 +573,18 @@ impl Inlyne {
                         let modified_key = ModifiedKey(key, modifiers);
                         if let Some(action) = self.keycombos.munch(modified_key) {
                             match action {
-                                Action::ToTop => {
-                                    self.renderer.set_scroll_y(0.0);
+                                Action::ToEdge(direction) => {
+                                    let scroll = match direction {
+                                        VertDirection::Up => 0.0,
+                                        VertDirection::Down => f32::INFINITY,
+                                    };
+                                    self.renderer.set_scroll_y(scroll);
                                     self.window.request_redraw();
                                 }
-                                Action::ToBottom => {
-                                    self.renderer.set_scroll_y(f32::INFINITY);
-                                    self.window.request_redraw();
-                                }
-                                a_scroll @ (Action::ScrollUp | Action::ScrollDown) => {
-                                    let lines = match a_scroll {
-                                        Action::ScrollUp => 1.0,
-                                        Action::ScrollDown => -1.0,
-                                        _ => unreachable!("This arm is only for scroll actions"),
+                                Action::Scroll(direction) => {
+                                    let lines = match direction {
+                                        VertDirection::Up => 1.0,
+                                        VertDirection::Down => -1.0,
                                     };
 
                                     Self::scroll_lines(
@@ -592,15 +594,12 @@ impl Inlyne {
                                         lines,
                                     )
                                 }
-                                a_page @ (Action::PageUp | Action::PageDown) => {
+                                Action::Page(direction) => {
                                     // Move 90% of current page height
                                     let scroll_amount = self.renderer.config.height as f32 * 0.9;
-                                    let scroll_with_direction = match a_page {
-                                        Action::PageUp => scroll_amount,
-                                        Action::PageDown => -scroll_amount,
-                                        _ => unreachable!(
-                                            "This arm is only for page up/down actions"
-                                        ),
+                                    let scroll_with_direction = match direction {
+                                        VertDirection::Up => scroll_amount,
+                                        VertDirection::Down => -scroll_amount,
                                     };
 
                                     Self::scroll_pixels(
@@ -609,12 +608,11 @@ impl Inlyne {
                                         scroll_with_direction,
                                     );
                                 }
-                                a_zoom @ (Action::ZoomIn | Action::ZoomOut | Action::ZoomReset) => {
-                                    let zoom = match a_zoom {
-                                        Action::ZoomIn => self.renderer.zoom * 1.1,
-                                        Action::ZoomOut => self.renderer.zoom * 0.9,
-                                        Action::ZoomReset => 1.0,
-                                        _ => unreachable!("This arm is only for zoom actions"),
+                                Action::Zoom(zoom_action) => {
+                                    let zoom = match zoom_action {
+                                        Zoom::In => self.renderer.zoom * 1.1,
+                                        Zoom::Out => self.renderer.zoom * 0.9,
+                                        Zoom::Reset => 1.0,
                                     };
 
                                     self.renderer.zoom = zoom;

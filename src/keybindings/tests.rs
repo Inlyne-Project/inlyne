@@ -1,4 +1,7 @@
-use super::{Action, Key, KeyCombo, KeyCombos, ModifiedKey, Keybindings};
+use super::{
+    action::{Action, VertDirection},
+    Key, KeyCombo, KeyCombos, Keybindings, ModifiedKey,
+};
 
 use serde::Deserialize;
 use winit::event::{ModifiersState, VirtualKeyCode};
@@ -30,12 +33,21 @@ inner = [
 
     // Invalid combo 'gG' where the key that broke us out is a singlekey combo
     assert!(key_combos.munch(g).is_none());
-    assert_eq!(Action::ToBottom, key_combos.munch(cap_g).unwrap());
+    assert_eq!(
+        Action::ToEdge(VertDirection::Down),
+        key_combos.munch(cap_g).unwrap()
+    );
 
     // Valid combo 'gj' that shares a branch with 'gg'
     assert!(key_combos.munch(g).is_none());
-    assert_eq!(Action::ScrollDown, key_combos.munch(j).unwrap());
+    assert_eq!(
+        Action::Scroll(VertDirection::Down),
+        key_combos.munch(j).unwrap()
+    );
 
     // Valid singlekey combo for a shared action
-    assert_eq!(Action::ScrollDown, key_combos.munch(j).unwrap());
+    assert_eq!(
+        Action::Scroll(VertDirection::Down),
+        key_combos.munch(j).unwrap()
+    );
 }
