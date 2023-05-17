@@ -17,7 +17,7 @@ use crate::table::Table;
 use crate::text::Text;
 
 use crate::image::ImageData;
-use keybindings::{Action, Key, KeyCombos, ModifiedKey};
+use keybindings::{action::Action, Key, KeyCombos, ModifiedKey};
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;

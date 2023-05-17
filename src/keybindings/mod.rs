@@ -1,3 +1,4 @@
+pub mod action;
 mod defaults;
 mod mappings;
 mod serialization;
@@ -5,6 +6,8 @@ mod serialization;
 mod tests;
 
 use std::{collections::BTreeMap, fmt, slice::Iter, str::FromStr, vec::IntoIter};
+
+use action::Action;
 
 use serde::Deserialize;
 use winit::event::{ModifiersState, ScanCode, VirtualKeyCode};
@@ -159,21 +162,6 @@ impl From<VirtualKeyCode> for KeyCombo {
     fn from(key_code: VirtualKeyCode) -> Self {
         KeyCombo(vec![ModifiedKey::from(key_code)])
     }
-}
-
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    ToTop,
-    ToBottom,
-    ScrollUp,
-    ScrollDown,
-    PageUp,
-    PageDown,
-    ZoomIn,
-    ZoomOut,
-    ZoomReset,
-    Copy,
-    Quit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
