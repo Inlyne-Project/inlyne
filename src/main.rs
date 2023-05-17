@@ -17,7 +17,10 @@ use crate::table::Table;
 use crate::text::Text;
 
 use crate::image::ImageData;
-use keybindings::{Action, Key, KeyCombos, ModifiedKey};
+use keybindings::{
+    action::{Action, VertDirection, Zoom},
+    Key, KeyCombos, ModifiedKey,
+};
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
@@ -56,6 +59,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
@@ -189,16 +193,32 @@ impl Inlyne {
 
             loop {
                 let event = match watch_rx.recv() {
-                    Ok(event) => event,
+                    Ok(Ok(event)) => event,
+                    Ok(Err(err)) => {
+                        log::warn!("File watcher error: {}", err);
+                        continue;
+                    }
                     Err(err) => {
-                        log::warn!("Config watcher channel dropped unexpectedly: {}", err);
+                        log::warn!("File watcher channel dropped unexpectedly: {}", err);
                         break;
                     }
                 };
 
-                if event.unwrap().kind.is_modify() {
-                    // Always reload the primary configuration file.
+                log::debug!("File event: {:#?}", event);
+                if event.kind.is_modify() {
                     let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                } else if event.kind.is_remove() {
+                    // Some editors may remove/rename the file as a part of saving.
+                    // Reregister file watching in this case
+                    std::thread::sleep(Duration::from_millis(10));
+                    log::info!(
+                        "File may have been renamed/removed. Attempting to re-register file watcher"
+                    );
+
+                    let _ = watcher.unwatch(&file_path);
+                    if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
+                        log::warn!("Unable to watch file. No longer reloading: {}", err);
+                    }
                 }
             }
         });
@@ -553,19 +573,18 @@ impl Inlyne {
                         let modified_key = ModifiedKey(key, modifiers);
                         if let Some(action) = self.keycombos.munch(modified_key) {
                             match action {
-                                Action::ToTop => {
-                                    self.renderer.set_scroll_y(0.0);
+                                Action::ToEdge(direction) => {
+                                    let scroll = match direction {
+                                        VertDirection::Up => 0.0,
+                                        VertDirection::Down => f32::INFINITY,
+                                    };
+                                    self.renderer.set_scroll_y(scroll);
                                     self.window.request_redraw();
                                 }
-                                Action::ToBottom => {
-                                    self.renderer.set_scroll_y(f32::INFINITY);
-                                    self.window.request_redraw();
-                                }
-                                a_scroll @ (Action::ScrollUp | Action::ScrollDown) => {
-                                    let lines = match a_scroll {
-                                        Action::ScrollUp => 1.0,
-                                        Action::ScrollDown => -1.0,
-                                        _ => unreachable!("This arm is only for scroll actions"),
+                                Action::Scroll(direction) => {
+                                    let lines = match direction {
+                                        VertDirection::Up => 1.0,
+                                        VertDirection::Down => -1.0,
                                     };
 
                                     Self::scroll_lines(
@@ -575,12 +594,25 @@ impl Inlyne {
                                         lines,
                                     )
                                 }
-                                a_zoom @ (Action::ZoomIn | Action::ZoomOut | Action::ZoomReset) => {
-                                    let zoom = match a_zoom {
-                                        Action::ZoomIn => self.renderer.zoom * 1.1,
-                                        Action::ZoomOut => self.renderer.zoom * 0.9,
-                                        Action::ZoomReset => 1.0,
-                                        _ => unreachable!("This arm is only for zoom actions"),
+                                Action::Page(direction) => {
+                                    // Move 90% of current page height
+                                    let scroll_amount = self.renderer.config.height as f32 * 0.9;
+                                    let scroll_with_direction = match direction {
+                                        VertDirection::Up => scroll_amount,
+                                        VertDirection::Down => -scroll_amount,
+                                    };
+
+                                    Self::scroll_pixels(
+                                        &mut self.renderer,
+                                        &self.window,
+                                        scroll_with_direction,
+                                    );
+                                }
+                                Action::Zoom(zoom_action) => {
+                                    let zoom = match zoom_action {
+                                        Zoom::In => self.renderer.zoom * 1.1,
+                                        Zoom::Out => self.renderer.zoom * 0.9,
+                                        Zoom::Reset => 1.0,
                                     };
 
                                     self.renderer.zoom = zoom;

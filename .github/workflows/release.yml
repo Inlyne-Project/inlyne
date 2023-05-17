@@ -54,7 +54,7 @@ jobs:
         staging="inlyne-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
         mkdir -p "$staging"
 
-        cp -r {README.md,LICENSE,example.png,inlyne.toml.sample,completions} "$staging/"
+        cp -r {README.md,LICENSE,example.png,inlyne.sample.toml,completions} "$staging/"
 
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
           cp "target/${{ matrix.target }}/release-lto/inlyne.exe" "$staging/"

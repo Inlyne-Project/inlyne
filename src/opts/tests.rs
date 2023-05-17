@@ -141,3 +141,28 @@ fn from_cli() {
         }
     );
 }
+
+#[test]
+fn cli_kitchen_sink() {
+    #[rustfmt::skip]
+    let args = gen_args(vec![
+        "--theme", "dark",
+        "--scale", "1.5",
+        "--config", "/path/to/file.toml",
+        "--page-width", "500",
+        "file.md",
+    ]);
+    assert_eq!(
+        Opts::parse_and_load_with_system_theme(
+            Args::parse_from(args),
+            config::Config::default(),
+            ResolvedTheme::Light,
+        ),
+        Opts {
+            page_width: Some(500.0),
+            scale: Some(1.5),
+            theme: ResolvedTheme::Dark.as_theme(),
+            ..Opts::mostly_default("file.md")
+        }
+    );
+}

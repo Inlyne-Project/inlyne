@@ -23,12 +23,9 @@ view markdown files in the blink of an eye.
 ## Install
 
 To install just use `cargo install inlyne`, everything comes pre-bundled.
+Alternatively you can install through various package managers.
 
-On NetBSD, a pre-compiled binary, including an example configuration file, is available from the official repositories. To install it, simply run:
-
-```bash
-pkgin install inlyne
-```
+[![Packaging status](https://repology.org/badge/vertical-allrepos/inlyne.svg)](https://repology.org/project/inlyne/versions)
 
 ## Features
 
@@ -96,7 +93,7 @@ You weren't supposed to see this!
 
 ## Configuration
 
-Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS. Checkout `inlyne.toml.sample` for an example configuration.
+Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS. Checkout `inlyne.sample.toml` for an example configuration.
 
 ## FAQ
 
