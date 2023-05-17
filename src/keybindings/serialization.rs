@@ -1,9 +1,50 @@
 use std::str::FromStr;
 
-use super::{Key, KeyCombo, ModifiedKey};
+use super::{
+    action::{Action, VertDirection, Zoom},
+    Key, KeyCombo, ModifiedKey,
+};
 
 use serde::{de, Deserialize, Deserializer};
 use winit::event::ModifiersState;
+
+impl<'de> Deserialize<'de> for Action {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        enum FlatAction {
+            ToTop,
+            ToBottom,
+            ScrollUp,
+            ScrollDown,
+            PageUp,
+            PageDown,
+            ZoomIn,
+            ZoomOut,
+            ZoomReset,
+            Copy,
+            Quit,
+        }
+
+        let action = match FlatAction::deserialize(deserializer)? {
+            FlatAction::ToTop => Action::ToEdge(VertDirection::Up),
+            FlatAction::ToBottom => Action::ToEdge(VertDirection::Down),
+            FlatAction::ScrollUp => Action::Scroll(VertDirection::Up),
+            FlatAction::ScrollDown => Action::Scroll(VertDirection::Down),
+            FlatAction::PageUp => Action::Page(VertDirection::Up),
+            FlatAction::PageDown => Action::Page(VertDirection::Down),
+            FlatAction::ZoomIn => Action::Zoom(Zoom::In),
+            FlatAction::ZoomOut => Action::Zoom(Zoom::Out),
+            FlatAction::ZoomReset => Action::Zoom(Zoom::Reset),
+            FlatAction::Copy => Action::Copy,
+            FlatAction::Quit => Action::Quit,
+        };
+
+        Ok(action)
+    }
+}
 
 impl<'de> Deserialize<'de> for Key {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
