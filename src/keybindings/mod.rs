@@ -1,22 +1,51 @@
+pub mod action;
 mod defaults;
 mod mappings;
 mod serialization;
 #[cfg(test)]
 mod tests;
 
-pub use defaults::defaults;
-
 use std::{collections::BTreeMap, fmt, slice::Iter, str::FromStr, vec::IntoIter};
+
+use action::Action;
 
 use serde::Deserialize;
 use winit::event::{ModifiersState, ScanCode, VirtualKeyCode};
 
-pub type Keybindings = Vec<(Action, KeyCombo)>;
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Keybindings(Vec<(Action, KeyCombo)>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     Resolved(VirtualKeyCode),
     ScanCode(ScanCode),
+}
+
+impl Keybindings {
+    pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
+        Self(bindings)
+    }
+}
+
+impl Extend<(Action, KeyCombo)> for Keybindings {
+    fn extend<I: IntoIterator<Item = (Action, KeyCombo)>>(&mut self, iter: I) {
+        self.0.extend(iter)
+    }
+}
+
+impl IntoIterator for Keybindings {
+    type Item = (Action, KeyCombo);
+    type IntoIter = <Vec<(Action, KeyCombo)> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Default for Keybindings {
+    fn default() -> Self {
+        Self(defaults::defaults())
+    }
 }
 
 impl Key {
@@ -135,19 +164,6 @@ impl From<VirtualKeyCode> for KeyCombo {
     }
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    ToTop,
-    ToBottom,
-    ScrollUp,
-    ScrollDown,
-    ZoomIn,
-    ZoomOut,
-    ZoomReset,
-    Copy,
-    Quit,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Connection {
     Branch(usize),
@@ -170,6 +186,7 @@ pub struct KeyCombos {
 
 impl KeyCombos {
     pub fn new(keybinds: Keybindings) -> anyhow::Result<Self> {
+        let keybinds = keybinds.0;
         let position = ROOT_INDEX;
 
         // A keycombo that starts with another keycombo will never be reachable since the prefixing

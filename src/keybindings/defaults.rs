@@ -1,10 +1,13 @@
-use super::{Action, Key, KeyCombo, Keybindings, ModifiedKey};
+use super::{
+    action::{Action, VertDirection, Zoom},
+    Key, KeyCombo, ModifiedKey,
+};
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
 
 const IS_MACOS: bool = cfg!(target_os = "macos");
 
-pub fn defaults() -> Keybindings {
+pub fn defaults() -> Vec<(Action, KeyCombo)> {
     let ctrl_or_command = if IS_MACOS {
         ModifiersState::LOGO
     } else {
@@ -19,14 +22,14 @@ pub fn defaults() -> Keybindings {
         ),
         // Zoom in: Ctrl++ / Command++
         (
-            Action::ZoomIn,
+            Action::Zoom(Zoom::In),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Equals),
                 ctrl_or_command | ModifiersState::SHIFT,
             )]),
         ),
         (
-            Action::ZoomIn,
+            Action::Zoom(Zoom::In),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Plus),
                 ctrl_or_command | ModifiersState::SHIFT,
@@ -34,7 +37,7 @@ pub fn defaults() -> Keybindings {
         ),
         // Zoom out: Ctrl+- / Command+-
         (
-            Action::ZoomOut,
+            Action::Zoom(Zoom::Out),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Minus),
                 ctrl_or_command,
@@ -42,32 +45,60 @@ pub fn defaults() -> Keybindings {
         ),
         // Zoom reset: Ctrl+= / Command+=
         (
-            Action::ZoomReset,
+            Action::Zoom(Zoom::Reset),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Equals),
                 ctrl_or_command,
             )]),
         ),
         // Scroll up: Up-arrow
-        (Action::ScrollUp, KeyCombo::from(VirtKey::Up)),
+        (
+            Action::Scroll(VertDirection::Up),
+            KeyCombo::from(VirtKey::Up),
+        ),
         // Scroll down: Down-arrow
-        (Action::ScrollDown, KeyCombo::from(VirtKey::Down)),
+        (
+            Action::Scroll(VertDirection::Down),
+            KeyCombo::from(VirtKey::Down),
+        ),
+        // Page up: PageUp
+        (
+            Action::Page(VertDirection::Up),
+            KeyCombo::from(VirtKey::PageUp),
+        ),
+        // Page down: PageDown
+        (
+            Action::Page(VertDirection::Down),
+            KeyCombo::from(VirtKey::PageDown),
+        ),
         // Go to top of doc: Home
-        (Action::ToTop, KeyCombo::from(VirtKey::Home)),
+        (
+            Action::ToEdge(VertDirection::Up),
+            KeyCombo::from(VirtKey::Home),
+        ),
         // Go to bottom of doc: End
-        (Action::ToBottom, KeyCombo::from(VirtKey::End)),
+        (
+            Action::ToEdge(VertDirection::Down),
+            KeyCombo::from(VirtKey::End),
+        ),
         // Quit: Esc
         (Action::Quit, KeyCombo::from(VirtKey::Escape)),
         // vim-like bindings
         // Copy: y
         (Action::Copy, KeyCombo::from(VirtKey::Y)),
         // Scroll up: k
-        (Action::ScrollUp, KeyCombo::from(VirtKey::K)),
+        (
+            Action::Scroll(VertDirection::Up),
+            KeyCombo::from(VirtKey::K),
+        ),
         // Scroll down: j
-        (Action::ScrollDown, KeyCombo::from(VirtKey::J)),
+        (
+            Action::Scroll(VertDirection::Down),
+            KeyCombo::from(VirtKey::J),
+        ),
         // Go to top of doc: gg
         (
-            Action::ToTop,
+            Action::ToEdge(VertDirection::Up),
             KeyCombo(vec![
                 ModifiedKey::from(VirtKey::G),
                 ModifiedKey::from(VirtKey::G),
@@ -75,7 +106,7 @@ pub fn defaults() -> Keybindings {
         ),
         // Go to bottom of doc: G
         (
-            Action::ToBottom,
+            Action::ToEdge(VertDirection::Down),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::G),
                 ModifiersState::SHIFT,

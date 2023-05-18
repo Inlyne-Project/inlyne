@@ -38,6 +38,9 @@ dark-light = "1.0.0"
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
 pollster = "0.3.0"
+serde_yaml = "0.9.21"
+indexmap = { version = "1.9.3", features = ["serde"] }
+html-escape = "0.2.13"
 fxhash = "0.2.1"
 twox-hash = "1.6.3"
 
@@ -56,4 +59,5 @@ strip = true
 lto = true
 
 [dev-dependencies]
+insta = "1.29.0"
 pretty_assertions = "1.3.0"

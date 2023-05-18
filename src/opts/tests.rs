@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use super::{cli, config, Opts, ResolvedTheme, ThemeType};
 use crate::color::{self, Theme};
-use crate::keybindings;
+use crate::keybindings::Keybindings;
 use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
 
@@ -24,7 +24,7 @@ impl Opts {
             page_width: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
-            keybindings: keybindings::defaults(),
+            keybindings: Keybindings::default(),
         }
     }
 }
@@ -40,19 +40,14 @@ impl ResolvedTheme {
 
 #[test]
 fn debug_assert() {
-    cli::command(
-        "Factor to scale rendered file by [default: Window's scale factor]".to_string(),
-        None,
-    )
-    .debug_assert();
+    cli::command().debug_assert();
 }
 
 #[test]
 fn defaults() {
-    let config = config::Config::default();
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            Args::parse_from(gen_args(vec!["file.md"])),
             config::Config::default(),
             ResolvedTheme::Light,
         ),
@@ -69,7 +64,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Light,
         ),
@@ -86,7 +81,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Dark,
         ),
@@ -102,7 +97,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["file.md"]), &config),
+            Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Light,
         ),
@@ -115,10 +110,9 @@ fn config_overrides_default() {
 
 #[test]
 fn from_cli() {
-    let config = config::Config::default();
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["--theme", "dark", "file.md"]), &config),
+            Args::parse_from(gen_args(vec!["--theme", "dark", "file.md"])),
             config::Config::default(),
             ResolvedTheme::Light,
         ),
@@ -136,13 +130,38 @@ fn from_cli() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            &Args::parse_from(gen_args(vec!["--scale", "1.5", "file.md"]), &config),
+            Args::parse_from(gen_args(vec!["--scale", "1.5", "file.md"])),
             config,
             ResolvedTheme::Light,
         ),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             scale: Some(1.5),
+            ..Opts::mostly_default("file.md")
+        }
+    );
+}
+
+#[test]
+fn cli_kitchen_sink() {
+    #[rustfmt::skip]
+    let args = gen_args(vec![
+        "--theme", "dark",
+        "--scale", "1.5",
+        "--config", "/path/to/file.toml",
+        "--page-width", "500",
+        "file.md",
+    ]);
+    assert_eq!(
+        Opts::parse_and_load_with_system_theme(
+            Args::parse_from(args),
+            config::Config::default(),
+            ResolvedTheme::Light,
+        ),
+        Opts {
+            page_width: Some(500.0),
+            scale: Some(1.5),
+            theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
         }
     );

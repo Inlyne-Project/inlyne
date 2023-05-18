@@ -17,7 +17,10 @@ use crate::table::Table;
 use crate::text::Text;
 
 use crate::image::ImageData;
-use keybindings::{Action, Key, KeyCombos, ModifiedKey};
+use keybindings::{
+    action::{Action, VertDirection, Zoom},
+    Key, KeyCombos, ModifiedKey,
+};
 use opts::Args;
 use opts::Config;
 use positioner::Positioned;
@@ -57,6 +60,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
@@ -123,6 +127,7 @@ impl From<Table> for Element {
 }
 
 pub struct Inlyne {
+    opts: Opts,
     window: Arc<Window>,
     event_loop: EventLoop<InlyneEvent>,
     renderer: Renderer,
@@ -130,7 +135,6 @@ pub struct Inlyne {
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
-    args: Args,
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
@@ -182,7 +186,7 @@ impl Inlyne {
 
         // Add the file path to be watched.
         let event_proxy = self.event_loop.create_proxy();
-        let file_path = self.args.file_path.clone();
+        let file_path = self.opts.file_path.clone();
         std::thread::spawn(move || {
             watcher
                 .watch(&file_path, RecursiveMode::NonRecursive)
@@ -190,27 +194,43 @@ impl Inlyne {
 
             loop {
                 let event = match watch_rx.recv() {
-                    Ok(event) => event,
+                    Ok(Ok(event)) => event,
+                    Ok(Err(err)) => {
+                        log::warn!("File watcher error: {}", err);
+                        continue;
+                    }
                     Err(err) => {
-                        log::warn!("Config watcher channel dropped unexpectedly: {}", err);
+                        log::warn!("File watcher channel dropped unexpectedly: {}", err);
                         break;
                     }
                 };
 
-                if event.unwrap().kind.is_modify() {
-                    // Always reload the primary configuration file.
+                log::debug!("File event: {:#?}", event);
+                if event.kind.is_modify() {
                     let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                } else if event.kind.is_remove() {
+                    // Some editors may remove/rename the file as a part of saving.
+                    // Reregister file watching in this case
+                    std::thread::sleep(Duration::from_millis(10));
+                    log::info!(
+                        "File may have been renamed/removed. Attempting to re-register file watcher"
+                    );
+
+                    let _ = watcher.unwatch(&file_path);
+                    if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
+                        log::warn!("Unable to watch file. No longer reloading: {}", err);
+                    }
                 }
             }
         });
     }
 
-    pub fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
+    pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(&args.file_path) {
+        match root_filepath_to_vcs_dir(&opts.file_path) {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
@@ -226,7 +246,7 @@ impl Inlyne {
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
         let md_string = read_to_string(&opts.file_path)
-            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+            .with_context(|| format!("Could not read file at '{}'", opts.file_path.display()))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),
@@ -234,7 +254,7 @@ impl Inlyne {
             renderer.theme.clone(),
             renderer.surface_format,
             renderer.hidpi_scale,
-            args.file_path.clone(),
+            opts.file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
         );
@@ -245,15 +265,17 @@ impl Inlyne {
 
         interpreter_sender.send(md_string)?;
 
+        let lines_to_scroll = opts.lines_to_scroll;
+
         Ok(Self {
+            opts,
             window,
             event_loop,
             renderer,
             element_queue,
             clipboard,
             elements: Vec::new(),
-            lines_to_scroll: opts.lines_to_scroll,
-            args,
+            lines_to_scroll,
             interpreter_sender,
             interpreter_should_queue,
             image_cache,
@@ -288,9 +310,12 @@ impl Inlyne {
                         self.renderer.positioner.reserved_height =
                             DEFAULT_PADDING * self.renderer.hidpi_scale;
                         self.renderer.positioner.anchors.clear();
-                        let md_string = read_to_string(&self.args.file_path)
+                        let md_string = read_to_string(&self.opts.file_path)
                             .with_context(|| {
-                                format!("Could not read file at {:?}", self.args.file_path)
+                                format!(
+                                    "Could not read file at '{}'",
+                                    self.opts.file_path.display()
+                                )
                             })
                             .unwrap();
                         self.interpreter_should_queue.store(true, Ordering::Relaxed);
@@ -471,36 +496,40 @@ impl Inlyne {
                                     });
                                     if is_local_md {
                                         // Open markdown files ourselves
-                                        let mut args = self.args.clone();
                                         let path = maybe_path.expect("not a path");
                                         // Handle relative paths and make them
                                         // absolute by prepending current
                                         // parent
                                         let path = if path.is_relative() {
                                             // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
-                                            let current_parent =
-                                                args.file_path.parent().expect("no current parent");
-                                            let link_without_prefix: &Path = path
+                                            let current_parent = self
+                                                .opts
+                                                .file_path
+                                                .parent()
+                                                .expect("no current parent");
+                                            let mut normalized_link = path.as_path();
+                                            if let Ok(stripped) = normalized_link
                                                 .strip_prefix(std::path::Component::CurDir)
-                                                .expect("no CurDir prefix");
+                                            {
+                                                normalized_link = stripped;
+                                            }
                                             let mut link = current_parent.to_path_buf();
-                                            link.push(link_without_prefix);
+                                            link.push(normalized_link);
                                             link
                                         } else {
                                             path
                                         };
                                         // Open them in a new window, akin to what a browser does
                                         if modifiers.shift() {
-                                            args.file_path = path;
                                             Command::new(
                                                 std::env::current_exe()
                                                     .unwrap_or_else(|_| "inlyne".into()),
                                             )
-                                            .args(args.program_args())
+                                            .args(Opts::program_args(&path))
                                             .spawn()
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
-                                            self.args.file_path = path;
+                                            self.opts.file_path = path;
                                             event_loop_proxy
                                                 .send_event(InlyneEvent::FileReload)
                                                 .expect("new file to reload successfully");
@@ -545,19 +574,18 @@ impl Inlyne {
                         let modified_key = ModifiedKey(key, modifiers);
                         if let Some(action) = self.keycombos.munch(modified_key) {
                             match action {
-                                Action::ToTop => {
-                                    self.renderer.set_scroll_y(0.0);
+                                Action::ToEdge(direction) => {
+                                    let scroll = match direction {
+                                        VertDirection::Up => 0.0,
+                                        VertDirection::Down => f32::INFINITY,
+                                    };
+                                    self.renderer.set_scroll_y(scroll);
                                     self.window.request_redraw();
                                 }
-                                Action::ToBottom => {
-                                    self.renderer.set_scroll_y(f32::INFINITY);
-                                    self.window.request_redraw();
-                                }
-                                a_scroll @ (Action::ScrollUp | Action::ScrollDown) => {
-                                    let lines = match a_scroll {
-                                        Action::ScrollUp => 1.0,
-                                        Action::ScrollDown => -1.0,
-                                        _ => unreachable!("This arm is only for scroll actions"),
+                                Action::Scroll(direction) => {
+                                    let lines = match direction {
+                                        VertDirection::Up => 1.0,
+                                        VertDirection::Down => -1.0,
                                     };
 
                                     Self::scroll_lines(
@@ -567,12 +595,25 @@ impl Inlyne {
                                         lines,
                                     )
                                 }
-                                a_zoom @ (Action::ZoomIn | Action::ZoomOut | Action::ZoomReset) => {
-                                    let zoom = match a_zoom {
-                                        Action::ZoomIn => self.renderer.zoom * 1.1,
-                                        Action::ZoomOut => self.renderer.zoom * 0.9,
-                                        Action::ZoomReset => 1.0,
-                                        _ => unreachable!("This arm is only for zoom actions"),
+                                Action::Page(direction) => {
+                                    // Move 90% of current page height
+                                    let scroll_amount = self.renderer.config.height as f32 * 0.9;
+                                    let scroll_with_direction = match direction {
+                                        VertDirection::Up => scroll_amount,
+                                        VertDirection::Down => -scroll_amount,
+                                    };
+
+                                    Self::scroll_pixels(
+                                        &mut self.renderer,
+                                        &self.window,
+                                        scroll_with_direction,
+                                    );
+                                }
+                                Action::Zoom(zoom_action) => {
+                                    let zoom = match zoom_action {
+                                        Zoom::In => self.renderer.zoom * 1.1,
+                                        Zoom::Out => self.renderer.zoom * 0.9,
+                                        Zoom::Reset => 1.0,
                                     };
 
                                     self.renderer.zoom = zoom;
@@ -714,19 +755,19 @@ fn main() -> anyhow::Result<()> {
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match Config::load() {
-        Ok(config) => config,
-        Err(err) => {
+    let args = Args::new();
+    let config = match &args.config {
+        Some(config_path) => Config::load_from_file(config_path)?,
+        None => Config::load_from_system().unwrap_or_else(|err| {
             log::warn!(
                 "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
             Config::default()
-        }
+        }),
     };
-    let args = Args::new(&config);
-    let opts = Opts::parse_and_load_from(&args, config);
-    let inlyne = Inlyne::new(&opts, args)?;
+    let opts = Opts::parse_and_load_from(args, config);
+    let inlyne = Inlyne::new(opts)?;
 
     inlyne.spawn_watcher();
     inlyne.run();
