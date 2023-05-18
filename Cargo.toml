@@ -14,7 +14,7 @@ winit = "0.28.5"
 wgpu = "0.16"
 bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
-comrak = { version = "0.18.0", default-features = false, features = ["syntect"] }
+comrak = { version = "0.18.0", default-features = false, features = ["shortcodes", "syntect"] }
 open = "4.1.0"
 html5ever = "0.26.0"
 image = "0.24.6"
