@@ -258,8 +258,11 @@ impl Renderer {
                             scrolled_pos.1 - 5. * self.hidpi_scale * self.zoom,
                         );
                         let max = (
-                            (min.0 + bounds.0 + 10.)
-                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
+                            min.0
+                                + bounds
+                                    .0
+                                    .max(text_box.size(&mut self.text_system, bounds, self.zoom).0)
+                                + 10.,
                             min.1 + size.1 + 12. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
@@ -326,22 +329,8 @@ impl Renderer {
                         bounds,
                         self.zoom,
                     ) {
-                        let min = (
-                            line.0 .0.clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
-                            line.0 .1,
-                        );
-                        let max = (
-                            line.1 .0.clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
-                            line.1 .1 + 2. * self.hidpi_scale * self.zoom,
-                        );
+                        let min = (line.0 .0, line.0 .1);
+                        let max = (line.1 .0, line.1 .1 + 2. * self.hidpi_scale * self.zoom);
                         self.draw_rectangle(
                             Rect::from_min_max(min, max),
                             native_color(self.theme.text_color, &self.surface_format),
@@ -356,6 +345,7 @@ impl Renderer {
                             selection,
                         );
                         self.selection_text.push_str(&selection_text);
+                        self.selection_text.push('\n');
                         for rect in selection_rects {
                             self.draw_rectangle(
                                 Rect::from_min_max(
@@ -411,6 +401,7 @@ impl Renderer {
                                     selection,
                                 );
                                 self.selection_text.push_str(&selection_text);
+                                self.selection_text.push('\n');
                                 for rect in selection_rects {
                                     self.draw_rectangle(
                                         Rect::from_min_max(
@@ -431,11 +422,7 @@ impl Renderer {
                             scrolled_pos.1 + y,
                         );
                         let max = (
-                            (scrolled_pos.0 + x).clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
+                            (scrolled_pos.0 + x),
                             scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(
@@ -472,6 +459,7 @@ impl Renderer {
                                                 selection,
                                             );
                                         self.selection_text.push_str(&selection_text);
+                                        self.selection_text.push('\n');
                                         for rect in selection_rects {
                                             self.draw_rectangle(
                                                 Rect::from_min_max(
@@ -496,11 +484,7 @@ impl Renderer {
                                 scrolled_pos.1 + y,
                             );
                             let max = (
-                                (scrolled_pos.0 + x).clamp(
-                                    DEFAULT_MARGIN + centering,
-                                    (screen_size.0 - DEFAULT_MARGIN - centering)
-                                        .max(DEFAULT_MARGIN + centering),
-                                ),
+                                (scrolled_pos.0 + x),
                                 scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
                             self.draw_rectangle(

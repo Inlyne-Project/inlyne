@@ -6,8 +6,8 @@ use std::{
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
-    cosmic_text::Align as TextAlign, Attrs, AttrsList, BufferLine, Color, FamilyOwned, FontSystem,
-    Style, SwashCache, TextArea, TextBounds, Weight,
+    cosmic_text::Align as TextAlign, Affinity, Attrs, AttrsList, BufferLine, Color, Cursor,
+    FamilyOwned, FontSystem, Style, SwashCache, TextArea, TextBounds, Weight,
 };
 
 use crate::utils::{Align, Line, Point, Rect, Selection, Size};
@@ -215,15 +215,52 @@ impl TextBox {
 
         let mut y = screen_position.1 + line_height;
         for line in buffer.layout_runs() {
+            let mut underline_ranges = Vec::new();
+            let mut underline_range = None;
+            let mut strike_ranges = Vec::new();
+            let mut strike_range = None;
             for glyph in line.glyphs {
                 let text = &self.texts[glyph.metadata];
-                let x = screen_position.0 + glyph.x;
                 if text.is_underlined {
-                    lines.push(((x, y), (x + glyph.w, y)))
+                    let mut range = underline_range.unwrap_or(glyph.start..glyph.end);
+                    range.end = glyph.end;
+                    underline_range = Some(range);
+                } else {
+                    if let Some(range) = underline_range.clone() {
+                        underline_ranges.push(range);
+                    }
                 }
                 if text.is_striked {
+                    let mut range = strike_range.unwrap_or(glyph.start..glyph.end);
+                    range.end = glyph.end;
+                    strike_range = Some(range);
+                } else {
+                    if let Some(range) = strike_range.clone() {
+                        strike_ranges.push(range);
+                    }
+                }
+            }
+            if let Some(range) = underline_range.clone() {
+                underline_ranges.push(range);
+            }
+            if let Some(range) = strike_range.clone() {
+                strike_ranges.push(range);
+            }
+            for underline_range in &underline_ranges {
+                let start_cursor = Cursor::new(line.line_i, underline_range.start);
+                let end_cursor = Cursor::new(line.line_i, underline_range.end);
+                if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
+                    let x = screen_position.0 + highlight_x;
+                    lines.push(((x.floor(), y), ((x + highlight_w).ceil(), y)));
+                }
+            }
+            for strike_range in &strike_ranges {
+                let start_cursor = Cursor::new(line.line_i, strike_range.start);
+                let end_cursor = Cursor::new(line.line_i, strike_range.end);
+                if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
+                    let x = screen_position.0 + highlight_x;
                     let y = y - (line_height / 2.);
-                    lines.push(((x, y), (x + glyph.w, y)))
+                    lines.push(((x.floor(), y), ((x + highlight_w).ceil(), y)));
                 }
             }
             y += line_height;
@@ -241,7 +278,7 @@ impl TextBox {
         selection: Selection,
     ) -> (Vec<Rect>, String) {
         let (mut select_start, mut select_end) = selection;
-        if select_start.1 > select_end.1 {
+        if select_start.1 > select_end.1 || select_start.0 > select_end.0 {
             std::mem::swap(&mut select_start, &mut select_end);
         }
         if screen_position.1 > select_end.1 || screen_position.1 + bounds.1 < select_start.1 {
@@ -257,36 +294,56 @@ impl TextBox {
         let (_, buffer) =
             cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
 
-        if let Some(start_cusor) = buffer.hit(
+        if let Some(start_cursor) = buffer.hit(
             select_start.0 - screen_position.0,
             select_start.1 - screen_position.1,
         ) {
-            if let Some(end_cusor) = buffer.hit(
+            if let Some(end_cursor) = buffer.hit(
                 select_end.0 - screen_position.0,
                 select_end.1 - screen_position.1,
             ) {
                 let mut y = screen_position.1;
-                let mut glyph_num = 0;
                 for line in buffer.layout_runs() {
-                    for glyph in line.glyphs {
-                        let x = screen_position.0 + glyph.x;
-                        if glyph_num >= start_cusor.index && glyph_num < end_cusor.index {
-                            rects.push(Rect::from_min_max((x, y), (x + glyph.w, y + line_height)));
+                    let line_contains =
+                        move |y_point: f32| y_point >= y && y_point <= y + line_height;
+                    if line_contains(select_start.1)
+                        || line_contains(select_end.1)
+                        || (select_start.1 < y && select_end.1 > y + line_height)
+                    {
+                        if let Some((highlight_x, highlight_w)) =
+                            line.highlight(start_cursor, end_cursor)
+                        {
+                            let x = screen_position.0 + highlight_x;
+                            rects.push(Rect::from_min_max(
+                                (x.floor(), y),
+                                ((x + highlight_w).ceil(), y + line_height),
+                            ));
                         }
-                        glyph_num += 1;
+                    }
+
+                    // See https://docs.rs/cosmic-text/0.8.0/cosmic_text/struct.LayoutRun.html#method.highlight implementation
+                    for glyph in line.glyphs.iter() {
+                        let left_glyph_cursor = if line.rtl {
+                            Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                        } else {
+                            Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                        };
+                        let right_glyph_cursor = if line.rtl {
+                            Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                        } else {
+                            Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                        };
+                        if (left_glyph_cursor >= start_cursor && left_glyph_cursor <= end_cursor)
+                            && (right_glyph_cursor >= start_cursor
+                                && right_glyph_cursor <= end_cursor)
+                        {
+                            selected_text.push_str(&line.text[glyph.start..glyph.end]);
+                        }
+                    }
+                    if select_end.1 > y + line_height {
+                        selected_text.push(' ')
                     }
                     y += line_height;
-                    glyph_num += 1;
-                }
-
-                let mut i = 0;
-                for text in &self.texts {
-                    for c in text.text.chars() {
-                        if i >= start_cusor.index && i < end_cusor.index {
-                            selected_text.push(c);
-                        }
-                        i += 1;
-                    }
                 }
             }
         }

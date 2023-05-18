@@ -56,6 +56,7 @@ self.glyph_brush.queue(&text_box.glyph_section(*pos, bounds));
 
 #### Lists and Links
 
+
 <ol>
     <li><a href="https://github.com/trimental/inlyne">Inlyne</a></li>
     <li><a href="https://github.com/gfx-rs/wgpu">WGPU Project</a></li>
@@ -86,7 +87,7 @@ You weren't supposed to see this!
 
 #### Text Effects
 
-<i><u>Are these text effects ~~to~~ too **much**?</u></i> <small>Theres no such thing</small>
+<small><i><u>Are these text effects ~~to~~ too **much**?</u></i> Theres no such thing</small>
 
 ## Configuration
 
