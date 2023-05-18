@@ -1,13 +1,15 @@
 use crate::color::{native_color, Theme};
-use crate::fonts;
+use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
+use crate::text::{CachedTextArea, TextCache, TextSystem};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::Element;
 use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
+use glyphon::{Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
@@ -15,9 +17,7 @@ use lyon::tessellation::*;
 use std::borrow::Cow;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use wgpu::util::StagingBelt;
-use wgpu::{BindGroup, Buffer, IndexFormat, TextureFormat};
-use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder};
+use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
 use winit::window::Window;
 
 #[repr(C)]
@@ -34,8 +34,7 @@ pub struct Renderer {
     pub device: wgpu::Device,
     pub render_pipeline: wgpu::RenderPipeline,
     pub queue: wgpu::Queue,
-    pub glyph_brush: GlyphBrush<()>,
-    pub staging_belt: StagingBelt,
+    pub text_system: TextSystem,
     pub scroll_y: f32,
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
     pub hidpi_scale: f32,
@@ -88,14 +87,11 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
+                    limits: wgpu::Limits::downlevel_defaults(),
                 },
                 None,
             )
             .await?;
-
-        let staging_belt = wgpu::util::StagingBelt::new(1024);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -154,9 +150,19 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &surface_format);
 
-        let glyph_brush = GlyphBrushBuilder::using_fonts(fonts::get_fonts(&font_opts)?)
-            .draw_cache_position_tolerance(0.5)
-            .build(&device, surface_format);
+        let font_system = get_fonts(&font_opts);
+        let swash_cache = SwashCache::new();
+        let mut text_atlas = TextAtlas::new(&device, &queue, surface_format);
+        let text_renderer =
+            TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
+        let text_cache = TextCache::new();
+        let text_system = TextSystem {
+            font_system,
+            swash_cache,
+            text_renderer,
+            text_atlas,
+            text_cache,
+        };
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
 
@@ -168,8 +174,7 @@ impl Renderer {
             device,
             render_pipeline,
             queue,
-            glyph_brush,
-            staging_belt,
+            text_system,
             scroll_y: 0.,
             lyon_buffer,
             hidpi_scale,
@@ -199,7 +204,11 @@ impl Renderer {
         Ok(())
     }
 
-    fn render_elements(&mut self, elements: &[Positioned<Element>]) -> anyhow::Result<()> {
+    fn render_elements(
+        &mut self,
+        elements: &[Positioned<Element>],
+    ) -> anyhow::Result<Vec<CachedTextArea>> {
+        let mut text_areas: Vec<CachedTextArea> = Vec::new();
         let screen_size = self.screen_size();
         for element in elements.iter() {
             let Rect { mut pos, size } =
@@ -216,10 +225,7 @@ impl Renderer {
 
             match &element.inner {
                 Element::TextBox(text_box) => {
-                    let box_size = text_box.texts.first().map(|last| last.size).unwrap_or(16.)
-                        * self.hidpi_scale
-                        * self.zoom
-                        * 0.75;
+                    let box_size = text_box.font_size * self.hidpi_scale * self.zoom * 0.75;
 
                     if text_box.is_checkbox.is_some() {
                         pos.0 += box_size * 1.5;
@@ -231,8 +237,13 @@ impl Renderer {
                         f32::INFINITY,
                     );
 
-                    self.glyph_brush
-                        .queue(&text_box.glyph_section(pos, bounds, self.zoom));
+                    text_areas.push(text_box.text_areas(
+                        &mut self.text_system,
+                        pos,
+                        bounds,
+                        self.zoom,
+                        self.scroll_y,
+                    ));
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if let Some(bg_color) = text_box.background_color {
                             bg_color
@@ -242,11 +253,17 @@ impl Renderer {
                             native_color(self.theme.quote_block_color, &self.surface_format)
                         };
 
-                        let mut min = ((scrolled_pos.0 - 10.), scrolled_pos.1);
+                        let mut min = (
+                            (scrolled_pos.0 - 10.),
+                            scrolled_pos.1 - 5. * self.hidpi_scale * self.zoom,
+                        );
                         let max = (
-                            (min.0 + bounds.0 + 10.)
-                                .min(screen_size.0 - DEFAULT_MARGIN - centering),
-                            min.1 + size.1 + 5. * self.hidpi_scale * self.zoom,
+                            min.0
+                                + bounds
+                                    .0
+                                    .max(text_box.size(&mut self.text_system, bounds, self.zoom).0)
+                                + 10.,
+                            min.1 + size.1 + 12. * self.hidpi_scale * self.zoom,
                         );
                         if let Some(nest) = text_box.is_quote_block {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
@@ -307,27 +324,13 @@ impl Renderer {
                         }
                     }
                     for line in text_box.render_lines(
-                        &mut self.glyph_brush,
+                        &mut self.text_system,
                         scrolled_pos,
                         bounds,
                         self.zoom,
                     ) {
-                        let min = (
-                            line.0 .0.clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
-                            line.0 .1,
-                        );
-                        let max = (
-                            line.1 .0.clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
-                            line.1 .1 + 2. * self.hidpi_scale * self.zoom,
-                        );
+                        let min = (line.0 .0, line.0 .1);
+                        let max = (line.1 .0, line.1 .1 + 2. * self.hidpi_scale * self.zoom);
                         self.draw_rectangle(
                             Rect::from_min_max(min, max),
                             native_color(self.theme.text_color, &self.surface_format),
@@ -335,13 +338,14 @@ impl Renderer {
                     }
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(
-                            &mut self.glyph_brush,
+                            &mut self.text_system,
                             pos,
                             bounds,
                             self.zoom,
                             selection,
                         );
                         self.selection_text.push_str(&selection_text);
+                        self.selection_text.push('\n');
                         for rect in selection_rects {
                             self.draw_rectangle(
                                 Rect::from_min_max(
@@ -355,8 +359,7 @@ impl Renderer {
                 }
                 Element::Table(table) => {
                     let row_heights = table.row_heights(
-                        &mut self.glyph_brush,
-                        pos,
+                        &mut self.text_system,
                         (
                             screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                             f32::INFINITY,
@@ -364,8 +367,7 @@ impl Renderer {
                         self.zoom,
                     );
                     let column_widths = table.column_widths(
-                        &mut self.glyph_brush,
-                        pos,
+                        &mut self.text_system,
                         (
                             screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                             f32::INFINITY,
@@ -383,20 +385,23 @@ impl Renderer {
                                     .min(screen_size.0 - DEFAULT_MARGIN - centering),
                                 f32::INFINITY,
                             );
-                            self.glyph_brush.queue(&text_box.glyph_section(
+                            text_areas.push(text_box.text_areas(
+                                &mut self.text_system,
                                 (pos.0 + x, pos.1 + y),
                                 bounds,
                                 self.zoom,
+                                self.scroll_y,
                             ));
                             if let Some(selection) = self.selection {
                                 let (selection_rects, selection_text) = text_box.render_selection(
-                                    &mut self.glyph_brush,
+                                    &mut self.text_system,
                                     (pos.0 + x, pos.1 + y),
                                     bounds,
                                     self.zoom,
                                     selection,
                                 );
                                 self.selection_text.push_str(&selection_text);
+                                self.selection_text.push('\n');
                                 for rect in selection_rects {
                                     self.draw_rectangle(
                                         Rect::from_min_max(
@@ -417,11 +422,7 @@ impl Renderer {
                             scrolled_pos.1 + y,
                         );
                         let max = (
-                            (scrolled_pos.0 + x).clamp(
-                                DEFAULT_MARGIN + centering,
-                                (screen_size.0 - DEFAULT_MARGIN - centering)
-                                    .max(DEFAULT_MARGIN + centering),
-                            ),
+                            (scrolled_pos.0 + x),
                             scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(
@@ -440,22 +441,25 @@ impl Renderer {
                                         screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering,
                                         f32::INFINITY,
                                     );
-                                    self.glyph_brush.queue(&text_box.glyph_section(
+                                    text_areas.push(text_box.text_areas(
+                                        &mut self.text_system,
                                         (pos.0 + x, pos.1 + y),
                                         bounds,
                                         self.zoom,
+                                        self.scroll_y,
                                     ));
 
                                     if let Some(selection) = self.selection {
                                         let (selection_rects, selection_text) = text_box
                                             .render_selection(
-                                                &mut self.glyph_brush,
+                                                &mut self.text_system,
                                                 (pos.0 + x, pos.1 + y),
                                                 bounds,
                                                 self.zoom,
                                                 selection,
                                             );
                                         self.selection_text.push_str(&selection_text);
+                                        self.selection_text.push('\n');
                                         for rect in selection_rects {
                                             self.draw_rectangle(
                                                 Rect::from_min_max(
@@ -480,11 +484,7 @@ impl Renderer {
                                 scrolled_pos.1 + y,
                             );
                             let max = (
-                                (scrolled_pos.0 + x).clamp(
-                                    DEFAULT_MARGIN + centering,
-                                    (screen_size.0 - DEFAULT_MARGIN - centering)
-                                        .max(DEFAULT_MARGIN + centering),
-                                ),
+                                (scrolled_pos.0 + x),
                                 scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
                             self.draw_rectangle(
@@ -514,7 +514,7 @@ impl Renderer {
                         )?;
                     }
                 }
-                Element::Row(row) => self.render_elements(&row.elements)?,
+                Element::Row(row) => text_areas.append(&mut self.render_elements(&row.elements)?),
                 Element::Section(section) => {
                     if let Some(ref summary) = *section.summary {
                         let bounds = summary.bounds.as_ref().unwrap();
@@ -527,17 +527,17 @@ impl Renderer {
                             native_color(self.theme.text_color, &self.surface_format),
                             *section.hidden.borrow(),
                         )?;
-                        self.render_elements(std::slice::from_ref(summary))?
+                        text_areas.append(&mut self.render_elements(std::slice::from_ref(summary))?)
                     }
                     if !*section.hidden.borrow() {
-                        self.render_elements(&section.elements)?
+                        text_areas.append(&mut self.render_elements(&section.elements)?)
                     }
                 }
             }
         }
 
         self.draw_scrollbar()?;
-        Ok(())
+        Ok(text_areas)
     }
 
     fn draw_hidden_marker(
@@ -739,7 +739,7 @@ impl Renderer {
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         self.selection_text = String::new();
-        self.render_elements(elements)?;
+        let cached_text_areas = self.render_elements(elements)?;
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -757,6 +757,28 @@ impl Renderer {
 
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
+
+        let text_areas: Vec<TextArea> = cached_text_areas
+            .iter()
+            .map(|c| c.text_area(&self.text_system.text_cache))
+            .collect();
+
+        self.text_system
+            .text_renderer
+            .prepare(
+                &self.device,
+                &self.queue,
+                &mut self.text_system.font_system,
+                &mut self.text_system.text_atlas,
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+                &text_areas,
+                &mut self.text_system.swash_cache,
+            )
+            .unwrap();
+        self.text_system.text_cache.trim();
 
         {
             let background_color = {
@@ -795,49 +817,22 @@ impl Renderer {
                 rpass.set_vertex_buffer(0, vertex_buf.slice(..));
                 rpass.draw_indexed(0..6, 0, 0..1);
             }
+
+            self.text_system
+                .text_renderer
+                .render(&self.text_system.text_atlas, &mut rpass)
+                .unwrap();
         }
 
-        let screen_size = self.screen_size();
-
-        // Draw wgpu brush elements
-        self.glyph_brush
-            .draw_queued_with_transform(
-                &self.device,
-                &mut self.staging_belt,
-                &mut encoder,
-                &view,
-                [
-                    2.0 / screen_size.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    -2.0 / screen_size.1,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    0.0,
-                    -1.0,
-                    1.0 + (self.scroll_y * 2. / (screen_size.1)),
-                    0.0,
-                    1.0,
-                ],
-            )
-            .expect("Failed to draw queued glyphs");
-
-        self.staging_belt.finish();
         self.queue.submit(Some(encoder.finish()));
         frame.present();
 
-        self.staging_belt.recall();
         Ok(())
     }
 
     pub fn reposition(&mut self, elements: &mut [Positioned<Element>]) -> anyhow::Result<()> {
         self.positioner
-            .reposition(&mut self.glyph_brush, elements, self.zoom)
+            .reposition(&mut self.text_system, elements, self.zoom)
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {

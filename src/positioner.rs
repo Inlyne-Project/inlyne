@@ -1,11 +1,10 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use anyhow::Context;
-use wgpu_glyph::GlyphBrush;
 
 use crate::{
     table::{TABLE_COL_GAP, TABLE_ROW_GAP},
-    text::TextBox,
+    text::{TextBox, TextSystem},
     utils::{Align, Point, Rect, Size},
     Element,
 };
@@ -61,7 +60,7 @@ impl Positioner {
     // Positions the element but does not update reserved_height
     pub fn position(
         &mut self,
-        glyph_brush: &mut GlyphBrush<()>,
+        text_system: &mut TextSystem,
         element: &mut Positioned<Element>,
         zoom: f32,
     ) -> anyhow::Result<()> {
@@ -73,8 +72,7 @@ impl Positioner {
                 let pos = (DEFAULT_MARGIN + indent + centering, self.reserved_height);
 
                 let size = text_box.size(
-                    glyph_brush,
-                    pos,
+                    text_system,
                     (
                         (self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering).max(0.),
                         f32::INFINITY,
@@ -111,8 +109,7 @@ impl Positioner {
                 let pos = (DEFAULT_MARGIN + centering, self.reserved_height);
                 let width = table
                     .column_widths(
-                        glyph_brush,
-                        pos,
+                        text_system,
                         (
                             self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                             f32::INFINITY,
@@ -123,8 +120,7 @@ impl Positioner {
                     .fold(0., |acc, x| acc + x);
                 let height = table
                     .row_heights(
-                        glyph_brush,
-                        pos,
+                        text_system,
                         (
                             self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                             f32::INFINITY,
@@ -147,7 +143,7 @@ impl Positioner {
                 let mut max_height: f32 = 0.;
                 let mut max_width: f32 = 0.;
                 for element in &mut row.elements {
-                    self.position(glyph_brush, element, zoom)?;
+                    self.position(text_system, element, zoom)?;
                     let element_bounds = element
                         .bounds
                         .as_mut()
@@ -188,7 +184,7 @@ impl Positioner {
                 let mut section_bounds =
                     Rect::new((DEFAULT_MARGIN + centering, self.reserved_height), (0., 0.));
                 if let Some(ref mut summary) = *section.summary {
-                    self.position(glyph_brush, summary, zoom)?;
+                    self.position(text_system, summary, zoom)?;
                     let element_size = summary
                         .bounds
                         .as_mut()
@@ -201,7 +197,7 @@ impl Positioner {
                     section_bounds.size.0 = section_bounds.size.0.max(element_size.0)
                 }
                 for element in &mut section.elements {
-                    self.position(glyph_brush, element, zoom)?;
+                    self.position(text_system, element, zoom)?;
                     let element_size = element
                         .bounds
                         .as_mut()
@@ -226,14 +222,14 @@ impl Positioner {
     // Resets reserved height and positions every element again
     pub fn reposition(
         &mut self,
-        glyph_brush: &mut GlyphBrush<()>,
+        text_system: &mut TextSystem,
         elements: &mut [Positioned<Element>],
         zoom: f32,
     ) -> anyhow::Result<()> {
         self.reserved_height = DEFAULT_PADDING * self.hidpi_scale * zoom;
 
         for element in elements {
-            self.position(glyph_brush, element, zoom)?;
+            self.position(text_system, element, zoom)?;
             self.reserved_height += DEFAULT_PADDING * self.hidpi_scale * zoom
                 + element
                     .bounds

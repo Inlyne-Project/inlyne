@@ -10,10 +10,9 @@ repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 
 [dependencies]
-wgpu_glyph =  "0.20"
 winit = "0.28.5"
 wgpu = "0.16"
-bytemuck = "1.13.1"
+bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
 comrak = { version = "0.18.0", default-features = false, features = ["syntect"] }
 open = "4.1.0"
@@ -21,19 +20,18 @@ html5ever = "0.26.0"
 image = "0.24.6"
 clap = { version = "4.2.7", features = ["cargo"] }
 copypasta = "0.8.2"
-resvg = "0.32.0"
-usvg = "0.32.0"
+resvg = "0.33.0"
+usvg = "0.33.0"
 tiny-skia = "0.9.0"
 anyhow = "1.0.71"
 dirs = "5.0.1"
 serde = { version = "1.0.162", features = ["derive"] }
 toml = "0.7.3"
 reqwest = { version = "0.11.17", features = ["blocking", "json", "stream"] }
-font-kit = "0.11.0"
-memmap2 = "0.5.10"
+memmap2 = "0.6.1"
 log = "0.4.17"
 env_logger = "0.10.0"
-notify = "5.1.0"
+notify = "6.0.0"
 clap_complete = "4.2.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
@@ -43,10 +41,17 @@ pollster = "0.3.0"
 serde_yaml = "0.9.21"
 indexmap = { version = "1.9.3", features = ["serde"] }
 html-escape = "0.2.13"
+fxhash = "0.2.1"
+twox-hash = "1.6.3"
+
+[dependencies.glyphon]
+version = "0.2"
+git = "https://github.com/grovesNL/glyphon.git"
+rev = "80e8465af6a1e6896ff45de715212568ccdef47a"
 
 # Uncomment for profiling
-# [profile.release]
-# debug = true
+ [profile.release]
+ debug = true
 
 [profile.release-lto]
 inherits = "release"

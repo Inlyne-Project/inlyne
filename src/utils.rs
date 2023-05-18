@@ -6,7 +6,6 @@ use std::{
 use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
 use serde::Deserialize;
-use wgpu_glyph::ab_glyph;
 use winit::window::CursorIcon;
 
 use crate::{color::SyntaxTheme, image::ImageData};
@@ -48,16 +47,6 @@ impl Rect {
     }
 }
 
-impl From<ab_glyph::Rect> for Rect {
-    fn from(other_rect: ab_glyph::Rect) -> Self {
-        let ab_glyph::Rect {
-            min: ab_glyph::Point { x: min_x, y: min_y },
-            max: ab_glyph::Point { x: max_x, y: max_y },
-        } = other_rect;
-        Self::from_min_max((min_x, min_y), (max_x, max_y))
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Align {
     #[default]
@@ -95,7 +84,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     let adapter = comrak::plugins::syntect::SyntectAdapter::new(syntax_theme.as_syntect_name());
     plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
-    let htmlified = markdown_to_html_with_plugins(&md, &options, &plugins);
+    let htmlified = markdown_to_html_with_plugins(md, &options, &plugins);
 
     // Comrak doesn't support converting the front matter to HTML, so we have to convert it to an
     // HTML table ourselves. Front matter is found like so

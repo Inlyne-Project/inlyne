@@ -18,7 +18,7 @@ Markdown files are a wonderful tool to get formatted, visually appealing, inform
 Except 9 times out of 10 you need an entire web browser to quickly open a file...
 
 Introducing **Inlyne**, a GPU powered yet browserless tool to help you quickly
-view markdown files in the blink of an eye.
+view markdown files in the blink of an eye 👀.
 
 ## Install
 
@@ -59,6 +59,7 @@ self.glyph_brush.queue(&text_box.glyph_section(*pos, bounds));
 
 #### Lists and Links
 
+
 <ol>
     <li><a href="https://github.com/trimental/inlyne">Inlyne</a></li>
     <li><a href="https://github.com/gfx-rs/wgpu">WGPU Project</a></li>
@@ -89,7 +90,7 @@ You weren't supposed to see this!
 
 #### Text Effects
 
-<i><u>Are these text effects ~~to~~ too **much**?</u></i> <small>Theres no such thing</small>
+<small><i><u>Are these text effects ~~to~~ too **much**?</u></i> Theres no such thing</small>
 
 ## Configuration
 
