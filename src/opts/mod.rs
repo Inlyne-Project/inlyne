@@ -108,10 +108,9 @@ impl Opts {
             ResolvedTheme::Dark => dark_theme.map_or(color::DARK_DEFAULT, |dark_theme| {
                 dark_theme.merge(color::DARK_DEFAULT)
             }),
-            ResolvedTheme::Light => light_theme
-                .map_or(color::LIGHT_DEFAULT, |light_theme| {
-                    light_theme.merge(color::LIGHT_DEFAULT)
-                }),
+            ResolvedTheme::Light => light_theme.map_or(color::LIGHT_DEFAULT, |light_theme| {
+                light_theme.merge(color::LIGHT_DEFAULT)
+            }),
         };
         let scale = args_scale.or(config_scale);
         let font_opts = font_options.unwrap_or_default();

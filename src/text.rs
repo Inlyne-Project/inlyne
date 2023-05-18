@@ -225,19 +225,15 @@ impl TextBox {
                     let mut range = underline_range.unwrap_or(glyph.start..glyph.end);
                     range.end = glyph.end;
                     underline_range = Some(range);
-                } else {
-                    if let Some(range) = underline_range.clone() {
-                        underline_ranges.push(range);
-                    }
+                } else if let Some(range) = underline_range.clone() {
+                    underline_ranges.push(range);
                 }
                 if text.is_striked {
                     let mut range = strike_range.unwrap_or(glyph.start..glyph.end);
                     range.end = glyph.end;
                     strike_range = Some(range);
-                } else {
-                    if let Some(range) = strike_range.clone() {
-                        strike_ranges.push(range);
-                    }
+                } else if let Some(range) = strike_range.clone() {
+                    strike_ranges.push(range);
                 }
             }
             if let Some(range) = underline_range.clone() {
