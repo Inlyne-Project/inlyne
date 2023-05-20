@@ -105,11 +105,36 @@ mod html {
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Eq)]
 enum FontWeight {
     #[default]
     Normal,
     Bold,
+}
+
+impl FontWeight {
+    fn new(s: &str) -> Self {
+        match s {
+            "bold" => Self::Bold,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+}
+
+impl FontStyle {
+    fn new(s: &str) -> Self {
+        match s {
+            "italic" => Self::Italic,
+            _ => Self::default(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -119,6 +144,7 @@ struct State {
     text_options: html::TextOptions,
     span_color: [f32; 4],
     span_weight: FontWeight,
+    span_style: FontStyle,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
 }
@@ -491,7 +517,14 @@ impl TokenSink for HtmlInterpreter {
                                         .split(';')
                                         .find_map(|style| style.strip_prefix("background-color:#"))
                                     {
-                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
+                                        if let Ok(mut hex) = u32::from_str_radix(hex_str, 16) {
+                                            // HACK: override `inspired-github`'s background color.
+                                            // It looks like this is made for an editor theme where
+                                            // full white makes more sense for a background.
+                                            // Default to github's background color instead;
+                                            if hex == 0xffffff {
+                                                hex = 0xf6f8fa;
+                                            }
                                             let bg_color = native_color(hex, &self.surface_format);
                                             self.current_textbox
                                                 .set_background_color(Some(bg_color));
@@ -522,9 +555,11 @@ impl TokenSink for HtmlInterpreter {
                                         } else if let Some(font_weight) =
                                             style.strip_prefix("font-weight:")
                                         {
-                                            if font_weight == "bold" {
-                                                self.state.span_weight = FontWeight::Bold
-                                            }
+                                            self.state.span_weight = FontWeight::new(font_weight);
+                                        } else if let Some(font_style) =
+                                            style.strip_prefix("font-style:")
+                                        {
+                                            self.state.span_style = FontStyle::new(font_style);
                                         }
                                     }
                                 }
@@ -675,7 +710,8 @@ impl TokenSink for HtmlInterpreter {
                         "span" => {
                             self.state.span_color =
                                 native_color(self.theme.code_color, &self.surface_format);
-                            self.state.span_weight = Default::default();
+                            self.state.span_weight = FontWeight::default();
+                            self.state.span_style = FontStyle::default();
                         }
                         "details" => {
                             self.push_current_textbox();
@@ -804,6 +840,9 @@ impl TokenSink for HtmlInterpreter {
                             .with_family(FamilyOwned::Monospace);
                         if self.state.span_weight == FontWeight::Bold {
                             text = text.make_bold(true);
+                        }
+                        if self.state.span_style == FontStyle::Italic {
+                            text = text.make_italic(true);
                         }
                         //.with_size(18.)
                     }
