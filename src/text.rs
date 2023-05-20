@@ -94,12 +94,19 @@ impl TextBox {
     }
 
     pub fn key(&self, bounds: Size, zoom: f32) -> Key<'_> {
-        let lines = vec![self
-            .texts
-            .iter()
-            .enumerate()
-            .map(|(n, t)| t.section_key(n))
-            .collect()];
+        let mut lines = Vec::new();
+        let mut sections = Vec::new();
+        for (i, text) in self.texts.iter().enumerate() {
+            sections.append(&mut text.section_keys(i));
+            if text.text.ends_with('\n') {
+                lines.push(sections.clone());
+                sections.clear();
+            }
+        }
+        if !sections.is_empty() {
+            lines.push(sections.clone());
+            sections.clear();
+        }
 
         let align = match self.align {
             Align::Left => TextAlign::Left,
@@ -447,22 +454,27 @@ impl Text {
         attrs
     }
 
-    pub fn section_key(&self, index: usize) -> SectionKey<'_> {
+    pub fn section_keys(&self, index: usize) -> Vec<SectionKey<'_>> {
         let color = self.color();
-        SectionKey {
-            content: &self.text,
-            font: Font {
-                family: self.font_family.as_family(),
-                weight: self.weight(),
-            },
-            color: Color::rgba(
-                (color[0] * 255.) as u8,
-                (color[1] * 255.) as u8,
-                (color[2] * 255.) as u8,
-                (color[3] * 255.) as u8,
-            ),
-            index,
-        }
+        let color = Color::rgba(
+            (color[0] * 255.) as u8,
+            (color[1] * 255.) as u8,
+            (color[2] * 255.) as u8,
+            (color[3] * 255.) as u8,
+        );
+        let font = Font {
+            family: self.font_family.as_family(),
+            weight: self.weight(),
+        };
+        self.text
+            .lines()
+            .map(|line| SectionKey {
+                content: line,
+                font,
+                color,
+                index,
+            })
+            .collect()
     }
 }
 

@@ -689,8 +689,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5002459813686f08a09bc78f9dce85ff12467db48f8f3f75ebe0242e0f063fdb"
+source = "git+https://github.com/trimental/cosmic-text?rev=e1e9fb5215daa9dbd40998e16210a6ee3a61ff1f#e1e9fb5215daa9dbd40998e16210a6ee3a61ff1f"
 dependencies = [
  "fontdb 0.13.1",
  "libm",
@@ -1383,7 +1382,7 @@ dependencies = [
 [[package]]
 name = "glyphon"
 version = "0.2.0"
-source = "git+https://github.com/grovesNL/glyphon.git?rev=80e8465af6a1e6896ff45de715212568ccdef47a#80e8465af6a1e6896ff45de715212568ccdef47a"
+source = "git+https://github.com/trimental/glyphon?rev=5bf8b6b6aa4a181824798836e1436809e78102e7#5bf8b6b6aa4a181824798836e1436809e78102e7"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -3632,14 +3631,11 @@ dependencies = [
 
 [[package]]
 name = "sys-locale"
-version = "0.2.4"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8a11bd9c338fdba09f7881ab41551932ad42e405f61d01e8406baea71c07aee"
+checksum = "ea0b9eefabb91675082b41eb94c3ecd91af7656caee3fb4961a07c0ec8c7ca6f"
 dependencies = [
- "js-sys",
  "libc",
- "wasm-bindgen",
- "web-sys",
  "windows-sys 0.45.0",
 ]
 

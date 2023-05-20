@@ -77,38 +77,6 @@ mod html {
         pub list_type: ListType,
     }
 
-    #[derive(Default, PartialEq, Eq)]
-    pub enum FontWeight {
-        Bold,
-        #[default]
-        Normal,
-    }
-
-    impl FontWeight {
-        pub fn new(s: &str) -> Self {
-            match s {
-                "bold" => Self::Bold,
-                _ => Self::default(),
-            }
-        }
-    }
-
-    #[derive(Default, PartialEq, Eq)]
-    pub enum FontStyle {
-        Italic,
-        #[default]
-        Normal,
-    }
-
-    impl FontStyle {
-        pub fn new(s: &str) -> Self {
-            match s {
-                "italic" => Self::Italic,
-                _ => Self::default(),
-            }
-        }
-    }
-
     // Represents the number of parent text option tags the current element is a child of
     #[derive(Default)]
     pub struct TextOptions {
@@ -120,8 +88,6 @@ mod html {
         pub code: usize,
         pub pre_formatted: usize,
         pub block_quote: usize,
-        pub font_weight: FontWeight,
-        pub font_style: FontStyle,
         pub link: Vec<String>,
     }
 
@@ -139,12 +105,46 @@ mod html {
     }
 }
 
+#[derive(Default, PartialEq, Eq)]
+pub enum FontWeight {
+    #[default]
+    Normal,
+    Bold,
+}
+
+impl FontWeight {
+    pub fn new(s: &str) -> Self {
+        match s {
+            "bold" => Self::Bold,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Default, PartialEq, Eq)]
+pub enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+}
+
+impl FontStyle {
+    pub fn new(s: &str) -> Self {
+        match s {
+            "italic" => Self::Italic,
+            _ => Self::default(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct State {
     global_indent: f32,
     element_stack: Vec<html::Element>,
     text_options: html::TextOptions,
     span_color: [f32; 4],
+    span_weight: FontWeight,
+    span_style: FontStyle,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
 }
@@ -546,7 +546,6 @@ impl TokenSink for HtmlInterpreter {
                             for Attribute { name, value } in &tag.attrs {
                                 if &name.local == "style" {
                                     let styles = value.to_string();
-
                                     for style in styles.split(';') {
                                         if let Some(hex_str) = style.strip_prefix("color:#") {
                                             if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
@@ -556,13 +555,11 @@ impl TokenSink for HtmlInterpreter {
                                         } else if let Some(font_weight) =
                                             style.strip_prefix("font-weight:")
                                         {
-                                            self.state.text_options.font_weight =
-                                                html::FontWeight::new(font_weight);
+                                            self.state.span_weight = FontWeight::new(font_weight);
                                         } else if let Some(font_style) =
                                             style.strip_prefix("font-style:")
                                         {
-                                            self.state.text_options.font_style =
-                                                html::FontStyle::new(font_style);
+                                            self.state.span_style = FontStyle::new(font_style);
                                         }
                                     }
                                 }
@@ -713,8 +710,8 @@ impl TokenSink for HtmlInterpreter {
                         "span" => {
                             self.state.span_color =
                                 native_color(self.theme.code_color, &self.surface_format);
-                            self.state.text_options.font_weight = html::FontWeight::default();
-                            self.state.text_options.font_style = html::FontStyle::default();
+                            self.state.span_weight = FontWeight::default();
+                            self.state.span_style = FontStyle::default();
                         }
                         "details" => {
                             self.push_current_textbox();
@@ -744,12 +741,11 @@ impl TokenSink for HtmlInterpreter {
                 let mut str = str.to_string();
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
-                        if !self.current_textbox.texts.is_empty() {
-                            self.push_element(self.current_textbox.clone());
-                            self.current_textbox.texts.clear();
-                        } else {
-                            self.push_element(self.current_textbox.clone().with_padding(12.))
-                        }
+                        self.current_textbox.texts.push(Text::new(
+                            "\n".to_string(),
+                            self.hidpi_scale,
+                            native_color(self.theme.text_color, &self.surface_format),
+                        ));
                     }
                     if let Some(last_text) = self.current_textbox.texts.last() {
                         if let Some(last_char) = last_text.text.chars().last() {
@@ -841,7 +837,10 @@ impl TokenSink for HtmlInterpreter {
                     if self.state.text_options.code >= 1 {
                         text = text
                             .with_color(self.state.span_color)
-                            .with_family(FamilyOwned::Monospace)
+                            .with_family(FamilyOwned::Monospace);
+                        if self.state.span_weight == FontWeight::Bold {
+                            text = text.make_bold(true);
+                        }
                         //.with_size(18.)
                     }
                     for elem in self.state.element_stack.iter().rev() {
@@ -857,12 +856,12 @@ impl TokenSink for HtmlInterpreter {
                             .with_color(native_color(self.theme.link_color, &self.surface_format));
                     }
                     if self.state.text_options.bold >= 1
-                        || self.state.text_options.font_weight == html::FontWeight::Bold
+                        || self.state.span_weight == FontWeight::Bold
                     {
                         text = text.make_bold(true);
                     }
                     if self.state.text_options.italic >= 1
-                        || self.state.text_options.font_style == html::FontStyle::Italic
+                        || self.state.span_style == FontStyle::Italic
                     {
                         text = text.make_italic(true);
                     }
