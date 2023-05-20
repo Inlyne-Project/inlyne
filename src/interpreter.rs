@@ -841,6 +841,9 @@ impl TokenSink for HtmlInterpreter {
                         if self.state.span_weight == FontWeight::Bold {
                             text = text.make_bold(true);
                         }
+                        if self.state.span_style == FontStyle::Italic {
+                            text = text.make_italic(true);
+                        }
                         //.with_size(18.)
                     }
                     for elem in self.state.element_stack.iter().rev() {
@@ -855,14 +858,10 @@ impl TokenSink for HtmlInterpreter {
                         text = text
                             .with_color(native_color(self.theme.link_color, &self.surface_format));
                     }
-                    if self.state.text_options.bold >= 1
-                        || self.state.span_weight == FontWeight::Bold
-                    {
+                    if self.state.text_options.bold >= 1 {
                         text = text.make_bold(true);
                     }
-                    if self.state.text_options.italic >= 1
-                        || self.state.span_style == FontStyle::Italic
-                    {
+                    if self.state.text_options.italic >= 1 {
                         text = text.make_italic(true);
                     }
                     if self.state.text_options.underline >= 1 {
