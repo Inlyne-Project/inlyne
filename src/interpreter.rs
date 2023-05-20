@@ -705,12 +705,11 @@ impl TokenSink for HtmlInterpreter {
                 let mut str = str.to_string();
                 if str == "\n" {
                     if self.state.text_options.pre_formatted >= 1 {
-                        if !self.current_textbox.texts.is_empty() {
-                            self.push_element(self.current_textbox.clone());
-                            self.current_textbox.texts.clear();
-                        } else {
-                            self.push_element(self.current_textbox.clone().with_padding(12.))
-                        }
+                        self.current_textbox.texts.push(Text::new(
+                            "\n".to_string(),
+                            self.hidpi_scale,
+                            native_color(self.theme.text_color, &self.surface_format),
+                        ));
                     }
                     if let Some(last_text) = self.current_textbox.texts.last() {
                         if let Some(last_char) = last_text.text.chars().last() {
