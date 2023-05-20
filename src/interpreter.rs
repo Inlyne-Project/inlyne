@@ -106,14 +106,14 @@ mod html {
 }
 
 #[derive(Default, PartialEq, Eq)]
-pub enum FontWeight {
+enum FontWeight {
     #[default]
     Normal,
     Bold,
 }
 
 impl FontWeight {
-    pub fn new(s: &str) -> Self {
+    fn new(s: &str) -> Self {
         match s {
             "bold" => Self::Bold,
             _ => Self::default(),
@@ -122,14 +122,14 @@ impl FontWeight {
 }
 
 #[derive(Default, PartialEq, Eq)]
-pub enum FontStyle {
+enum FontStyle {
     #[default]
     Normal,
     Italic,
 }
 
 impl FontStyle {
-    pub fn new(s: &str) -> Self {
+    fn new(s: &str) -> Self {
         match s {
             "italic" => Self::Italic,
             _ => Self::default(),
