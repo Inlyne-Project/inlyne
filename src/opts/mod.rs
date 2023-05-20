@@ -9,17 +9,9 @@ use crate::{color, keybindings::Keybindings};
 
 use serde::Deserialize;
 
-pub use self::cli::Args;
+pub use self::cli::{Args, ThemeType};
 pub use self::config::Config;
 pub use self::config::FontOptions;
-
-#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ThemeType {
-    #[default]
-    Auto,
-    Dark,
-    Light,
-}
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {

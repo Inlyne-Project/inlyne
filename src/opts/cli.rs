@@ -1,13 +1,19 @@
-use std::{env, ffi::OsString, io, path::PathBuf};
-
-use super::ThemeType;
+use std::{env, ffi::OsString, path::PathBuf};
 
 use clap::builder::PossibleValue;
 use clap::{command, value_parser, Arg, Command, ValueEnum, ValueHint};
-use clap_complete::{generate, Generator, Shell};
+use serde::Deserialize;
 
 const SCALE_HELP: &str =
     "Factor to scale rendered file by [default: OS defined window scale factor]";
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ThemeType {
+    #[default]
+    Auto,
+    Dark,
+    Light,
+}
 
 impl ThemeType {
     pub fn as_str(&self) -> &'static str {
@@ -40,7 +46,6 @@ pub struct Args {
 
 pub fn command() -> Command {
     let file_arg = Arg::new("file")
-        .required_unless_present("shell")
         .number_of_values(1)
         .value_name("FILE")
         .value_parser(value_parser!(PathBuf))
@@ -61,12 +66,6 @@ pub fn command() -> Command {
         .value_parser(value_parser!(f32))
         .help(SCALE_HELP);
 
-    let gen_comp_arg = Arg::new("shell")
-        .long("gen-completions")
-        .help("Generate shell completions")
-        .number_of_values(1)
-        .value_parser(value_parser!(Shell));
-
     let config_arg = Arg::new("config")
         .short('c')
         .long("config")
@@ -85,7 +84,6 @@ pub fn command() -> Command {
         .arg(file_arg)
         .arg(theme_arg)
         .arg(scale_arg)
-        .arg(gen_comp_arg)
         .arg(config_arg)
         .arg(page_width_arg)
 }
@@ -100,13 +98,6 @@ impl Args {
         let c = command();
         let matches = c.get_matches_from(args);
 
-        // Shell completions exit early so handle them first
-        if let Some(shell) = matches.get_one::<Shell>("shell").copied() {
-            let mut c = command();
-            Self::print_completions(shell, &mut c);
-            std::process::exit(0);
-        }
-
         let file_path = matches.get_one("file").cloned().expect("required");
         let theme = matches.get_one("theme").cloned();
         let scale = matches.get_one("scale").cloned();
@@ -120,9 +111,5 @@ impl Args {
             config,
             page_width,
         }
-    }
-
-    fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
-        generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
     }
 }

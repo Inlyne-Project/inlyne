@@ -52,35 +52,17 @@ jobs:
       shell: bash
       run: |
         staging="inlyne-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
-        comp_out="$staging/completions"
-
         mkdir -p "$staging"
-        mkdir -p "$comp_out"
 
-        cp {README.md,LICENSE,example.png,inlyne.sample.toml} "$staging/"
+        cp -r {README.md,LICENSE,example.png,inlyne.sample.toml,completions} "$staging/"
 
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
           cp "target/${{ matrix.target }}/release-lto/inlyne.exe" "$staging/"
-          inlyne_bin="$staging/inlyne.exe"
-        else
-          cp "target/${{ matrix.target }}/release-lto/inlyne" "$staging/"
-          inlyne_bin="$staging/inlyne"
-        fi
-
-        # Skip `aarch64-apple-darwin` for now since it's failing in CI
-        if [ "${{ matrix.target }}" != "aarch64-apple-darwin" ]; then
-          "$inlyne_bin" --gen-completions bash       > "$comp_out/inlyne.bash"
-          "$inlyne_bin" --gen-completions elvish     > "$comp_out/inlyne.elv"
-          "$inlyne_bin" --gen-completions fish       > "$comp_out/inlyne.fish"
-          "$inlyne_bin" --gen-completions powershell > "$comp_out/inlyne.ps1"
-          "$inlyne_bin" --gen-completions zsh        > "$comp_out/_inlyne"
-        fi
-
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
           7z a "$staging.zip" "$staging"
           echo "ASSET=$staging.zip" >> $GITHUB_ENV
         else
           tar czf "$staging.tar.gz" "$staging"
+          cp "target/${{ matrix.target }}/release-lto/inlyne" "$staging/"
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
         fi
 
