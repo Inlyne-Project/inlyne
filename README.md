@@ -93,7 +93,13 @@ You weren't supposed to see this!
 
 ## Configuration
 
-Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS. Checkout `inlyne.toml.sample` for an example configuration.
+Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into a directory called `inlyne` within the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS:
+
+- Linux: `/home/alice/.config/inlyne/inlyne.toml`
+- Windows: `C:\Users\Alice\AppData\Roaming\inlyne\inlyne.toml`
+- Mac: `/Users/Alice/Library/Application Support/inlyne/inlyne.toml`
+
+Checkout `inlyne.toml.sample` for an example configuration.
 
 ## FAQ
 
