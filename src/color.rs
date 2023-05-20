@@ -57,7 +57,7 @@ pub const LIGHT_DEFAULT: Theme = Theme {
     link_color: 0x5466FF,
     select_color: 0xCDE8F0,
     checkbox_color: 0x96ECAE,
-    code_highlighter: SyntaxTheme::Base16OceanLight,
+    code_highlighter: SyntaxTheme::InspiredGithub,
 };
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

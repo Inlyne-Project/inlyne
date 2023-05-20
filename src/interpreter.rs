@@ -77,6 +77,38 @@ mod html {
         pub list_type: ListType,
     }
 
+    #[derive(Default, PartialEq, Eq)]
+    pub enum FontWeight {
+        Bold,
+        #[default]
+        Normal,
+    }
+
+    impl FontWeight {
+        pub fn new(s: &str) -> Self {
+            match s {
+                "bold" => Self::Bold,
+                _ => Self::default(),
+            }
+        }
+    }
+
+    #[derive(Default, PartialEq, Eq)]
+    pub enum FontStyle {
+        Italic,
+        #[default]
+        Normal,
+    }
+
+    impl FontStyle {
+        pub fn new(s: &str) -> Self {
+            match s {
+                "italic" => Self::Italic,
+                _ => Self::default(),
+            }
+        }
+    }
+
     // Represents the number of parent text option tags the current element is a child of
     #[derive(Default)]
     pub struct TextOptions {
@@ -88,6 +120,8 @@ mod html {
         pub code: usize,
         pub pre_formatted: usize,
         pub block_quote: usize,
+        pub font_weight: FontWeight,
+        pub font_style: FontStyle,
         pub link: Vec<String>,
     }
 
@@ -483,7 +517,14 @@ impl TokenSink for HtmlInterpreter {
                                         .split(';')
                                         .find_map(|style| style.strip_prefix("background-color:#"))
                                     {
-                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
+                                        if let Ok(mut hex) = u32::from_str_radix(hex_str, 16) {
+                                            // HACK: override `inspired-github`'s background color.
+                                            // It looks like this is made for an editor theme where
+                                            // full white makes more sense for a background.
+                                            // Default to github's background color instead;
+                                            if hex == 0xffffff {
+                                                hex = 0xf6f8fa;
+                                            }
                                             let bg_color = native_color(hex, &self.surface_format);
                                             self.current_textbox
                                                 .set_background_color(Some(bg_color));
@@ -505,13 +546,23 @@ impl TokenSink for HtmlInterpreter {
                             for Attribute { name, value } in &tag.attrs {
                                 if &name.local == "style" {
                                     let styles = value.to_string();
-                                    if let Some(hex_str) = styles
-                                        .split(';')
-                                        .find_map(|style| style.strip_prefix("color:#"))
-                                    {
-                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
-                                            self.state.span_color =
-                                                native_color(hex, &self.surface_format);
+
+                                    for style in styles.split(';') {
+                                        if let Some(hex_str) = style.strip_prefix("color:#") {
+                                            if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
+                                                self.state.span_color =
+                                                    native_color(hex, &self.surface_format);
+                                            }
+                                        } else if let Some(font_weight) =
+                                            style.strip_prefix("font-weight:")
+                                        {
+                                            self.state.text_options.font_weight =
+                                                html::FontWeight::new(font_weight);
+                                        } else if let Some(font_style) =
+                                            style.strip_prefix("font-style:")
+                                        {
+                                            self.state.text_options.font_style =
+                                                html::FontStyle::new(font_style);
                                         }
                                     }
                                 }
@@ -661,7 +712,9 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "span" => {
                             self.state.span_color =
-                                native_color(self.theme.code_color, &self.surface_format)
+                                native_color(self.theme.code_color, &self.surface_format);
+                            self.state.text_options.font_weight = html::FontWeight::default();
+                            self.state.text_options.font_style = html::FontStyle::default();
                         }
                         "details" => {
                             self.push_current_textbox();
@@ -803,10 +856,14 @@ impl TokenSink for HtmlInterpreter {
                         text = text
                             .with_color(native_color(self.theme.link_color, &self.surface_format));
                     }
-                    if self.state.text_options.bold >= 1 {
+                    if self.state.text_options.bold >= 1
+                        || self.state.text_options.font_weight == html::FontWeight::Bold
+                    {
                         text = text.make_bold(true);
                     }
-                    if self.state.text_options.italic >= 1 {
+                    if self.state.text_options.italic >= 1
+                        || self.state.text_options.font_style == html::FontStyle::Italic
+                    {
                         text = text.make_italic(true);
                     }
                     if self.state.text_options.underline >= 1 {
