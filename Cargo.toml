@@ -46,8 +46,8 @@ twox-hash = "1.6.3"
 
 [dependencies.glyphon]
 version = "0.2"
-git = "https://github.com/grovesNL/glyphon.git"
-rev = "80e8465af6a1e6896ff45de715212568ccdef47a"
+git = "https://github.com/trimental/glyphon"
+rev = "5bf8b6b6aa4a181824798836e1436809e78102e7"
 
 # Uncomment for profiling
  [profile.release]
