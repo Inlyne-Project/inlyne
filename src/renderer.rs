@@ -7,9 +7,9 @@ use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
 use crate::text::{CachedTextArea, TextCache, TextSystem};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::Element;
-use anyhow::{Context, Ok};
+use anyhow::{anyhow, Context, Ok};
 use bytemuck::{Pod, Zeroable};
-use glyphon::{Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
+use glyphon::{PrepareError, Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
@@ -87,7 +87,7 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_defaults(),
+                    limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
                 },
                 None,
             )
@@ -763,21 +763,27 @@ impl Renderer {
             .map(|c| c.text_area(&self.text_system.text_cache))
             .collect();
 
-        self.text_system
-            .text_renderer
-            .prepare(
-                &self.device,
-                &self.queue,
-                &mut self.text_system.font_system,
-                &mut self.text_system.text_atlas,
-                Resolution {
-                    width: self.config.width,
-                    height: self.config.height,
-                },
-                &text_areas,
-                &mut self.text_system.swash_cache,
-            )
-            .unwrap();
+        let result = self.text_system.text_renderer.prepare(
+            &self.device,
+            &self.queue,
+            &mut self.text_system.font_system,
+            &mut self.text_system.text_atlas,
+            Resolution {
+                width: self.config.width,
+                height: self.config.height,
+            },
+            &text_areas,
+            &mut self.text_system.swash_cache,
+        );
+        match result {
+            Result::Ok(()) => {}
+            Err(PrepareError::AtlasFull(content_type)) => {
+                if !self.text_system.text_atlas.grow(&self.device, content_type) {
+                    return Err(anyhow!("Could not grow text atlas"));
+                }
+            }
+        }
+
         self.text_system.text_cache.trim();
 
         {
@@ -826,6 +832,7 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
         frame.present();
+        self.text_system.text_atlas.trim();
 
         Ok(())
     }
