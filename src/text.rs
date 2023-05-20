@@ -440,20 +440,6 @@ impl Text {
         }
     }
 
-    pub fn attrs(&self) -> Attrs {
-        let color = self.color();
-        let attrs = Attrs::new()
-            .color(Color::rgba(
-                (color[0] * 255.) as u8,
-                (color[1] * 255.) as u8,
-                (color[2] * 255.) as u8,
-                (color[3] * 255.) as u8,
-            ))
-            .style(self.style())
-            .weight(self.weight());
-        attrs
-    }
-
     pub fn section_keys(&self, index: usize) -> Vec<SectionKey<'_>> {
         let color = self.color();
         let color = Color::rgba(
@@ -465,6 +451,7 @@ impl Text {
         let font = Font {
             family: self.font_family.as_family(),
             weight: self.weight(),
+            style: self.style(),
         };
         self.text
             .lines()
@@ -482,6 +469,7 @@ impl Text {
 struct Font<'a> {
     family: glyphon::Family<'a>,
     weight: glyphon::Weight,
+    style: glyphon::Style,
 }
 
 #[derive(Clone, Copy, Hash)]
@@ -554,6 +542,7 @@ impl TextCache {
                         Attrs::new()
                             .family(section.font.family)
                             .weight(section.font.weight)
+                            .style(section.font.style)
                             .color(section.color)
                             .metadata(section.index),
                     )
