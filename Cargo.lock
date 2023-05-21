@@ -1652,6 +1652,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_yaml",
+ "syntect",
  "tiny-skia 0.9.1",
  "toml",
  "twox-hash",
