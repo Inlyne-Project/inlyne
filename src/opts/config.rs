@@ -16,7 +16,7 @@ pub struct FontOptions {
     pub monospace_font: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct OptionalTheme {
     #[serde(default)]
@@ -55,7 +55,7 @@ impl OptionalTheme {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct LinesToScroll(pub f32);
 
 impl From<LinesToScroll> for f32 {
@@ -70,13 +70,13 @@ impl Default for LinesToScroll {
     }
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, PartialEq)]
 pub struct KeybindingsSection {
     pub base: Option<Keybindings>,
     pub extra: Option<Keybindings>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
     pub theme: Option<ThemeType>,
@@ -110,5 +110,31 @@ impl Config {
         }
 
         Self::load_from_file(&config_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_file_is_in_sync() {
+        // Load the provided default toml file and compare with what we generate to make sure the
+        // defaults stay in sync
+        let mut config = Config::load_from_file(Path::new("inlyne.default.toml")).unwrap();
+
+        // Swap out some of the values to compare
+        let theme = config.theme.take().unwrap();
+        let _ = config.font_options.take();
+        let dark_theme = config.dark_theme.take().unwrap();
+        let light_theme = config.light_theme.take().unwrap();
+
+        assert_eq!(config, Config::default());
+        assert_eq!(theme, ThemeType::Auto);
+        assert_eq!(dark_theme.merge(color::DARK_DEFAULT), color::DARK_DEFAULT);
+        assert_eq!(
+            light_theme.merge(color::LIGHT_DEFAULT),
+            color::LIGHT_DEFAULT
+        );
     }
 }

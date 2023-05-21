@@ -100,7 +100,7 @@ Use `inlyne --help` to see all the command line options. Some of which can be se
 - Windows: `C:\Users\Alice\AppData\Roaming\inlyne\inlyne.toml`
 - Mac: `/Users/Alice/Library/Application Support/inlyne/inlyne.toml`
 
-Checkout `inlyne.sample.toml` for an example configuration.
+Checkout `inlyne.default.toml` for an example configuration.
 
 ## FAQ
 
