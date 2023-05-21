@@ -3,9 +3,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use comrak::{markdown_to_html_with_plugins, ComrakOptions};
+use comrak::{
+    markdown_to_html_with_plugins, plugins::syntect::SyntectAdapterBuilder, ComrakOptions,
+};
 use indexmap::IndexMap;
 use serde::Deserialize;
+use syntect::highlighting::ThemeSet;
 use winit::window::CursorIcon;
 
 use crate::{color::SyntaxTheme, image::ImageData};
@@ -81,8 +84,24 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     options.parse.smart = true;
     options.render.unsafe_ = true;
 
+    let mut theme_set = ThemeSet::load_defaults();
+    // InspiredGitHub's background color is 0xfff which is the same as the default light theme
+    // background. We match GitHub's light theme code blocks instead to distinguish code blocks from
+    // the background
+    if let Some(inspired_gh) = theme_set.themes.get_mut("InspiredGitHub") {
+        inspired_gh.settings.background = Some(syntect::highlighting::Color {
+            r: 0xf6,
+            g: 0xf8,
+            b: 0xfa,
+            a: u8::MAX,
+        });
+    }
+    let adapter = SyntectAdapterBuilder::new()
+        .theme_set(theme_set)
+        .theme(syntax_theme.as_syntect_name())
+        .build();
+
     let mut plugins = comrak::ComrakPlugins::default();
-    let adapter = comrak::plugins::syntect::SyntectAdapter::new(syntax_theme.as_syntect_name());
     plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
     let htmlified = markdown_to_html_with_plugins(md, &options, &plugins);

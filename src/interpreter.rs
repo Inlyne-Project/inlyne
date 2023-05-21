@@ -517,14 +517,7 @@ impl TokenSink for HtmlInterpreter {
                                         .split(';')
                                         .find_map(|style| style.strip_prefix("background-color:#"))
                                     {
-                                        if let Ok(mut hex) = u32::from_str_radix(hex_str, 16) {
-                                            // HACK: override `inspired-github`'s background color.
-                                            // It looks like this is made for an editor theme where
-                                            // full white makes more sense for a background.
-                                            // Default to github's background color instead;
-                                            if hex == 0xffffff {
-                                                hex = 0xf6f8fa;
-                                            }
+                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
                                             let bg_color = native_color(hex, &self.surface_format);
                                             self.current_textbox
                                                 .set_background_color(Some(bg_color));
