@@ -14,6 +14,7 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
+rust-version = "1.65"
 
 [dependencies]
 winit = "0.28.5"
@@ -55,13 +56,17 @@ version = "0.2"
 git = "https://github.com/trimental/glyphon"
 rev = "5bf8b6b6aa4a181824798836e1436809e78102e7"
 
-# Uncomment for profiling
  [profile.release]
+ strip = true
+
+# Run `cargo run/build --profile release-debug` to use
+ [profile.release-debug]
+ inherits = "release"
+ strip = false
  debug = true
 
 [profile.release-lto]
 inherits = "release"
-strip = true
 lto = true
 
 [dev-dependencies]
