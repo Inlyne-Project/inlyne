@@ -6,6 +6,7 @@ use crate::{color, keybindings::Keybindings};
 
 use anyhow::Context;
 use serde::Deserialize;
+use syntect::highlighting::Theme as SyntectTheme;
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Default, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -16,32 +17,28 @@ pub struct FontOptions {
     pub monospace_font: Option<String>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Deserialize, Debug, Default, PartialEq)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct OptionalTheme {
-    #[serde(default)]
     pub text_color: Option<u32>,
-    #[serde(default)]
     pub background_color: Option<u32>,
-    #[serde(default)]
     pub code_color: Option<u32>,
-    #[serde(default)]
     pub code_block_color: Option<u32>,
-    #[serde(default)]
     pub quote_block_color: Option<u32>,
-    #[serde(default)]
     pub link_color: Option<u32>,
-    #[serde(default)]
     pub select_color: Option<u32>,
-    #[serde(default)]
     pub checkbox_color: Option<u32>,
-    #[serde(default)]
     pub code_highlighter: Option<color::SyntaxTheme>,
 }
 
 impl OptionalTheme {
-    pub fn merge(self, other: color::Theme) -> color::Theme {
-        color::Theme {
+    pub fn merge(self, other: color::Theme) -> anyhow::Result<color::Theme> {
+        let code_highlighter = match self.code_highlighter {
+            Some(theme) => SyntectTheme::try_from(theme)?,
+            None => other.code_highlighter,
+        };
+
+        Ok(color::Theme {
             text_color: self.text_color.unwrap_or(other.text_color),
             background_color: self.background_color.unwrap_or(other.background_color),
             code_color: self.code_color.unwrap_or(other.code_color),
@@ -50,8 +47,8 @@ impl OptionalTheme {
             link_color: self.link_color.unwrap_or(other.link_color),
             select_color: self.select_color.unwrap_or(other.select_color),
             checkbox_color: self.checkbox_color.unwrap_or(other.checkbox_color),
-            code_highlighter: self.code_highlighter.unwrap_or(other.code_highlighter),
-        }
+            code_highlighter,
+        })
     }
 }
 
@@ -131,10 +128,13 @@ mod tests {
 
         assert_eq!(config, Config::default());
         assert_eq!(theme, ThemeType::Auto);
-        assert_eq!(dark_theme.merge(color::DARK_DEFAULT), color::DARK_DEFAULT);
         assert_eq!(
-            light_theme.merge(color::LIGHT_DEFAULT),
-            color::LIGHT_DEFAULT
+            dark_theme.merge(color::Theme::dark_default()).unwrap(),
+            color::Theme::dark_default()
+        );
+        assert_eq!(
+            light_theme.merge(color::Theme::light_default()).unwrap(),
+            color::Theme::light_default()
         );
     }
 }

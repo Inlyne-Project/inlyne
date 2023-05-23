@@ -45,6 +45,9 @@ checkbox-color = 0x0a5301
 #     "base16-ocean-light", "inspired-github",      "solarized-dark",
 #     "solarized-light"
 # ]
+# You can also pass a path to a `.tmTheme` file for a custom theme instead
+# Example:
+# code-highlighter.path = "/path/to/custom.tmTheme"
 code-highlighter = "base16-ocean-dark"
 
 # And the same settings are available for the light theme as well
