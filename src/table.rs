@@ -212,7 +212,7 @@ impl Table {
                 root,
                 TaffySize::<AvailableSpace> {
                     width: AvailableSpace::Definite(bounds.0),
-                    height: AvailableSpace::Definite(bounds.1),
+                    height: AvailableSpace::MaxContent,
                 },
             )
             .unwrap();
