@@ -2,6 +2,7 @@ use std::{
     borrow::BorrowMut,
     collections::hash_map,
     hash::{BuildHasher, Hash, Hasher},
+    sync::{Arc, Mutex},
 };
 
 use fxhash::{FxHashMap, FxHashSet};
@@ -9,11 +10,99 @@ use glyphon::{
     cosmic_text::Align as TextAlign, Affinity, Attrs, AttrsList, BufferLine, Color, Cursor,
     FamilyOwned, FontSystem, Style, SwashCache, TextArea, TextBounds, Weight,
 };
+use taffy::prelude::Size as TaffySize;
+use taffy::{style::AvailableSpace, tree::Measurable};
 
 use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
+
+pub struct TextBoxMeasure {
+    pub textbox: Arc<TextBox>,
+    pub text_cache: Arc<Mutex<TextCache>>,
+    pub font_system: Arc<Mutex<FontSystem>>,
+    pub zoom: f32,
+}
+
+impl Measurable for TextBoxMeasure {
+    fn measure(
+        &self,
+        known_dimensions: TaffySize<Option<f32>>,
+        available_space: TaffySize<taffy::style::AvailableSpace>,
+    ) -> TaffySize<f32> {
+        let size = move |bounds: (f32, f32)| {
+            if self.textbox.texts.is_empty() {
+                return (
+                    0.,
+                    self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
+                );
+            }
+
+            let mut cache = self.text_cache.lock().unwrap();
+
+            let line_height = self.textbox.line_height(self.zoom);
+
+            let (_, paragraph) = cache.borrow_mut().allocate(
+                self.font_system.lock().unwrap().borrow_mut(),
+                self.textbox.key(bounds, self.zoom),
+            );
+
+            let (total_lines, max_width) = paragraph
+                .layout_runs()
+                .enumerate()
+                .fold((0, 0.0), |(_, max), (i, buffer)| {
+                    (i + 1, buffer.line_w.max(max))
+                });
+
+            (
+                max_width,
+                total_lines as f32 * line_height
+                    + self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
+            )
+        };
+        let mut bounds = (0., f32::MAX);
+        match available_space.width {
+            AvailableSpace::Definite(space) => {
+                bounds.0 = space;
+            }
+            AvailableSpace::MinContent => {
+                bounds.0 = 0.;
+            }
+            AvailableSpace::MaxContent => {
+                bounds.0 = f32::MAX;
+            }
+        }
+        match known_dimensions {
+            TaffySize {
+                width: None,
+                height: Some(height),
+            } => {
+                let size = size((bounds.0, f32::MAX));
+                return TaffySize::<f32> {
+                    width: size.0.min(bounds.0),
+                    height,
+                };
+            }
+            TaffySize {
+                width: Some(width),
+                height: None,
+            } => {
+                let size = size((bounds.0, f32::MAX));
+                return TaffySize::<f32> {
+                    width,
+                    height: size.1,
+                };
+            }
+            _ => {}
+        }
+        let size = size(bounds);
+        TaffySize::<f32> {
+            width: size.0.min(bounds.0),
+            height: size.1,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct TextBox {

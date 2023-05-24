@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::HashMap};
 use anyhow::Context;
 
 use crate::{
-    table::{TABLE_COL_GAP, TABLE_ROW_GAP},
     text::{TextBox, TextSystem},
     utils::{Align, Point, Rect, Size},
     Element,
@@ -107,33 +106,24 @@ impl Positioner {
             }
             Element::Table(table) => {
                 let pos = (DEFAULT_MARGIN + centering, self.reserved_height);
-                let width = table
-                    .column_widths(
-                        text_system,
-                        (
-                            self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
-                        zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                let height = table
-                    .row_heights(
-                        text_system,
-                        (
-                            self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
-                        zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                Rect::new(
-                    pos,
+                let layout = table.layout(
+                    text_system,
                     (
-                        width * (TABLE_COL_GAP * table.headers.len() as f32),
-                        height + (TABLE_ROW_GAP * (table.rows.len() + 1) as f32),
+                        self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
+                        f32::INFINITY,
+                    ),
+                    zoom,
+                )?;
+                let min = layout.first().unwrap().first().unwrap();
+                let max = layout.last().unwrap().last().unwrap();
+                Rect::from_min_max(
+                    (
+                        DEFAULT_MARGIN + centering + min.location.x,
+                        self.reserved_height + min.location.y,
+                    ),
+                    (
+                        DEFAULT_MARGIN + centering + max.location.x + max.size.width,
+                        self.reserved_height + max.location.y + max.size.height,
                     ),
                 )
             }

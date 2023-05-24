@@ -1,6 +1,18 @@
 use crate::{
-    text::{Text, TextBox, TextSystem},
+    text::{Text, TextBox, TextBoxMeasure, TextCache, TextSystem},
     utils::{Point, Rect, Size},
+};
+
+use std::{
+    default::default,
+    sync::{Arc, Mutex},
+};
+
+use glyphon::FontSystem;
+use taffy::{
+    prelude::{auto, length, Display, Layout, Size as TaffySize, Style, Taffy},
+    style::AvailableSpace,
+    tree::MeasureFunc,
 };
 
 pub const TABLE_ROW_GAP: f32 = 20.;
@@ -123,6 +135,97 @@ impl Table {
             heights.push(max_height);
         }
         heights
+    }
+
+    pub fn layout(
+        &self,
+        _text_system: &mut TextSystem,
+        bounds: Size,
+        zoom: f32,
+    ) -> anyhow::Result<Vec<Vec<Layout>>> {
+        let mut taffy = Taffy::new();
+        let max_columns = self.rows.iter().fold(self.headers.len(), |max, row| {
+            if row.len() > max {
+                row.len()
+            } else {
+                max
+            }
+        });
+
+        // Setup the grid
+        let root_style = Style {
+            display: Display::Grid,
+            size: TaffySize {
+                width: auto(),
+                height: auto(),
+            },
+            gap: TaffySize {
+                width: length(TABLE_COL_GAP),
+                height: length(TABLE_ROW_GAP),
+            },
+            grid_template_columns: vec![auto(); max_columns],
+            ..default()
+        };
+
+        let font_system = Arc::new(Mutex::new(FontSystem::new()));
+        let text_cache = Arc::new(Mutex::new(TextCache::new()));
+        let mut nodes = Vec::new();
+        let mut node_row = Vec::new();
+        // Define the child nodes
+        for (_, header) in self.headers.iter().enumerate() {
+            node_row.push(taffy.new_leaf_with_measure(
+                Style { ..default() },
+                MeasureFunc::Boxed(Box::new(TextBoxMeasure {
+                    font_system: font_system.clone(),
+                    text_cache: text_cache.clone(),
+                    textbox: Arc::new(header.clone()),
+                    zoom,
+                })),
+            )?);
+        }
+        nodes.push(node_row.clone());
+        node_row.clear();
+
+        for (_, row) in self.rows.iter().enumerate() {
+            for (_, item) in row.iter().enumerate() {
+                let item = item.clone();
+                node_row.push(taffy.new_leaf_with_measure(
+                    Style { ..default() },
+                    MeasureFunc::Boxed(Box::new(TextBoxMeasure {
+                        font_system: font_system.clone(),
+                        text_cache: text_cache.clone(),
+                        textbox: Arc::new(item.clone()),
+                        zoom,
+                    })),
+                )?);
+            }
+            nodes.push(node_row.clone());
+            node_row.clear();
+        }
+
+        let mut flattened_nodes = Vec::new();
+        for row in &nodes {
+            flattened_nodes.append(&mut row.clone());
+        }
+
+        let root = taffy.new_with_children(root_style, &flattened_nodes)?;
+
+        taffy
+            .compute_layout(
+                root,
+                TaffySize::<AvailableSpace> {
+                    width: AvailableSpace::Definite(bounds.0),
+                    height: AvailableSpace::Definite(bounds.1),
+                },
+            )
+            .unwrap();
+        let mut layouts = Vec::new();
+
+        for row in nodes {
+            layouts.push(row.iter().map(|n| *taffy.layout(*n).unwrap()).collect())
+        }
+
+        Ok(layouts)
     }
 
     pub fn push_header(&mut self, header: TextBox) {

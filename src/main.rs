@@ -1,3 +1,4 @@
+#![feature(default_free_fn)]
 pub mod color;
 pub mod fonts;
 pub mod image;
