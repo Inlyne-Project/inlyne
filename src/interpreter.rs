@@ -147,6 +147,7 @@ struct State {
     span_style: FontStyle,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
+    pending_anchor: Option<String>,
 }
 
 pub struct HtmlInterpreter {
@@ -332,11 +333,13 @@ impl TokenSink for HtmlInterpreter {
                                 .push(html::Element::Table(Table::new()));
                         }
                         "a" => {
-                            let attrs = tag.attrs;
-                            for attr in attrs {
-                                if attr.name.local == local_name!("href") {
-                                    self.state.text_options.link.push(attr.value.to_string());
-                                    break;
+                            for Attribute { name, value } in tag.attrs {
+                                if name.local == local_name!("href") {
+                                    self.state.text_options.link.push(value.to_string());
+                                }
+                                if name.local == local_name!("id") {
+                                    let anchor_name = format!("#{}", value);
+                                    self.current_textbox.set_anchor(Some(anchor_name));
                                 }
                             }
                         }
@@ -422,6 +425,13 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "div" | "p" => {
                             self.push_current_textbox();
+
+                            // Push potentially pending anchor from containing li
+                            let anchor_name = self.state.pending_anchor.take();
+                            if anchor_name.is_some() {
+                                self.current_textbox.set_anchor(anchor_name);
+                            }
+
                             let mut align = None;
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("align")
@@ -449,6 +459,12 @@ impl TokenSink for HtmlInterpreter {
                         "code" => self.state.text_options.code += 1,
                         "li" => {
                             self.state.element_stack.push(html::Element::ListItem);
+                            for Attribute { name, value } in tag.attrs {
+                                if name.local == local_name!("id") {
+                                    let anchor_name = format!("#{}", value);
+                                    self.state.pending_anchor = Some(anchor_name);
+                                }
+                            }
                         }
                         "ul" => {
                             self.push_current_textbox();
@@ -670,6 +686,9 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.pop();
                         }
                         "li" => {
+                            // Pop pending anchor if nothing consumed it
+                            let _ = self.state.pending_anchor.take();
+
                             self.push_current_textbox();
                             self.state.element_stack.pop();
                         }
