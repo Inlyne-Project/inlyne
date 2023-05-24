@@ -202,7 +202,7 @@ impl HtmlInterpreter {
         let mut input = BufferQueue::new();
 
         let span_color = native_color(self.theme.code_color, &self.surface_format);
-        let code_highlighter = self.theme.code_highlighter;
+        let code_highlighter = self.theme.code_highlighter.clone();
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in receiver {
@@ -217,7 +217,7 @@ impl HtmlInterpreter {
                 };
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
-                let htmlified = markdown_to_html(&md_string, code_highlighter);
+                let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
 
                 input.push_back(
                     Tendril::from_str(&htmlified)

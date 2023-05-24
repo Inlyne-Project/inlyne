@@ -1,7 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
 use super::{cli, config, Opts, ResolvedTheme, ThemeType};
-use crate::color::{self, Theme};
+use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::keybindings::Keybindings;
 use crate::opts::config::{FontOptions, LinesToScroll};
 use crate::opts::Args;
@@ -32,8 +32,8 @@ impl Opts {
 impl ResolvedTheme {
     fn as_theme(&self) -> Theme {
         match &self {
-            Self::Dark => color::DARK_DEFAULT,
-            Self::Light => color::LIGHT_DEFAULT,
+            Self::Dark => Theme::dark_default(),
+            Self::Light => Theme::light_default(),
         }
     }
 }
@@ -50,7 +50,8 @@ fn defaults() {
             Args::parse_from(gen_args(vec!["file.md"])),
             config::Config::default(),
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts::mostly_default("file.md")
     );
 }
@@ -67,7 +68,8 @@ fn config_overrides_default() {
             Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
@@ -84,7 +86,8 @@ fn config_overrides_default() {
             Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Dark,
-        ),
+        )
+        .unwrap(),
         Opts {
             theme: ResolvedTheme::Light.as_theme(),
             ..Opts::mostly_default("file.md")
@@ -100,7 +103,8 @@ fn config_overrides_default() {
             Args::parse_from(gen_args(vec!["file.md"])),
             config,
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts {
             scale: Some(1.5),
             ..Opts::mostly_default("file.md")
@@ -115,7 +119,8 @@ fn from_cli() {
             Args::parse_from(gen_args(vec!["--theme", "dark", "file.md"])),
             config::Config::default(),
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
@@ -133,7 +138,8 @@ fn from_cli() {
             Args::parse_from(gen_args(vec!["--scale", "1.5", "file.md"])),
             config,
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             scale: Some(1.5),
@@ -157,12 +163,71 @@ fn cli_kitchen_sink() {
             Args::parse_from(args),
             config::Config::default(),
             ResolvedTheme::Light,
-        ),
+        )
+        .unwrap(),
         Opts {
             page_width: Some(500.0),
             scale: Some(1.5),
             theme: ResolvedTheme::Dark.as_theme(),
             ..Opts::mostly_default("file.md")
         }
+    );
+}
+
+#[test]
+fn builtin_syntax_theme() {
+    let mut config = config::Config::default();
+    config.light_theme = Some(config::OptionalTheme {
+        code_highlighter: Some(SyntaxTheme::Defaults(ThemeDefaults::SolarizedLight)),
+        ..Default::default()
+    });
+
+    let opts = Opts::parse_and_load_with_system_theme(
+        Args::parse_from(gen_args(vec!["file.md"])),
+        config,
+        ResolvedTheme::Light,
+    )
+    .unwrap();
+
+    assert_eq!(
+        opts.theme.code_highlighter.name.unwrap(),
+        "Solarized (light)"
+    );
+}
+
+#[test]
+fn custom_syntax_theme() {
+    fn config_with_theme_at(path: PathBuf) -> config::Config {
+        let mut config = config::Config::default();
+        config.light_theme = Some(config::OptionalTheme {
+            code_highlighter: Some(SyntaxTheme::Custom { path }),
+            ..Default::default()
+        });
+        config
+    }
+
+    let args = Args::parse_from(gen_args(vec!["file.md"]));
+
+    let res = Opts::parse_and_load_with_system_theme(
+        args.clone(),
+        config_with_theme_at(PathBuf::from("this_path_doesnt_exist")),
+        ResolvedTheme::Light,
+    );
+    assert!(res.is_err());
+
+    let opts = Opts::parse_and_load_with_system_theme(
+        args,
+        config_with_theme_at(
+            PathBuf::new()
+                .join("tests")
+                .join("assets")
+                .join("sample.tmTheme"),
+        ),
+        ResolvedTheme::Light,
+    )
+    .unwrap();
+    assert_eq!(
+        opts.theme.code_highlighter.name.unwrap(),
+        "Example Color Scheme"
     );
 }

@@ -766,7 +766,7 @@ fn main() -> anyhow::Result<()> {
             Config::default()
         }),
     };
-    let opts = Opts::parse_and_load_from(args, config);
+    let opts = Opts::parse_and_load_from(args, config)?;
     let inlyne = Inlyne::new(opts)?;
 
     inlyne.spawn_watcher();

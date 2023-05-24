@@ -1,0 +1,60 @@
+<!--
+Barebones theme from:
+https://www.sublimetext.com/docs/color_schemes_tmtheme.html
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>name</key>
+    <string>Example Color Scheme</string>
+    <key>settings</key>
+    <array>
+        <!-- Global settings -->
+        <dict>
+            <key>settings</key>
+            <dict>
+                <key>background</key>
+                <string>#222222</string>
+                <key>foreground</key>
+                <string>#EEEEEE</string>
+                <key>caret</key>
+                <string>#FFFFFF</string>
+            </dict>
+        </dict>
+        <!-- Scope styles -->
+        <dict>
+            <key>name</key>
+            <string>Comment</string>
+            <key>scope</key>
+            <string>comment</string>
+            <key>settings</key>
+            <dict>
+                <key>foreground</key>
+                <string>#888888</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>name</key>
+            <string>String</string>
+            <key>scope</key>
+            <string>string</string>
+            <key>settings</key>
+            <dict>
+                <key>foreground</key>
+                <string>#FFD500</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>name</key>
+            <string>Number</string>
+            <key>scope</key>
+            <string>constant.numeric</string>
+            <key>settings</key>
+            <dict>
+                <key>foreground</key>
+                <string>#7F00FF</string>
+            </dict>
+        </dict>
+    </array>
+</dict>

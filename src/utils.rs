@@ -8,10 +8,10 @@ use comrak::{
 };
 use indexmap::IndexMap;
 use serde::Deserialize;
-use syntect::highlighting::ThemeSet;
+use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use winit::window::CursorIcon;
 
-use crate::{color::SyntaxTheme, image::ImageData};
+use crate::image::ImageData;
 
 pub fn usize_in_mib(num: usize) -> f32 {
     num as f32 / 1_024.0 / 1_024.0
@@ -73,7 +73,7 @@ impl From<CursorIcon> for HoverInfo {
     }
 }
 
-pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
+pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     let mut options = ComrakOptions::default();
     options.extension.table = true;
     options.extension.strikethrough = true;
@@ -84,21 +84,16 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     options.parse.smart = true;
     options.render.unsafe_ = true;
 
-    let mut theme_set = ThemeSet::load_defaults();
-    // InspiredGitHub's background color is 0xfff which is the same as the default light theme
-    // background. We match GitHub's light theme code blocks instead to distinguish code blocks from
-    // the background
-    if let Some(inspired_gh) = theme_set.themes.get_mut("InspiredGitHub") {
-        inspired_gh.settings.background = Some(syntect::highlighting::Color {
-            r: 0xf6,
-            g: 0xf8,
-            b: 0xfa,
-            a: u8::MAX,
-        });
-    }
+    // TODO(cosmic): gonna send a PR so that a plugin can pass in a single theme too
+    let dummy_name = "theme";
+    let mut theme_set = SyntectThemeSet::new();
+    theme_set
+        .themes
+        .insert(String::from(dummy_name), syntax_theme);
     let adapter = SyntectAdapterBuilder::new()
         .theme_set(theme_set)
-        .theme(syntax_theme.as_syntect_name())
+        // .theme(syntax_theme.as_syntect_name())
+        .theme(dummy_name)
         .build();
 
     let mut plugins = comrak::ComrakPlugins::default();
@@ -187,6 +182,17 @@ impl Cell {
     }
 }
 
+// TODO(cosmic): Gonna send a PR upstream because the theme should impl `PartialEq`
+pub struct SyntectThemePartialEq<'a>(pub &'a SyntectTheme);
+
+impl PartialEq for SyntectThemePartialEq<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.name == other.0.name
+            && self.0.author == other.0.author
+            && self.0.scopes.len() == other.0.scopes.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,7 +211,7 @@ tags:
 body
 ";
 
-        let html = markdown_to_html(text, SyntaxTheme::Base16OceanDark);
+        let html = markdown_to_html(text, SyntectTheme::default());
         insta::assert_snapshot!(html, @r###"
         <table>
         <thead>
