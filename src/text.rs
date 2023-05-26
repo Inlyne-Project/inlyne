@@ -25,81 +25,56 @@ pub struct TextBoxMeasure {
     pub zoom: f32,
 }
 
+impl TextBoxMeasure {
+    fn internal_measure(&self, bounds: (f32, f32)) -> (f32, f32) {
+        if self.textbox.texts.is_empty() {
+            return (
+                0.,
+                self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
+            );
+        }
+
+        let mut cache = self.text_cache.lock().unwrap();
+
+        let line_height = self.textbox.line_height(self.zoom);
+
+        let (_, paragraph) = cache.borrow_mut().allocate(
+            self.font_system.lock().unwrap().borrow_mut(),
+            self.textbox.key(bounds, self.zoom),
+        );
+
+        let (total_lines, max_width) = paragraph
+            .layout_runs()
+            .enumerate()
+            .fold((0, 0.0), |(_, max), (i, buffer)| {
+                (i + 1, buffer.line_w.max(max))
+            });
+
+        (
+            max_width,
+            total_lines as f32 * line_height
+                + self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
+        )
+    }
+}
+
 impl Measurable for TextBoxMeasure {
     fn measure(
         &self,
         known_dimensions: TaffySize<Option<f32>>,
         available_space: TaffySize<taffy::style::AvailableSpace>,
     ) -> TaffySize<f32> {
-        let size = move |bounds: (f32, f32)| {
-            if self.textbox.texts.is_empty() {
-                return (
-                    0.,
-                    self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
-                );
-            }
-
-            let mut cache = self.text_cache.lock().unwrap();
-
-            let line_height = self.textbox.line_height(self.zoom);
-
-            let (_, paragraph) = cache.borrow_mut().allocate(
-                self.font_system.lock().unwrap().borrow_mut(),
-                self.textbox.key(bounds, self.zoom),
-            );
-
-            let (total_lines, max_width) = paragraph
-                .layout_runs()
-                .enumerate()
-                .fold((0, 0.0), |(_, max), (i, buffer)| {
-                    (i + 1, buffer.line_w.max(max))
-                });
-
-            (
-                max_width,
-                total_lines as f32 * line_height
-                    + self.textbox.padding_height * self.textbox.hidpi_scale * self.zoom,
-            )
+        let available_width = match available_space.width {
+            AvailableSpace::Definite(space) => space,
+            AvailableSpace::MinContent => 0.0,
+            AvailableSpace::MaxContent => f32::MAX,
         };
-        let mut bounds = (0., f32::MAX);
-        match available_space.width {
-            AvailableSpace::Definite(space) => {
-                bounds.0 = space;
-            }
-            AvailableSpace::MinContent => {
-                bounds.0 = 0.;
-            }
-            AvailableSpace::MaxContent => {
-                bounds.0 = f32::MAX;
-            }
-        }
-        match known_dimensions {
-            TaffySize {
-                width: None,
-                height: Some(height),
-            } => {
-                let size = size((bounds.0, f32::MAX));
-                return TaffySize::<f32> {
-                    width: size.0.min(bounds.0),
-                    height,
-                };
-            }
-            TaffySize {
-                width: Some(width),
-                height: None,
-            } => {
-                let size = size((bounds.0, f32::MAX));
-                return TaffySize::<f32> {
-                    width,
-                    height: size.1,
-                };
-            }
-            _ => {}
-        }
-        let size = size(bounds);
-        TaffySize::<f32> {
-            width: size.0.min(bounds.0),
-            height: size.1,
+        let width_bound = known_dimensions.width.unwrap_or(available_width);
+
+        let size = self.internal_measure((width_bound, f32::MAX));
+        TaffySize {
+            width: known_dimensions.width.unwrap_or(size.0),
+            height: known_dimensions.height.unwrap_or(size.1),
         }
     }
 }

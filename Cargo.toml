@@ -49,7 +49,7 @@ indexmap = { version = "1.9.3", features = ["serde"] }
 html-escape = "0.2.13"
 fxhash = "0.2.1"
 twox-hash = "1.6.3"
-taffy = { git="https://github.com/DioxusLabs/taffy" }
+taffy = { git = "https://github.com/nicoburns/taffy", rev = "044780216f2400687bd86c0060d29b0c1105c494" }
 
 [dependencies.glyphon]
 version = "0.2"

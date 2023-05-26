@@ -1,12 +1,9 @@
 use crate::{
     text::{Text, TextBox, TextBoxMeasure, TextCache, TextSystem},
-    utils::{Point, Rect, Size},
+    utils::{default, Point, Rect, Size},
 };
 
-use std::{
-    default::default,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use glyphon::FontSystem;
 use taffy::{
@@ -215,7 +212,7 @@ impl Table {
                 root,
                 TaffySize::<AvailableSpace> {
                     width: AvailableSpace::Definite(bounds.0),
-                    height: AvailableSpace::Definite(bounds.1),
+                    height: AvailableSpace::MaxContent,
                 },
             )
             .unwrap();
