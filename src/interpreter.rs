@@ -105,11 +105,36 @@ mod html {
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Eq)]
 enum FontWeight {
     #[default]
     Normal,
     Bold,
+}
+
+impl FontWeight {
+    fn new(s: &str) -> Self {
+        match s {
+            "bold" => Self::Bold,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+}
+
+impl FontStyle {
+    fn new(s: &str) -> Self {
+        match s {
+            "italic" => Self::Italic,
+            _ => Self::default(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -119,8 +144,10 @@ struct State {
     text_options: html::TextOptions,
     span_color: [f32; 4],
     span_weight: FontWeight,
+    span_style: FontStyle,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
+    pending_anchor: Option<String>,
 }
 
 pub struct HtmlInterpreter {
@@ -176,7 +203,7 @@ impl HtmlInterpreter {
         let mut input = BufferQueue::new();
 
         let span_color = native_color(self.theme.code_color, &self.surface_format);
-        let code_highlighter = self.theme.code_highlighter;
+        let code_highlighter = self.theme.code_highlighter.clone();
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in receiver {
@@ -191,7 +218,7 @@ impl HtmlInterpreter {
                 };
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
-                let htmlified = markdown_to_html(&md_string, code_highlighter);
+                let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
 
                 input.push_back(
                     Tendril::from_str(&htmlified)
@@ -306,11 +333,13 @@ impl TokenSink for HtmlInterpreter {
                                 .push(html::Element::Table(Table::new()));
                         }
                         "a" => {
-                            let attrs = tag.attrs;
-                            for attr in attrs {
-                                if attr.name.local == local_name!("href") {
-                                    self.state.text_options.link.push(attr.value.to_string());
-                                    break;
+                            for Attribute { name, value } in tag.attrs {
+                                if name.local == local_name!("href") {
+                                    self.state.text_options.link.push(value.to_string());
+                                }
+                                if name.local == local_name!("id") {
+                                    let anchor_name = format!("#{}", value);
+                                    self.current_textbox.set_anchor(Some(anchor_name));
                                 }
                             }
                         }
@@ -396,6 +425,13 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "div" | "p" => {
                             self.push_current_textbox();
+
+                            // Push potentially pending anchor from containing li
+                            let anchor_name = self.state.pending_anchor.take();
+                            if anchor_name.is_some() {
+                                self.current_textbox.set_anchor(anchor_name);
+                            }
+
                             let mut align = None;
                             for attr in tag.attrs {
                                 if attr.name.local == local_name!("align")
@@ -423,6 +459,12 @@ impl TokenSink for HtmlInterpreter {
                         "code" => self.state.text_options.code += 1,
                         "li" => {
                             self.state.element_stack.push(html::Element::ListItem);
+                            for Attribute { name, value } in tag.attrs {
+                                if name.local == local_name!("id") {
+                                    let anchor_name = format!("#{}", value);
+                                    self.state.pending_anchor = Some(anchor_name);
+                                }
+                            }
                         }
                         "ul" => {
                             self.push_current_textbox();
@@ -522,9 +564,11 @@ impl TokenSink for HtmlInterpreter {
                                         } else if let Some(font_weight) =
                                             style.strip_prefix("font-weight:")
                                         {
-                                            if font_weight == "bold" {
-                                                self.state.span_weight = FontWeight::Bold
-                                            }
+                                            self.state.span_weight = FontWeight::new(font_weight);
+                                        } else if let Some(font_style) =
+                                            style.strip_prefix("font-style:")
+                                        {
+                                            self.state.span_style = FontStyle::new(font_style);
                                         }
                                     }
                                 }
@@ -642,6 +686,9 @@ impl TokenSink for HtmlInterpreter {
                             self.state.element_stack.pop();
                         }
                         "li" => {
+                            // Pop pending anchor if nothing consumed it
+                            let _ = self.state.pending_anchor.take();
+
                             self.push_current_textbox();
                             self.state.element_stack.pop();
                         }
@@ -675,7 +722,8 @@ impl TokenSink for HtmlInterpreter {
                         "span" => {
                             self.state.span_color =
                                 native_color(self.theme.code_color, &self.surface_format);
-                            self.state.span_weight = Default::default();
+                            self.state.span_weight = FontWeight::default();
+                            self.state.span_style = FontStyle::default();
                         }
                         "details" => {
                             self.push_current_textbox();
@@ -804,6 +852,9 @@ impl TokenSink for HtmlInterpreter {
                             .with_family(FamilyOwned::Monospace);
                         if self.state.span_weight == FontWeight::Bold {
                             text = text.make_bold(true);
+                        }
+                        if self.state.span_style == FontStyle::Italic {
+                            text = text.make_italic(true);
                         }
                         //.with_size(18.)
                     }

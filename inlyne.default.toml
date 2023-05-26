@@ -1,61 +1,78 @@
 # A different scale factor can be specified
+# Example:
+# scale = 1.5
 # Default: The window's scale factor (system dependent)
-scale = 1.5
 
-# A maximum page width can be specified in pixels
+# The Maximum page width can be specified in pixels
+# Example:
+# page-width = 800
 # Default: Unconstrained
-page-width = 800
 
-# The theme can be set as well
-# Default: "Auto"
+# Force the use of a specific color theme
+# Example:
+# theme = "Dark"
 # Possible values: ["Auto", "Light", "Dark"]
-theme = "Dark"
+theme = "Auto"
 
 # Number of lines to scroll when using a line-based scrolling device (a lot of
 # mice)
-# Default: 3.0
-lines-to-scroll = 4.5
+# Example:
+# lines-to-scroll = 4.5
+lines-to-scroll = 3.0
 
 # The light and dark themes can be customized as well
-# Here is a dark theme inspired by GitHub's dark dimmed theme
+# Both the light and dark theme colors can be fully customized
 [dark-theme]
 # Regular text color
-text-color = 0xadbac7
+text-color = 0x9dacbb
 # Background canvas color
-background-color = 0x22272e
+background-color = 0x1a1d22
 # Inline code text color
-code-color = 0x8d97a5
+code-color = 0xb38fac
 # Code block background color
-code-block-color = 0x2d333b
+code-block-color = 0x181c21
 # Quote block background color
-quote-block-color = 0x262b32
+quote-block-color = 0x1d2025
 # Hyperlink text color
-link-color = 0x539bf5
+link-color = 0x4182eb
 # Text selection color
-select-color = 0x438bd5
+select-color = 0x3675cb
 # Checkbox ticked background color
-checkbox-color = 0x006400
+checkbox-color = 0x0a5301
 # Syntax highlighting theme. All of `syntect`s default themes are supported
 # Possible values: [
 #     "base16-ocean-dark",  "base16-eighties-dark", "base16-mocha-dark",
 #     "base16-ocean-light", "inspired-github",      "solarized-dark",
 #     "solarized-light"
 # ]
-# Default: "base16-ocean-dark"
-code-highlighter = "base16-mocha-dark"
+# You can also pass a path to a `.tmTheme` file for a custom theme instead
+# Example:
+# code-highlighter.path = "/path/to/custom.tmTheme"
+code-highlighter = "base16-ocean-dark"
 
 # And the same settings are available for the light theme as well
 [light-theme]
-# Default: "base16-ocean-light"
-code-highlighter = "solarized-light"
-# ... Refer to `[dark-theme]`'s other fields
+text-color = 0x000000
+background-color = 0xffffff
+code-color = 0x95114e
+code-block-color = 0xeaedf3
+quote-block-color = 0xeef9fe
+link-color = 0x5466ff
+select-color = 0xcde8f0
+checkbox-color = 0x96ecae
+code-highlighter = "inspired-github"
 
-# Change the appearance of text with font options
+# Specify the main and monospace font families
 [font-options]
-# Name of font for regular text
-regular-font = "Chalkduster"
-# Name of font for monospace text such as code
-monospace-font = "Monaco"
+# Font family for regular text. E.g.
+# Example:
+# regular-font = "Chalkduster"
+# Default: System dependent
+
+# Font family for monospace text such as code
+# Example:
+# monospace-font = "Monaco"
+# Default: System dependent
 
 # Custom keybinds for actions
 #
@@ -89,17 +106,21 @@ monospace-font = "Monaco"
 #     "Home", "End", "Delete", "Insert"
 # ]
 [keybindings]
-# Base will override the defaults if set
+# The default keybindings include both normal and vim-like bindings
+
+# Base will override the defaults keybindings if set. Useful for when you want
+# to fully specify all of the keybindings
+# Example:
+# base = [
+#     ["ToTop", "Home"],
+#     ["ToBottom", "End"],
+#     ["Copy", { key = "c", mod = ["Ctrl"] }],
+#     ["ToTop", ["g", "g"]],
+#     ["ToBottom", { key = "g", mod = ["Shift"] }],
+#     ["Copy", "y"],
+# ]
 # Default: Not set
-base = [
-    ["ToTop", "Home"],
-    ["ToBottom", "End"],
-    ["Copy", { key = "c", mod = ["Ctrl"] }],
-    ["ToTop", ["g", "g"]],
-    ["ToBottom", { key = "g", mod = ["Shift"] }],
-    ["Copy", "y"],
-]
-# Extra will be applied on top of base/defaults
-extra = [
-    # ... Refer to `base`
-]
+
+# Extra will be applied on top of base/defaults. Useful for when you want to
+# just add some extra keybindings on top of the defaults
+# Default: Not set

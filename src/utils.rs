@@ -3,12 +3,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use comrak::{markdown_to_html_with_plugins, ComrakOptions};
+use comrak::{
+    markdown_to_html_with_plugins, plugins::syntect::SyntectAdapterBuilder, ComrakOptions,
+};
 use indexmap::IndexMap;
 use serde::Deserialize;
+use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use winit::window::CursorIcon;
 
-use crate::{color::SyntaxTheme, image::ImageData};
+use crate::image::ImageData;
 
 pub(crate) fn default<T: Default>() -> T {
     Default::default()
@@ -74,7 +77,7 @@ impl From<CursorIcon> for HoverInfo {
     }
 }
 
-pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
+pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     let mut options = ComrakOptions::default();
     options.extension.table = true;
     options.extension.strikethrough = true;
@@ -85,8 +88,19 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     options.parse.smart = true;
     options.render.unsafe_ = true;
 
+    // TODO(cosmic): gonna send a PR so that a plugin can pass in a single theme too
+    let dummy_name = "theme";
+    let mut theme_set = SyntectThemeSet::new();
+    theme_set
+        .themes
+        .insert(String::from(dummy_name), syntax_theme);
+    let adapter = SyntectAdapterBuilder::new()
+        .theme_set(theme_set)
+        // .theme(syntax_theme.as_syntect_name())
+        .theme(dummy_name)
+        .build();
+
     let mut plugins = comrak::ComrakPlugins::default();
-    let adapter = comrak::plugins::syntect::SyntectAdapter::new(syntax_theme.as_syntect_name());
     plugins.render.codefence_syntax_highlighter = Some(&adapter);
 
     let htmlified = markdown_to_html_with_plugins(md, &options, &plugins);
@@ -172,6 +186,17 @@ impl Cell {
     }
 }
 
+// TODO(cosmic): Gonna send a PR upstream because the theme should impl `PartialEq`
+pub struct SyntectThemePartialEq<'a>(pub &'a SyntectTheme);
+
+impl PartialEq for SyntectThemePartialEq<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.name == other.0.name
+            && self.0.author == other.0.author
+            && self.0.scopes.len() == other.0.scopes.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,7 +215,7 @@ tags:
 body
 ";
 
-        let html = markdown_to_html(text, SyntaxTheme::Base16OceanDark);
+        let html = markdown_to_html(text, SyntectTheme::default());
         insta::assert_snapshot!(html, @r###"
         <table>
         <thead>

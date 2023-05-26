@@ -1658,6 +1658,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_yaml",
+ "syntect",
  "taffy",
  "tiny-skia 0.9.1",
  "toml",

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{color, keybindings::Keybindings};
 
+use anyhow::Result;
 use serde::Deserialize;
 
 pub use self::cli::{Args, ThemeType};
@@ -52,7 +53,7 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn parse_and_load_from(args: Args, config: Config) -> Self {
+    pub fn parse_and_load_from(args: Args, config: Config) -> Result<Self> {
         #[cfg(test)]
         {
             // "Use" the unused params
@@ -68,11 +69,15 @@ impl Opts {
         args: Args,
         config: Config,
         theme: ResolvedTheme,
-    ) -> Self {
+    ) -> Result<Self> {
         Self::parse_and_load_inner(args, config, theme)
     }
 
-    fn parse_and_load_inner(args: Args, config: Config, fallback_theme: ResolvedTheme) -> Self {
+    fn parse_and_load_inner(
+        args: Args,
+        config: Config,
+        fallback_theme: ResolvedTheme,
+    ) -> Result<Self> {
         let Config {
             theme: config_theme,
             scale: config_scale,
@@ -93,17 +98,23 @@ impl Opts {
         } = args;
 
         let file_path = file_path;
-        let resolved_theme = args_theme
-            .or(config_theme)
-            .map_or(fallback_theme, ResolvedTheme::from);
-        let theme = match resolved_theme {
-            ResolvedTheme::Dark => dark_theme.map_or(color::DARK_DEFAULT, |dark_theme| {
-                dark_theme.merge(color::DARK_DEFAULT)
-            }),
-            ResolvedTheme::Light => light_theme.map_or(color::LIGHT_DEFAULT, |light_theme| {
-                light_theme.merge(color::LIGHT_DEFAULT)
-            }),
+
+        let theme = {
+            let resolved_theme = args_theme
+                .or(config_theme)
+                .map_or(fallback_theme, ResolvedTheme::from);
+
+            let (maybe_theme, fallback_values) = match resolved_theme {
+                ResolvedTheme::Dark => (dark_theme, color::Theme::dark_default()),
+                ResolvedTheme::Light => (light_theme, color::Theme::light_default()),
+            };
+
+            match maybe_theme {
+                Some(theme) => theme.merge(fallback_values)?,
+                None => fallback_values,
+            }
         };
+
         let scale = args_scale.or(config_scale);
         let font_opts = font_options.unwrap_or_default();
         let page_width = args_page_width.or(config_page_width);
@@ -113,7 +124,7 @@ impl Opts {
             keybindings.extend(extra.into_iter());
         }
 
-        Self {
+        Ok(Self {
             file_path,
             theme,
             scale,
@@ -121,7 +132,7 @@ impl Opts {
             lines_to_scroll,
             font_opts,
             keybindings,
-        }
+        })
     }
 
     /// Arguments to supply to program that are opened externally.
