@@ -9,6 +9,7 @@ use taffy::{
     prelude::{
         auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
     },
+    style::JustifyContent,
     tree::MeasureFunc,
 };
 
@@ -96,11 +97,17 @@ impl Table {
 
         // Setup the grid
         let root_style = Style {
-            display: Display::Grid,
+            display: Display::Flex,
             size: TaffySize {
-                width: auto(),
+                width: length(bounds.0),
                 height: auto(),
             },
+            justify_content: Some(JustifyContent::Start),
+            ..default()
+        };
+
+        let grid_style = Style {
+            display: Display::Grid,
             gap: TaffySize {
                 width: length(TABLE_COL_GAP),
                 height: length(TABLE_ROW_GAP),
@@ -156,7 +163,8 @@ impl Table {
             flattened_nodes.append(&mut row.clone());
         }
 
-        let root = taffy.new_with_children(root_style, &flattened_nodes)?;
+        let grid = taffy.new_with_children(grid_style, &flattened_nodes)?;
+        let root = taffy.new_with_children(root_style, &[grid])?;
 
         taffy.compute_layout(
             root,
