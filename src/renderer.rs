@@ -15,7 +15,7 @@ use lyon::geom::Box2D;
 use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
 use winit::window::Window;
@@ -150,12 +150,12 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &surface_format);
 
-        let font_system = get_fonts(&font_opts);
+        let font_system = Arc::new(Mutex::new(get_fonts(&font_opts)));
         let swash_cache = SwashCache::new();
         let mut text_atlas = TextAtlas::new(&device, &queue, surface_format);
         let text_renderer =
             TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
-        let text_cache = TextCache::new();
+        let text_cache = Arc::new(Mutex::new(TextCache::new()));
         let text_system = TextSystem {
             font_system,
             swash_cache,
@@ -364,7 +364,7 @@ impl Renderer {
                     );
                     let layout = table.layout(&mut self.text_system, bounds, self.zoom)?;
 
-                    for (col, node) in layout[0].iter().enumerate() {
+                    for (col, node) in layout.headers.iter().enumerate() {
                         if let Some(text_box) = table.headers.get(col) {
                             text_areas.push(text_box.text_areas(
                                 &mut self.text_system,
@@ -395,13 +395,13 @@ impl Renderer {
                             }
                         }
                     }
-                    let last_header_node = layout[0].last().unwrap();
+                    let last_header_node = layout.headers.last().unwrap();
                     let y = last_header_node.location.y
                         + last_header_node.size.height
                         + TABLE_ROW_GAP / 2.;
                     let x = layout
-                        .first()
-                        .and_then(|f| f.last())
+                        .headers
+                        .last()
                         .map(|f| f.location.x + f.size.width)
                         .unwrap_or(0.);
                     {
@@ -419,7 +419,7 @@ impl Renderer {
                         )?;
                     }
 
-                    for (row, node_row) in layout.iter().skip(1).enumerate() {
+                    for (row, node_row) in layout.rows.iter().enumerate() {
                         for (col, node) in node_row.iter().enumerate() {
                             if let Some(row) = table.rows.get(row) {
                                 if let Some(text_box) = row.get(col) {
@@ -745,33 +745,35 @@ impl Renderer {
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
 
-        let text_areas: Vec<TextArea> = cached_text_areas
-            .iter()
-            .map(|c| c.text_area(&self.text_system.text_cache))
-            .collect();
+        {
+            let mut text_cache = self.text_system.text_cache.lock().unwrap();
+            let text_areas: Vec<TextArea> = cached_text_areas
+                .iter()
+                .map(|c| c.text_area(&text_cache))
+                .collect();
 
-        let result = self.text_system.text_renderer.prepare(
-            &self.device,
-            &self.queue,
-            &mut self.text_system.font_system,
-            &mut self.text_system.text_atlas,
-            Resolution {
-                width: self.config.width,
-                height: self.config.height,
-            },
-            &text_areas,
-            &mut self.text_system.swash_cache,
-        );
-        match result {
-            Result::Ok(()) => {}
-            Err(PrepareError::AtlasFull(content_type)) => {
-                if !self.text_system.text_atlas.grow(&self.device, content_type) {
-                    return Err(anyhow!("Could not grow text atlas"));
+            let result = self.text_system.text_renderer.prepare(
+                &self.device,
+                &self.queue,
+                &mut self.text_system.font_system.lock().unwrap(),
+                &mut self.text_system.text_atlas,
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+                &text_areas,
+                &mut self.text_system.swash_cache,
+            );
+            match result {
+                Result::Ok(()) => {}
+                Err(PrepareError::AtlasFull(content_type)) => {
+                    if !self.text_system.text_atlas.grow(&self.device, content_type) {
+                        return Err(anyhow!("Could not grow text atlas"));
+                    }
                 }
             }
+            text_cache.trim();
         }
-
-        self.text_system.text_cache.trim();
 
         {
             let background_color = {

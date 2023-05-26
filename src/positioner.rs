@@ -114,17 +114,9 @@ impl Positioner {
                     ),
                     zoom,
                 )?;
-                let min = layout.first().unwrap().first().unwrap();
-                let max = layout.last().unwrap().last().unwrap();
-                Rect::from_min_max(
-                    (
-                        DEFAULT_MARGIN + centering + min.location.x,
-                        self.reserved_height + min.location.y,
-                    ),
-                    (
-                        DEFAULT_MARGIN + centering + max.location.x + max.size.width,
-                        self.reserved_height + max.location.y + max.size.height,
-                    ),
+                Rect::new(
+                    (DEFAULT_MARGIN + centering, self.reserved_height),
+                    layout.size,
                 )
             }
             Element::Row(row) => {
