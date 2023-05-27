@@ -112,7 +112,7 @@ fn interpret_md(text: &str) -> VecDeque<Element> {
     std::mem::take(&mut *elements_queue)
 }
 
-macro_rules! snapshot_interpretted_elements {
+macro_rules! snapshot_interpreted_elements {
     ( $( ($test_name:ident, $md_text:ident) ),* $(,)? ) => {
         $(
             #[test]
@@ -136,4 +136,4 @@ This sentence[^1] has two footnotes[^2] followed by a list.
 [^1]: 1st footnote
 [^2]: 2nd footnote";
 
-snapshot_interpretted_elements!((numbered_list_prefix, NUMBERED_LIST_PREFIX));
+snapshot_interpreted_elements!((numbered_list_prefix, NUMBERED_LIST_PREFIX));
