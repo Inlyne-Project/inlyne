@@ -16,6 +16,11 @@ repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 rust-version = "1.65"
 
+[features]
+default = ["x11", "wayland"]
+x11 = ["winit/x11", "copypasta/x11"]
+wayland = ["winit/wayland", "copypasta/wayland"]
+
 [dependencies]
 winit = { version = "0.28.5", default-features = false }
 wgpu = "0.16"
