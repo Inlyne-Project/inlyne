@@ -895,7 +895,9 @@ impl TokenSink for HtmlInterpreter {
                 self.should_queue
                     .store(false, std::sync::atomic::Ordering::Relaxed);
                 self.first_pass = false;
-                self.window.request_redraw();
+                self.event_proxy
+                    .send_event(InlyneEvent::PositionQueue)
+                    .unwrap();
             }
             _ => {}
         }

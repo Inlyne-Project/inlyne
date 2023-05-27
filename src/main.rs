@@ -66,6 +66,7 @@ pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
     Reposition,
+    PositionQueue,
 }
 
 impl Debug for InlyneEvent {
@@ -284,6 +285,36 @@ impl Inlyne {
         })
     }
 
+    pub fn position_queued_elements(
+        element_queue: &Arc<Mutex<VecDeque<Element>>>,
+        renderer: &mut Renderer,
+        elements: &mut Vec<Positioned<Element>>,
+    ) {
+        let queue = {
+            element_queue
+                .try_lock()
+                .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
+        };
+        if let Ok(queue) = queue {
+            for element in queue {
+                // Position element and add it to elements
+                let mut positioned_element = Positioned::new(element);
+                renderer
+                    .positioner
+                    .position(
+                        &mut renderer.text_system,
+                        &mut positioned_element,
+                        renderer.zoom,
+                    )
+                    .unwrap();
+                renderer.positioner.reserved_height +=
+                    DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
+                        + positioned_element.bounds.as_ref().unwrap().size.1;
+                elements.push(positioned_element);
+            }
+        }
+    }
+
     pub fn run(mut self) {
         let mut pending_resize = None;
         let mut scrollbar_held = None;
@@ -324,31 +355,21 @@ impl Inlyne {
                     InlyneEvent::Reposition => {
                         self.need_repositioning = true;
                     }
+                    InlyneEvent::PositionQueue => {
+                        Self::position_queued_elements(
+                            &self.element_queue,
+                            &mut self.renderer,
+                            &mut self.elements,
+                        );
+                        self.window.request_redraw()
+                    }
                 },
                 Event::RedrawRequested(_) => {
-                    let queue = {
-                        self.element_queue
-                            .try_lock()
-                            .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
-                    };
-                    if let Ok(queue) = queue {
-                        for element in queue {
-                            // Position element and add it to elements
-                            let mut positioned_element = Positioned::new(element);
-                            self.renderer
-                                .positioner
-                                .position(
-                                    &mut self.renderer.text_system,
-                                    &mut positioned_element,
-                                    self.renderer.zoom,
-                                )
-                                .unwrap();
-                            self.renderer.positioner.reserved_height +=
-                                DEFAULT_PADDING * self.renderer.hidpi_scale * self.renderer.zoom
-                                    + positioned_element.bounds.as_ref().unwrap().size.1;
-                            self.elements.push(positioned_element);
-                        }
-                    }
+                    Self::position_queued_elements(
+                        &self.element_queue,
+                        &mut self.renderer,
+                        &mut self.elements,
+                    );
                     self.renderer.set_scroll_y(self.renderer.scroll_y);
                     self.renderer
                         .redraw(&mut self.elements)
