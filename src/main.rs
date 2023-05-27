@@ -534,14 +534,14 @@ impl Inlyne {
                                                 .send_event(InlyneEvent::FileReload)
                                                 .expect("new file to reload successfully");
                                         }
-                                    } else if open::that(link).is_err() {
-                                        if let Some(anchor_pos) =
-                                            self.renderer.positioner.anchors.get(link)
-                                        {
-                                            self.renderer.set_scroll_y(*anchor_pos);
-                                            self.window.request_redraw();
-                                            self.window.set_cursor_icon(CursorIcon::Default);
-                                        }
+                                    } else if let Some(anchor_pos) =
+                                        self.renderer.positioner.anchors.get(link)
+                                    {
+                                        self.renderer.set_scroll_y(*anchor_pos);
+                                        self.window.request_redraw();
+                                        self.window.set_cursor_icon(CursorIcon::Default);
+                                    } else {
+                                        open::that(link).unwrap();
                                     }
                                 } else if self.renderer.selection.is_none() {
                                     // Only set selection when not over link
