@@ -53,7 +53,6 @@ pub struct TextOptions {
 
 pub enum Element {
     List(List),
-    ListItem,
     Input,
     Table(Table),
     TableRow(Vec<TextBox>),

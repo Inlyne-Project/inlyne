@@ -1,6 +1,5 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n1. 1st item\n\n    ```rust\n    fn main() {}\n    ```\n\n2. 2nd item\n\n\n --- html\n\n<ol>\n<li>\n<p>1st item</p>\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-rust\"><span style=\"font-weight:bold;color:#a71d5d;\">fn </span><span style=\"font-weight:bold;color:#795da3;\">main</span><span style=\"color:#323232;\">() {}\n</span></code></pre>\n</li>\n<li>\n<p>2nd item</p>\n</li>\n</ol>\n"
 expression: interpret_md(text)
 ---
 [
@@ -29,32 +28,25 @@ expression: interpret_md(text)
     TextBox(
         TextBox {
             indent: 50.0,
-            background_color: Some(Color { r: 0.92, g: 0.94, b: 0.96 }),
+            background_color: Some(Color { r: 0.86, g: 0.88, b: 0.91 }),
             is_code_block: true,
             texts: [
                 Text {
                     text: "fn ",
-                    font_family: Monospace,
-                    color: Some(Color { r: 0.39, g: 0.01, b: 0.11 }),
-                    style: BOLD ,
+                    size: 18.0,
+                    color: Some(Color { r: 0.46, g: 0.27, b: 0.42 }),
                     ..
                 },
                 Text {
                     text: "main",
-                    font_family: Monospace,
-                    color: Some(Color { r: 0.19, g: 0.11, b: 0.37 }),
-                    style: BOLD ,
+                    size: 18.0,
+                    color: Some(Color { r: 0.27, g: 0.36, b: 0.45 }),
                     ..
                 },
                 Text {
                     text: "() {}",
-                    font_family: Monospace,
-                    color: Some(Color { r: 0.03, g: 0.03, b: 0.03 }),
-                    ..
-                },
-                Text {
-                    text: "\n",
-                    default_color: Color(BLACK),
+                    size: 18.0,
+                    color: Some(Color { r: 0.08, g: 0.10, b: 0.13 }),
                     ..
                 },
             ],
