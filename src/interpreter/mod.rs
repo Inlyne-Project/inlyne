@@ -39,6 +39,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 mod html;
+#[cfg(test)]
+mod tests;
 
 #[derive(Default, PartialEq, Eq)]
 enum FontWeight {
