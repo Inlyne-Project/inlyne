@@ -17,7 +17,7 @@ homepage = "https://github.com/trimental/inlyne"
 rust-version = "1.65"
 
 [dependencies]
-winit = "0.28.5"
+winit = { version = "0.28.5", default-features = false }
 wgpu = "0.16"
 bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
@@ -26,7 +26,7 @@ open = "4.1.0"
 html5ever = "0.26.0"
 image = "0.24.6"
 clap = { version = "4.2.7", features = ["cargo"] }
-copypasta = "0.8.2"
+copypasta = { version = "0.8.2", default-features = false }
 resvg = "0.33.0"
 usvg = "0.33.0"
 tiny-skia = "0.9.0"

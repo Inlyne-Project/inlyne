@@ -35,7 +35,7 @@ use text::TextSystem;
 use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
-use copypasta::{ClipboardContext, ClipboardProvider};
+use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 use winit::event::ModifiersState;
