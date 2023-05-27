@@ -17,7 +17,7 @@ homepage = "https://github.com/trimental/inlyne"
 rust-version = "1.65"
 
 [features]
-default = ["x11", "wayland"]
+default = ["x11"]
 x11 = ["winit/x11", "copypasta/x11"]
 wayland = ["winit/wayland", "copypasta/wayland"]
 

@@ -35,6 +35,9 @@ use text::TextSystem;
 use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
+#[cfg(feature = "x11")]
+use copypasta::{ClipboardContext, ClipboardProvider};
+#[cfg(feature = "wayland")]
 use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
