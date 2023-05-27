@@ -1,8 +1,11 @@
 use std::{
     borrow::BorrowMut,
     collections::hash_map,
+    fmt,
     hash::{BuildHasher, Hash, Hasher},
 };
+
+use crate::debug_impls;
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
@@ -15,7 +18,7 @@ use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone)]
 pub struct TextBox {
     pub indent: f32,
     pub font_size: f32,
@@ -28,6 +31,30 @@ pub struct TextBox {
     pub hidpi_scale: f32,
     pub padding_height: f32,
     pub background_color: Option<[f32; 4]>,
+}
+
+impl fmt::Debug for TextBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::text_box(self, f)
+    }
+}
+
+impl Default for TextBox {
+    fn default() -> Self {
+        Self {
+            indent: 0.0,
+            font_size: 16.0,
+            texts: Vec::new(),
+            is_code_block: false,
+            is_quote_block: None,
+            is_checkbox: None,
+            is_anchor: None,
+            align: Align::default(),
+            hidpi_scale: 1.0,
+            padding_height: 0.0,
+            background_color: None,
+        }
+    }
 }
 
 pub struct CachedTextArea {
@@ -360,7 +387,7 @@ impl TextBox {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Text {
     pub text: String,
     pub color: Option<[f32; 4]>,
@@ -372,6 +399,12 @@ pub struct Text {
     pub font_family: FamilyOwned,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
+}
+
+impl fmt::Debug for Text {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::text(&self, f)
+    }
 }
 
 impl Text {
