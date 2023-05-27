@@ -1,5 +1,6 @@
 use crate::color::native_color;
 use crate::image::Image;
+use crate::image::ImageData;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
 use crate::positioner::Row;
@@ -85,13 +86,55 @@ struct State {
     pending_list_prefix: Option<String>,
 }
 
+// Images are loaded in a separate thread and use a callback to indicate when they're finished
+pub trait ImageCallback {
+    fn loaded_image(&self, src: String, image_data: Arc<Mutex<Option<ImageData>>>);
+}
+
+// External state from the interpreter that we want to stub out for testing
+trait WindowInteractor {
+    fn finished_single_doc(&self);
+    fn request_redraw(&self);
+    fn image_callback(&self) -> Box<dyn ImageCallback + Send>;
+}
+
+struct EventLoopCallback(EventLoopProxy<InlyneEvent>);
+
+impl ImageCallback for EventLoopCallback {
+    fn loaded_image(&self, src: String, image_data: Arc<Mutex<Option<ImageData>>>) {
+        let event = InlyneEvent::LoadedImage(src, image_data);
+        self.0.send_event(event).unwrap();
+    }
+}
+
+// A real interactive window that is being used with `HtmlInterpreter`
+struct LiveWindow {
+    window: Arc<Window>,
+    event_proxy: EventLoopProxy<InlyneEvent>,
+}
+
+impl WindowInteractor for LiveWindow {
+    fn request_redraw(&self) {
+        self.window.request_redraw();
+    }
+
+    fn image_callback(&self) -> Box<dyn ImageCallback + Send> {
+        Box::new(EventLoopCallback(self.event_proxy.clone()))
+    }
+
+    fn finished_single_doc(&self) {
+        self.event_proxy
+            .send_event(InlyneEvent::PositionQueue)
+            .unwrap();
+    }
+}
+
 pub struct HtmlInterpreter {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     current_textbox: TextBox,
     hidpi_scale: f32,
     theme: Theme,
     surface_format: TextureFormat,
-    window: Arc<Window>,
     state: State,
     file_path: PathBuf,
     // Whether the interpreters is allowed to queue elements
@@ -100,7 +143,7 @@ pub struct HtmlInterpreter {
     stopped: bool,
     first_pass: bool,
     image_cache: ImageCache,
-    event_proxy: EventLoopProxy<InlyneEvent>,
+    window: Box<dyn WindowInteractor + Send>,
 }
 
 impl HtmlInterpreter {
@@ -113,6 +156,30 @@ impl HtmlInterpreter {
         file_path: PathBuf,
         image_cache: ImageCache,
         event_proxy: EventLoopProxy<InlyneEvent>,
+    ) -> Self {
+        let live_window = LiveWindow {
+            window,
+            event_proxy,
+        };
+        Self::new_with_interactor(
+            element_queue,
+            theme,
+            surface_format,
+            hidpi_scale,
+            file_path,
+            image_cache,
+            Box::new(live_window),
+        )
+    }
+
+    fn new_with_interactor(
+        element_queue: Arc<Mutex<VecDeque<Element>>>,
+        theme: Theme,
+        surface_format: TextureFormat,
+        hidpi_scale: f32,
+        file_path: PathBuf,
+        image_cache: ImageCache,
+        window: Box<dyn WindowInteractor + Send>,
     ) -> Self {
         Self {
             window,
@@ -130,7 +197,6 @@ impl HtmlInterpreter {
             stopped: false,
             first_pass: true,
             image_cache,
-            event_proxy,
         }
     }
 
@@ -323,7 +389,7 @@ impl TokenSink for HtmlInterpreter {
                                             src.clone(),
                                             self.file_path.clone(),
                                             self.hidpi_scale,
-                                            self.event_proxy.clone(),
+                                            self.window.image_callback(),
                                         )
                                         .unwrap()
                                         .with_align(*align),
@@ -825,9 +891,7 @@ impl TokenSink for HtmlInterpreter {
                 self.should_queue
                     .store(false, std::sync::atomic::Ordering::Relaxed);
                 self.first_pass = false;
-                self.event_proxy
-                    .send_event(InlyneEvent::PositionQueue)
-                    .unwrap();
+                self.window.finished_single_doc();
             }
             _ => {}
         }
