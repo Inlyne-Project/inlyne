@@ -127,12 +127,10 @@ macro_rules! snapshot_interpreted_elements {
     }
 }
 
-const NUMBERED_LIST_PREFIX: &str = "\
-This sentence[^1] has two footnotes[^2] followed by a list.
-
-1. Ordered list
+const FOOTNOTES_LIST_PREFIX: &str = "\
+This sentence[^1] has two footnotes[^2]
 
 [^1]: 1st footnote
 [^2]: 2nd footnote";
 
-snapshot_interpreted_elements!((numbered_list_prefix, NUMBERED_LIST_PREFIX));
+snapshot_interpreted_elements!((footnotes_list_prefix, FOOTNOTES_LIST_PREFIX));
