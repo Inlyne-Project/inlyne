@@ -112,8 +112,13 @@ macro_rules! snapshot_interpreted_elements {
             #[test]
             fn $test_name() {
                 let text = $md_text;
+
+                let syntect_theme = $crate::color::Theme::light_default().code_highlighter;
+                let htmlified = $crate::utils::markdown_to_html(text, syntect_theme);
+                let description = format!(" --- md\n\n{text}\n\n --- html\n\n{htmlified}");
+
                 ::insta::with_settings!({
-                    description => text,
+                    description => description,
                 }, {
                     insta::assert_debug_snapshot!(interpret_md(text));
                 });
