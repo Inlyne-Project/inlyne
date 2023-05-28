@@ -606,6 +606,9 @@ impl TokenSink for HtmlInterpreter {
                                 if &name.local == "type" {
                                     let value = value.to_string();
                                     if value == "checkbox" {
+                                        // Checkbox uses a custom prefix, so remove pending text
+                                        // prefix
+                                        let _ = self.state.pending_list_prefix.take();
                                         self.push_current_textbox();
                                         self.current_textbox.set_checkbox(Some(
                                             tag.attrs

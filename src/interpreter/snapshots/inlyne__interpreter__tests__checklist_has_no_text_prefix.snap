@@ -10,11 +10,6 @@ expression: interpret_md(text)
             is_checkbox: Some(true),
             texts: [
                 Text {
-                    text: "· ",
-                    default_color: Color(BLACK),
-                    style: BOLD ,
-                },
-                Text {
                     text: "Completed task",
                     default_color: Color(BLACK),
                 },
@@ -26,11 +21,6 @@ expression: interpret_md(text)
             indent: 50.0,
             is_checkbox: Some(false),
             texts: [
-                Text {
-                    text: "· ",
-                    default_color: Color(BLACK),
-                    style: BOLD ,
-                },
                 Text {
                     text: "Incomplete task",
                     default_color: Color(BLACK),
