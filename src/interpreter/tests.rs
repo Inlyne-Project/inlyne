@@ -46,12 +46,6 @@ impl AtomicCounter {
 
 struct DummyWindow(AtomicCounter);
 
-impl From<AtomicCounter> for DummyWindow {
-    fn from(counter: AtomicCounter) -> Self {
-        Self(counter)
-    }
-}
-
 impl WindowInteractor for DummyWindow {
     fn finished_single_doc(&self) {
         self.0.dec();
@@ -81,7 +75,7 @@ fn dummy_interpreter(counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecD
     let hidpi_scale = 1.0;
     let file_path = PathBuf::from("does_not_exist");
     let image_cache = ImageCache::default();
-    let window = Box::new(DummyWindow::from(counter));
+    let window = Box::new(DummyWindow(counter));
     let interpreter = HtmlInterpreter::new_with_interactor(
         Arc::clone(&element_queue),
         theme,

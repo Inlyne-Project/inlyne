@@ -82,7 +82,6 @@ impl TextBox {
         TextBox {
             texts,
             hidpi_scale,
-            font_size: 16.,
             ..Default::default()
         }
     }
@@ -403,7 +402,7 @@ pub struct Text {
 
 impl fmt::Debug for Text {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        debug_impls::text(&self, f)
+        debug_impls::text(self, f)
     }
 }
 
