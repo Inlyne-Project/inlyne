@@ -9,7 +9,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use usvg::{Size as UsvgSize, TreeParsing, TreeTextToPath};
+use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 
@@ -195,18 +195,18 @@ impl Image {
                 fontdb.load_system_fonts();
                 let mut tree = usvg::Tree::from_data(&image_data, &opt).unwrap();
                 tree.size = tree.size.scale_to(
-                    UsvgSize::new(
-                        tree.size.width() * hidpi_scale as f64,
-                        tree.size.height() * hidpi_scale as f64,
+                    tiny_skia::Size::from_wh(
+                        tree.size.width() * hidpi_scale,
+                        tree.size.height() * hidpi_scale,
                     )
                     .unwrap(),
                 );
                 tree.convert_text(&fontdb);
                 let rtree = resvg::Tree::from_usvg(&tree);
-                let pixmap_size = resvg::IntSize::from_usvg(rtree.size);
-                let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height())
-                    .context("Couldn't create svg pixmap")
-                    .unwrap();
+                let mut pixmap =
+                    tiny_skia::Pixmap::new(rtree.size.width() as u32, rtree.size.height() as u32)
+                        .context("Couldn't create svg pixmap")
+                        .unwrap();
                 rtree.render(tiny_skia::Transform::default(), &mut pixmap.as_mut());
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())

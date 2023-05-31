@@ -13,6 +13,10 @@ use winit::window::CursorIcon;
 
 use crate::image::ImageData;
 
+pub(crate) fn default<T: Default>() -> T {
+    Default::default()
+}
+
 pub fn usize_in_mib(num: usize) -> f32 {
     num as f32 / 1_024.0 / 1_024.0
 }
