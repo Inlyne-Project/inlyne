@@ -202,8 +202,8 @@ impl TextBox {
 
     pub fn size_without_system(
         &self,
-        text_cache: &Arc<Mutex<TextCache>>,
-        font_system: &Arc<Mutex<FontSystem>>,
+        text_cache: &Mutex<TextCache>,
+        font_system: &Mutex<FontSystem>,
         bounds: Size,
         zoom: f32,
     ) -> Size {

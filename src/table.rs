@@ -87,13 +87,10 @@ impl Table {
         zoom: f32,
     ) -> anyhow::Result<TableLayout> {
         let mut taffy = Taffy::new();
-        let max_columns = self.rows.iter().fold(self.headers.len(), |max, row| {
-            if row.len() > max {
-                row.len()
-            } else {
-                max
-            }
-        });
+        let max_columns = self
+            .rows
+            .iter()
+            .fold(self.headers.len(), |max, row| std::cmp::max(row.len(), max));
 
         // Setup the grid
         let root_style = Style {
