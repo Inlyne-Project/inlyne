@@ -1,9 +1,10 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, fmt};
 
 use anyhow::Context;
 use wgpu_glyph::GlyphBrush;
 
 use crate::{
+    debug_impls,
     table::{TABLE_COL_GAP, TABLE_ROW_GAP},
     text::TextBox,
     utils::{Align, Point, Rect, Size},
@@ -246,10 +247,15 @@ impl Positioner {
     }
 }
 
-#[derive(Debug)]
 pub struct Spacer {
     pub space: f32,
     pub visible: bool,
+}
+
+impl fmt::Debug for Spacer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::spacer(self, f)
+    }
 }
 
 impl Spacer {
