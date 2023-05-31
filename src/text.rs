@@ -3,6 +3,7 @@ use std::{
     collections::hash_map,
     fmt,
     hash::{BuildHasher, Hash, Hasher},
+    sync::{Arc, Mutex},
 };
 
 use crate::debug_impls;
@@ -12,11 +13,50 @@ use glyphon::{
     cosmic_text::Align as TextAlign, Affinity, Attrs, AttrsList, BufferLine, Color, Cursor,
     FamilyOwned, FontSystem, Style, SwashCache, TextArea, TextBounds, Weight,
 };
+use taffy::{
+    prelude::{AvailableSpace, Size as TaffySize},
+    tree::Measurable,
+};
 
 use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
+
+pub struct TextBoxMeasure {
+    pub textbox: Arc<TextBox>,
+    pub text_cache: Arc<Mutex<TextCache>>,
+    pub font_system: Arc<Mutex<FontSystem>>,
+    pub zoom: f32,
+}
+
+impl TextBoxMeasure {
+    fn internal_measure(&self, bounds: (f32, f32)) -> (f32, f32) {
+        self.textbox
+            .size_without_system(&self.text_cache, &self.font_system, bounds, self.zoom)
+    }
+}
+
+impl Measurable for TextBoxMeasure {
+    fn measure(
+        &self,
+        known_dimensions: TaffySize<Option<f32>>,
+        available_space: TaffySize<taffy::style::AvailableSpace>,
+    ) -> TaffySize<f32> {
+        let available_width = match available_space.width {
+            AvailableSpace::Definite(space) => space,
+            AvailableSpace::MinContent => 0.0,
+            AvailableSpace::MaxContent => f32::MAX,
+        };
+        let width_bound = known_dimensions.width.unwrap_or(available_width);
+
+        let size = self.internal_measure((width_bound, f32::MAX));
+        TaffySize {
+            width: known_dimensions.width.unwrap_or(size.0),
+            height: known_dimensions.height.unwrap_or(size.1),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct TextBox {
@@ -160,10 +200,13 @@ impl TextBox {
         if screen_position.1 > loc.1 || screen_position.1 + bounds.1 < loc.1 {
             return None;
         }
-        let cache = text_system.text_cache.borrow_mut();
 
-        let (_, buffer) =
-            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+        let mut cache = text_system.text_cache.lock().unwrap();
+
+        let (_, buffer) = cache.allocate(
+            text_system.font_system.lock().unwrap().borrow_mut(),
+            self.key(bounds, zoom),
+        );
 
         if let Some(cursor) = buffer.hit(loc.0 - screen_position.0, loc.1 - screen_position.1) {
             let line = &buffer.lines[cursor.line];
@@ -180,16 +223,33 @@ impl TextBox {
     }
 
     pub fn size(&self, text_system: &mut TextSystem, bounds: Size, zoom: f32) -> Size {
+        self.size_without_system(
+            &text_system.text_cache,
+            &text_system.font_system,
+            bounds,
+            zoom,
+        )
+    }
+
+    pub fn size_without_system(
+        &self,
+        text_cache: &Mutex<TextCache>,
+        font_system: &Mutex<FontSystem>,
+        bounds: Size,
+        zoom: f32,
+    ) -> Size {
         if self.texts.is_empty() {
             return (0., self.padding_height * self.hidpi_scale * zoom);
         }
 
-        let cache = text_system.text_cache.borrow_mut();
+        let mut cache = text_cache.lock().unwrap();
 
         let line_height = self.line_height(zoom);
 
-        let (_, paragraph) =
-            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+        let (_, paragraph) = cache.allocate(
+            font_system.lock().unwrap().borrow_mut(),
+            self.key(bounds, zoom),
+        );
 
         let (total_lines, max_width) = paragraph
             .layout_runs()
@@ -214,7 +274,10 @@ impl TextBox {
     ) -> CachedTextArea {
         let cache = text_system.text_cache.borrow_mut();
 
-        let (key, _) = cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+        let (key, _) = cache.lock().unwrap().allocate(
+            text_system.font_system.lock().unwrap().borrow_mut(),
+            self.key(bounds, zoom),
+        );
 
         CachedTextArea {
             key,
@@ -246,10 +309,12 @@ impl TextBox {
         let line_height = self.line_height(zoom);
         let mut lines = Vec::new();
 
-        let cache = text_system.text_cache.borrow_mut();
+        let mut cache = text_system.text_cache.lock().unwrap();
 
-        let (_, buffer) =
-            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+        let (_, buffer) = cache.allocate(
+            text_system.font_system.lock().unwrap().borrow_mut(),
+            self.key(bounds, zoom),
+        );
 
         let mut y = screen_position.1 + line_height;
         for line in buffer.layout_runs() {
@@ -323,10 +388,12 @@ impl TextBox {
         let mut selected_text = String::new();
 
         let line_height = self.line_height(zoom);
-        let cache = text_system.text_cache.borrow_mut();
+        let mut cache = text_system.text_cache.lock().unwrap();
 
-        let (_, buffer) =
-            cache.allocate(text_system.font_system.borrow_mut(), self.key(bounds, zoom));
+        let (_, buffer) = cache.allocate(
+            text_system.font_system.lock().unwrap().borrow_mut(),
+            self.key(bounds, zoom),
+        );
 
         if let Some(start_cursor) = buffer.hit(
             select_start.0 - screen_position.0,
@@ -608,9 +675,9 @@ impl TextCache {
 }
 
 pub struct TextSystem {
-    pub font_system: FontSystem,
+    pub font_system: Arc<Mutex<FontSystem>>,
     pub text_renderer: glyphon::TextRenderer,
     pub text_atlas: glyphon::TextAtlas,
-    pub text_cache: TextCache,
+    pub text_cache: Arc<Mutex<TextCache>>,
     pub swash_cache: SwashCache,
 }

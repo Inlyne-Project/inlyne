@@ -3,7 +3,7 @@ use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
-use crate::table::{TABLE_COL_GAP, TABLE_ROW_GAP};
+use crate::table::TABLE_ROW_GAP;
 use crate::text::{CachedTextArea, TextCache, TextSystem};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::Element;
@@ -15,7 +15,7 @@ use lyon::geom::Box2D;
 use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
 use winit::window::Window;
@@ -150,12 +150,12 @@ impl Renderer {
         surface.configure(&device, &config);
         let image_renderer = ImageRenderer::new(&device, &surface_format);
 
-        let font_system = get_fonts(&font_opts);
+        let font_system = Arc::new(Mutex::new(get_fonts(&font_opts)));
         let swash_cache = SwashCache::new();
         let mut text_atlas = TextAtlas::new(&device, &queue, surface_format);
         let text_renderer =
             TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
-        let text_cache = TextCache::new();
+        let text_cache = Arc::new(Mutex::new(TextCache::new()));
         let text_system = TextSystem {
             font_system,
             swash_cache,
@@ -358,45 +358,31 @@ impl Renderer {
                     }
                 }
                 Element::Table(table) => {
-                    let row_heights = table.row_heights(
-                        &mut self.text_system,
-                        (
-                            screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
-                        self.zoom,
+                    let bounds = (
+                        (screen_size.0 - pos.0 - DEFAULT_MARGIN - centering).max(0.),
+                        f32::INFINITY,
                     );
-                    let column_widths = table.column_widths(
+                    let layout = table.layout(
                         &mut self.text_system,
-                        (
-                            screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
+                        &mut self.positioner.taffy,
+                        bounds,
                         self.zoom,
-                    );
-                    let mut x = 0.;
-                    let mut y = 0.;
+                    )?;
 
-                    let header_height = row_heights.first().unwrap();
-                    for (col, width) in column_widths.iter().enumerate() {
+                    for (col, node) in layout.headers.iter().enumerate() {
                         if let Some(text_box) = table.headers.get(col) {
-                            let bounds = (
-                                (screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering)
-                                    .min(screen_size.0 - DEFAULT_MARGIN - centering),
-                                f32::INFINITY,
-                            );
                             text_areas.push(text_box.text_areas(
                                 &mut self.text_system,
-                                (pos.0 + x, pos.1 + y),
-                                bounds,
+                                (pos.0 + node.location.x, pos.1 + node.location.y),
+                                (node.size.width, f32::MAX),
                                 self.zoom,
                                 self.scroll_y,
                             ));
                             if let Some(selection) = self.selection {
                                 let (selection_rects, selection_text) = text_box.render_selection(
                                     &mut self.text_system,
-                                    (pos.0 + x, pos.1 + y),
-                                    bounds,
+                                    (pos.0 + node.location.x, pos.1 + node.location.y),
+                                    (node.size.width, node.size.height),
                                     self.zoom,
                                     selection,
                                 );
@@ -412,10 +398,17 @@ impl Renderer {
                                     )?;
                                 }
                             }
-                            x += width + TABLE_COL_GAP;
                         }
                     }
-                    y += header_height + (TABLE_ROW_GAP / 2.);
+                    let last_header_node = layout.headers.last().unwrap();
+                    let y = last_header_node.location.y
+                        + last_header_node.size.height
+                        + TABLE_ROW_GAP / 2.;
+                    let x = layout
+                        .headers
+                        .last()
+                        .map(|f| f.location.x + f.size.width)
+                        .unwrap_or(0.);
                     {
                         let min = (
                             scrolled_pos.0.max(DEFAULT_MARGIN + centering),
@@ -423,7 +416,7 @@ impl Renderer {
                         );
                         let max = (
                             (scrolled_pos.0 + x),
-                            scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
+                            scrolled_pos.1 + y + 2. * self.hidpi_scale * self.zoom,
                         );
                         self.draw_rectangle(
                             Rect::from_min_max(min, max),
@@ -431,20 +424,14 @@ impl Renderer {
                         )?;
                     }
 
-                    y += TABLE_ROW_GAP / 2.;
-                    for (row, height) in row_heights.iter().skip(1).enumerate() {
-                        let mut x = 0.;
-                        for (col, width) in column_widths.iter().enumerate() {
+                    for (row, node_row) in layout.rows.iter().enumerate() {
+                        for (col, node) in node_row.iter().enumerate() {
                             if let Some(row) = table.rows.get(row) {
                                 if let Some(text_box) = row.get(col) {
-                                    let bounds = (
-                                        screen_size.0 - pos.0 - x - DEFAULT_MARGIN - centering,
-                                        f32::INFINITY,
-                                    );
                                     text_areas.push(text_box.text_areas(
                                         &mut self.text_system,
-                                        (pos.0 + x, pos.1 + y),
-                                        bounds,
+                                        (pos.0 + node.location.x, pos.1 + node.location.y),
+                                        (node.size.width, f32::MAX),
                                         self.zoom,
                                         self.scroll_y,
                                     ));
@@ -453,8 +440,8 @@ impl Renderer {
                                         let (selection_rects, selection_text) = text_box
                                             .render_selection(
                                                 &mut self.text_system,
-                                                (pos.0 + x, pos.1 + y),
-                                                bounds,
+                                                (pos.0 + node.location.x, pos.1 + node.location.y),
+                                                (node.size.width, node.size.height),
                                                 self.zoom,
                                                 selection,
                                             );
@@ -475,24 +462,29 @@ impl Renderer {
                                     }
                                 }
                             }
-                            x += width + TABLE_COL_GAP;
                         }
-                        y += height + (TABLE_COL_GAP / 2.);
+                        let last_row_node = node_row.last().unwrap();
+                        let y = last_row_node.location.y
+                            + last_row_node.size.height
+                            + TABLE_ROW_GAP / 2.;
+                        let x = node_row
+                            .last()
+                            .map(|f| f.location.x + f.size.width)
+                            .unwrap_or(0.);
                         {
                             let min = (
                                 scrolled_pos.0.max(DEFAULT_MARGIN + centering),
                                 scrolled_pos.1 + y,
                             );
                             let max = (
-                                (scrolled_pos.0 + x),
+                                scrolled_pos.0 + x,
                                 scrolled_pos.1 + y + 1. * self.hidpi_scale * self.zoom,
                             );
                             self.draw_rectangle(
                                 Rect::from_min_max(min, max),
-                                native_color(self.theme.code_block_color, &self.surface_format),
+                                native_color(self.theme.text_color, &self.surface_format),
                             )?;
                         }
-                        y += TABLE_ROW_GAP / 2.;
                     }
                 }
                 Element::Image(_) => {}
@@ -758,31 +750,33 @@ impl Renderer {
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
 
-        let text_areas: Vec<TextArea> = cached_text_areas
-            .iter()
-            .map(|c| c.text_area(&self.text_system.text_cache))
-            .collect();
-
-        while let Result::Err(PrepareError::AtlasFull(content_type)) =
-            self.text_system.text_renderer.prepare(
-                &self.device,
-                &self.queue,
-                &mut self.text_system.font_system,
-                &mut self.text_system.text_atlas,
-                Resolution {
-                    width: self.config.width,
-                    height: self.config.height,
-                },
-                &text_areas,
-                &mut self.text_system.swash_cache,
-            )
         {
-            if !self.text_system.text_atlas.grow(&self.device, content_type) {
-                return Err(anyhow!("Could not grow text atlas"));
-            }
-        }
+            let mut text_cache = self.text_system.text_cache.lock().unwrap();
+            let text_areas: Vec<TextArea> = cached_text_areas
+                .iter()
+                .map(|c| c.text_area(&text_cache))
+                .collect();
 
-        self.text_system.text_cache.trim();
+            while let Result::Err(PrepareError::AtlasFull(content_type)) =
+                self.text_system.text_renderer.prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.text_system.font_system.lock().unwrap(),
+                    &mut self.text_system.text_atlas,
+                    Resolution {
+                        width: self.config.width,
+                        height: self.config.height,
+                    },
+                    &text_areas,
+                    &mut self.text_system.swash_cache,
+                )
+            {
+                if !self.text_system.text_atlas.grow(&self.device, content_type) {
+                    return Err(anyhow!("Could not grow text atlas"));
+                }
+            }
+            text_cache.trim();
+        }
 
         {
             let background_color = {
