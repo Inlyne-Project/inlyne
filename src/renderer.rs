@@ -362,7 +362,12 @@ impl Renderer {
                         (screen_size.0 - pos.0 - DEFAULT_MARGIN - centering).max(0.),
                         f32::INFINITY,
                     );
-                    let layout = table.layout(&mut self.text_system, bounds, self.zoom)?;
+                    let layout = table.layout(
+                        &mut self.text_system,
+                        &mut self.positioner.taffy,
+                        bounds,
+                        self.zoom,
+                    )?;
 
                     for (col, node) in layout.headers.iter().enumerate() {
                         if let Some(text_box) = table.headers.get(col) {

@@ -37,12 +37,13 @@ impl Table {
     pub fn find_hoverable<'a>(
         &'a self,
         text_system: &mut TextSystem,
+        taffy: &mut Taffy,
         loc: Point,
         pos: Point,
         bounds: Size,
         zoom: f32,
     ) -> Option<&'a Text> {
-        let table_layout = self.layout(text_system, bounds, zoom).ok()?;
+        let table_layout = self.layout(text_system, taffy, bounds, zoom).ok()?;
         for (header, layout) in self.headers.iter().zip(table_layout.headers.iter()) {
             if Rect::new(
                 (pos.0 + layout.location.x, pos.1 + layout.location.y),
@@ -83,10 +84,10 @@ impl Table {
     pub fn layout(
         &self,
         text_system: &mut TextSystem,
+        taffy: &mut Taffy,
         bounds: Size,
         zoom: f32,
     ) -> anyhow::Result<TableLayout> {
-        let mut taffy = Taffy::new();
         let max_columns = self
             .rows
             .iter()

@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use anyhow::Context;
+use taffy::Taffy;
 
 use crate::{
     text::{TextBox, TextSystem},
@@ -43,16 +44,20 @@ pub struct Positioner {
     pub hidpi_scale: f32,
     pub page_width: f32,
     pub anchors: HashMap<String, f32>,
+    pub taffy: Taffy,
 }
 
 impl Positioner {
     pub fn new(screen_size: Size, hidpi_scale: f32, page_width: f32) -> Self {
+        let mut taffy = Taffy::new();
+        taffy.disable_rounding();
         Self {
             reserved_height: DEFAULT_PADDING * hidpi_scale,
             hidpi_scale,
             page_width,
             screen_size,
             anchors: HashMap::new(),
+            taffy,
         }
     }
 
@@ -108,6 +113,7 @@ impl Positioner {
                 let pos = (DEFAULT_MARGIN + centering, self.reserved_height);
                 let layout = table.layout(
                     text_system,
+                    &mut self.taffy,
                     (
                         self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                         f32::INFINITY,

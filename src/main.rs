@@ -30,6 +30,7 @@ use positioner::Spacer;
 use positioner::DEFAULT_MARGIN;
 use positioner::DEFAULT_PADDING;
 use renderer::Renderer;
+use taffy::Taffy;
 use text::TextBox;
 use text::TextSystem;
 use utils::{ImageCache, Point, Rect, Size};
@@ -381,6 +382,7 @@ impl Inlyne {
 
                         let cursor_icon = if let Some(hoverable) = Self::find_hoverable(
                             &mut self.renderer.text_system,
+                            &mut self.renderer.positioner.taffy,
                             &self.elements,
                             loc,
                             screen_size,
@@ -469,6 +471,7 @@ impl Inlyne {
                             let screen_size = self.renderer.screen_size();
                             if let Some(hoverable) = Self::find_hoverable(
                                 &mut self.renderer.text_system,
+                                &mut self.renderer.positioner.taffy,
                                 &self.elements,
                                 last_loc,
                                 screen_size,
@@ -685,6 +688,7 @@ impl Inlyne {
 
     fn find_hoverable<'a>(
         text_system: &mut TextSystem,
+        taffy: &mut Taffy,
         elements: &'a [Positioned<Element>],
         loc: Point,
         screen_size: Size,
@@ -718,6 +722,7 @@ impl Inlyne {
                     table
                         .find_hoverable(
                             text_system,
+                            taffy,
                             loc,
                             bounds.pos,
                             screen_pos(screen_size, bounds.pos.0),
@@ -728,7 +733,7 @@ impl Inlyne {
                 Element::Image(image) => Some(Hoverable::Image(image)),
                 Element::Spacer(_) => unreachable!("Spacers are filtered"),
                 Element::Row(row) => {
-                    Self::find_hoverable(text_system, &row.elements, loc, screen_size, zoom)
+                    Self::find_hoverable(text_system, taffy, &row.elements, loc, screen_size, zoom)
                 }
                 Element::Section(section) => {
                     if let Some(ref summary) = *section.summary {
@@ -739,7 +744,14 @@ impl Inlyne {
                         }
                     }
                     if !*section.hidden.borrow() {
-                        Self::find_hoverable(text_system, &section.elements, loc, screen_size, zoom)
+                        Self::find_hoverable(
+                            text_system,
+                            taffy,
+                            &section.elements,
+                            loc,
+                            screen_size,
+                            zoom,
+                        )
                     } else {
                         None
                     }
