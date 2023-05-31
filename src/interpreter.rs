@@ -93,7 +93,6 @@ mod html {
 
     pub enum Element {
         List(List),
-        ListItem,
         Input,
         Table(Table),
         TableRow(Vec<TextBox>),
@@ -148,6 +147,7 @@ struct State {
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
     pending_anchor: Option<String>,
+    pending_list_prefix: Option<String>,
 }
 
 pub struct HtmlInterpreter {
@@ -458,11 +458,35 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
-                            self.state.element_stack.push(html::Element::ListItem);
                             for Attribute { name, value } in tag.attrs {
                                 if name.local == local_name!("id") {
                                     let anchor_name = format!("#{}", value);
                                     self.state.pending_anchor = Some(anchor_name);
+                                }
+                            }
+
+                            // Push a pending list prefix based on the list type
+                            let mut list = None;
+                            for element in self.state.element_stack.iter_mut().rev() {
+                                if let html::Element::List(html_list) = element {
+                                    list = Some(html_list);
+                                }
+                            }
+                            let list = list.expect("List ended unexpectedly");
+                            if self.current_textbox.texts.is_empty() {
+                                if let html::List {
+                                    list_type: html::ListType::Ordered(index),
+                                    ..
+                                } = list
+                                {
+                                    self.state.pending_list_prefix = Some(format!("{}. ", index));
+                                    *index += 1;
+                                } else if let html::List {
+                                    list_type: html::ListType::Unordered,
+                                    ..
+                                } = list
+                                {
+                                    self.state.pending_list_prefix = Some("· ".to_owned());
                                 }
                             }
                         }
@@ -690,7 +714,6 @@ impl TokenSink for HtmlInterpreter {
                             let _ = self.state.pending_anchor.take();
 
                             self.push_current_textbox();
-                            self.state.element_stack.pop();
                         }
                         "input" => {
                             self.push_current_textbox();
@@ -802,44 +825,16 @@ impl TokenSink for HtmlInterpreter {
                         self.hidpi_scale,
                         native_color(self.theme.text_color, &self.surface_format),
                     );
-                    if let Some(html::Element::ListItem) = self.state.element_stack.last() {
-                        let mut list = None;
-                        for element in self.state.element_stack.iter_mut().rev() {
-                            if let html::Element::List(html_list) = element {
-                                list = Some(html_list);
-                            }
-                        }
-                        let list = list.expect("List ended unexpectedly");
-
+                    if let Some(prefix) = self.state.pending_list_prefix.take() {
                         if self.current_textbox.texts.is_empty() {
-                            if let html::List {
-                                list_type: html::ListType::Ordered(index),
-                                ..
-                            } = list
-                            {
-                                self.current_textbox.texts.push(
-                                    Text::new(
-                                        format!("{}. ", index),
-                                        self.hidpi_scale,
-                                        native_color(self.theme.text_color, &self.surface_format),
-                                    )
-                                    .make_bold(true),
-                                );
-                                *index += 1;
-                            } else if let html::List {
-                                list_type: html::ListType::Unordered,
-                                ..
-                            } = list
-                            {
-                                self.current_textbox.texts.push(
-                                    Text::new(
-                                        "· ".to_string(),
-                                        self.hidpi_scale,
-                                        native_color(self.theme.text_color, &self.surface_format),
-                                    )
-                                    .make_bold(true),
+                            self.current_textbox.texts.push(
+                                Text::new(
+                                    prefix,
+                                    self.hidpi_scale,
+                                    native_color(self.theme.text_color, &self.surface_format),
                                 )
-                            }
+                                .make_bold(true),
+                            );
                         }
                     }
                     if self.state.text_options.block_quote >= 1 {
@@ -895,7 +890,9 @@ impl TokenSink for HtmlInterpreter {
                 self.should_queue
                     .store(false, std::sync::atomic::Ordering::Relaxed);
                 self.first_pass = false;
-                self.window.request_redraw();
+                self.event_proxy
+                    .send_event(InlyneEvent::PositionQueue)
+                    .unwrap();
             }
             _ => {}
         }

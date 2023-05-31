@@ -184,7 +184,12 @@ impl TextBox {
 
         if let Some(cursor) = buffer.hit(loc.0 - screen_position.0, loc.1 - screen_position.1) {
             let line = &buffer.lines[cursor.line];
-            let text = &self.texts[line.attrs_list().get_span(cursor.index).metadata];
+            let mut index = cursor.index;
+            if cursor.affinity == Affinity::Before {
+                // FIXME (Can we assume that the glyph is 1 index wide)
+                index -= 1;
+            }
+            let text = &self.texts[line.attrs_list().get_span(index).metadata];
             Some(text)
         } else {
             None

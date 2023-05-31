@@ -142,7 +142,7 @@ impl Renderer {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: caps.present_modes[0],
+            present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -757,24 +757,22 @@ impl Renderer {
                 .map(|c| c.text_area(&text_cache))
                 .collect();
 
-            let result = self.text_system.text_renderer.prepare(
-                &self.device,
-                &self.queue,
-                &mut self.text_system.font_system.lock().unwrap(),
-                &mut self.text_system.text_atlas,
-                Resolution {
-                    width: self.config.width,
-                    height: self.config.height,
-                },
-                &text_areas,
-                &mut self.text_system.swash_cache,
-            );
-            match result {
-                Result::Ok(()) => {}
-                Err(PrepareError::AtlasFull(content_type)) => {
-                    if !self.text_system.text_atlas.grow(&self.device, content_type) {
-                        return Err(anyhow!("Could not grow text atlas"));
-                    }
+            while let Result::Err(PrepareError::AtlasFull(content_type)) =
+                self.text_system.text_renderer.prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.text_system.font_system.lock().unwrap(),
+                    &mut self.text_system.text_atlas,
+                    Resolution {
+                        width: self.config.width,
+                        height: self.config.height,
+                    },
+                    &text_areas,
+                    &mut self.text_system.swash_cache,
+                )
+            {
+                if !self.text_system.text_atlas.grow(&self.device, content_type) {
+                    return Err(anyhow!("Could not grow text atlas"));
                 }
             }
             text_cache.trim();
