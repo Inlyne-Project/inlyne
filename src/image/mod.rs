@@ -1,6 +1,6 @@
+use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
-use crate::InlyneEvent;
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
@@ -12,7 +12,6 @@ use std::time::Instant;
 use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
-use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
 
@@ -166,7 +165,7 @@ impl Image {
         src: String,
         file_path: PathBuf,
         hidpi_scale: f32,
-        event_proxy: EventLoopProxy<InlyneEvent>,
+        image_callback: Box<dyn ImageCallback + Send>,
     ) -> anyhow::Result<Image> {
         let image_data = Arc::new(Mutex::new(None));
         let image_data_clone = image_data.clone();
@@ -218,9 +217,7 @@ impl Image {
             };
 
             *image_data_clone.lock().unwrap() = Some(image);
-            event_proxy
-                .send_event(InlyneEvent::LoadedImage(src, image_data_clone))
-                .unwrap();
+            image_callback.loaded_image(src, image_data_clone);
         });
 
         let image = Image {

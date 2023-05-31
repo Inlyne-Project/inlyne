@@ -1,4 +1,5 @@
 pub mod color;
+mod debug_impls;
 pub mod fonts;
 pub mod image;
 pub mod interpreter;

@@ -1,9 +1,10 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, fmt};
 
 use anyhow::Context;
 use taffy::Taffy;
 
 use crate::{
+    debug_impls,
     text::{TextBox, TextSystem},
     utils::{Align, Point, Rect, Size},
     Element,
@@ -230,10 +231,15 @@ impl Positioner {
     }
 }
 
-#[derive(Debug)]
 pub struct Spacer {
     pub space: f32,
     pub visible: bool,
+}
+
+impl fmt::Debug for Spacer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::spacer(self, f)
+    }
 }
 
 impl Spacer {
