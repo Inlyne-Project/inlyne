@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use anyhow::Context;
+use taffy::Taffy;
 
 use crate::{
-    table::{TABLE_COL_GAP, TABLE_ROW_GAP},
     text::{TextBox, TextSystem},
     utils::{Align, Point, Rect, Size},
     Element,
@@ -44,16 +44,20 @@ pub struct Positioner {
     pub hidpi_scale: f32,
     pub page_width: f32,
     pub anchors: HashMap<String, f32>,
+    pub taffy: Taffy,
 }
 
 impl Positioner {
     pub fn new(screen_size: Size, hidpi_scale: f32, page_width: f32) -> Self {
+        let mut taffy = Taffy::new();
+        taffy.disable_rounding();
         Self {
             reserved_height: DEFAULT_PADDING * hidpi_scale,
             hidpi_scale,
             page_width,
             screen_size,
             anchors: HashMap::new(),
+            taffy,
         }
     }
 
@@ -107,34 +111,18 @@ impl Positioner {
             }
             Element::Table(table) => {
                 let pos = (DEFAULT_MARGIN + centering, self.reserved_height);
-                let width = table
-                    .column_widths(
-                        text_system,
-                        (
-                            self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
-                        zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                let height = table
-                    .row_heights(
-                        text_system,
-                        (
-                            self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
-                            f32::INFINITY,
-                        ),
-                        zoom,
-                    )
-                    .iter()
-                    .fold(0., |acc, x| acc + x);
-                Rect::new(
-                    pos,
+                let layout = table.layout(
+                    text_system,
+                    &mut self.taffy,
                     (
-                        width * (TABLE_COL_GAP * table.headers.len() as f32),
-                        height + (TABLE_ROW_GAP * (table.rows.len() + 1) as f32),
+                        self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
+                        f32::INFINITY,
                     ),
+                    zoom,
+                )?;
+                Rect::new(
+                    (DEFAULT_MARGIN + centering, self.reserved_height),
+                    layout.size,
                 )
             }
             Element::Row(row) => {
