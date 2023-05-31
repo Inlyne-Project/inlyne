@@ -1,0 +1,34 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n- [x] Completed task\n- [ ] Incomplete task\n\n --- html\n\n<ul>\n<li><input type=\"checkbox\" disabled=\"\" checked=\"\" /> Completed task</li>\n<li><input type=\"checkbox\" disabled=\"\" /> Incomplete task</li>\n</ul>\n"
+expression: interpret_md(text)
+---
+[
+    TextBox(
+        TextBox {
+            indent: 50.0,
+            is_checkbox: Some(true),
+            texts: [
+                Text {
+                    text: "Completed task",
+                    default_color: Color(BLACK),
+                },
+            ],
+        },
+    ),
+    TextBox(
+        TextBox {
+            indent: 50.0,
+            is_checkbox: Some(false),
+            texts: [
+                Text {
+                    text: "Incomplete task",
+                    default_color: Color(BLACK),
+                },
+            ],
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]

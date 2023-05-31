@@ -133,4 +133,11 @@ This sentence[^1] has two footnotes[^2]
 [^1]: 1st footnote
 [^2]: 2nd footnote";
 
-snapshot_interpreted_elements!((footnotes_list_prefix, FOOTNOTES_LIST_PREFIX));
+const CHECKLIST_HAS_NO_TEXT_PREFIX: &str = "\
+- [x] Completed task
+- [ ] Incomplete task";
+
+snapshot_interpreted_elements!(
+    (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
+    (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
+);
