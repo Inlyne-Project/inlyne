@@ -10,8 +10,8 @@ use crate::debug_impls;
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
-    cosmic_text::Align as TextAlign, Affinity, Attrs, AttrsList, BufferLine, Color, Cursor,
-    FamilyOwned, FontSystem, Style, SwashCache, TextArea, TextBounds, Weight,
+    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, Style,
+    SwashCache, TextArea, TextBounds, Weight,
 };
 use taffy::{
     prelude::{AvailableSpace, Size as TaffySize},
@@ -174,18 +174,11 @@ impl TextBox {
             sections.clear();
         }
 
-        let align = match self.align {
-            Align::Left => TextAlign::Left,
-            Align::Center => TextAlign::Center,
-            Align::Right => TextAlign::Right,
-        };
-
         Key {
             lines,
             size: self.font_size * self.hidpi_scale * zoom,
             line_height: self.line_height(zoom),
             bounds,
-            align,
         }
     }
 
@@ -274,14 +267,28 @@ impl TextBox {
     ) -> CachedTextArea {
         let cache = text_system.text_cache.borrow_mut();
 
-        let (key, _) = cache.lock().unwrap().allocate(
-            text_system.font_system.lock().unwrap().borrow_mut(),
-            self.key(bounds, zoom),
-        );
+        let (key, max_width) = {
+            let mut cache = cache.lock().unwrap();
+            let (key, paragraph) = cache.allocate(
+                text_system.font_system.lock().unwrap().borrow_mut(),
+                self.key(bounds, zoom),
+            );
+
+            let max_width = paragraph
+                .layout_runs()
+                .fold(0., |max, buffer| buffer.line_w.max(max));
+            (key, max_width)
+        };
+
+        let left = match self.align {
+            Align::Left => screen_position.0,
+            Align::Center => screen_position.0 + (bounds.0 - max_width) / 2.,
+            Align::Right => screen_position.0 + bounds.0 - max_width,
+        };
 
         CachedTextArea {
             key,
-            left: screen_position.0 as i32,
+            left: left as i32,
             top: (screen_position.1 - scroll_y) as i32,
             bounds: TextBounds::default(),
             default_color: Color::rgb(255, 255, 255),
@@ -590,7 +597,6 @@ pub struct Key<'a> {
     size: f32,
     line_height: f32,
     bounds: Size,
-    align: TextAlign,
 }
 
 #[derive(Default)]
@@ -651,8 +657,7 @@ impl TextCache {
                             .metadata(section.index),
                     )
                 }
-                let mut buffer_line = BufferLine::new(line_str, attrs_list);
-                buffer_line.set_align(Some(key.align));
+                let buffer_line = BufferLine::new(line_str, attrs_list);
                 buffer.lines.push(buffer_line);
             }
 

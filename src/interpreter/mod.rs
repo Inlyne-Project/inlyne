@@ -327,8 +327,39 @@ impl TokenSink for HtmlInterpreter {
                             self.current_textbox
                                 .set_quote_block(Some(self.state.text_options.block_quote));
                         }
-                        "th" => self.state.text_options.bold += 1,
-                        "td" => {}
+                        "th" => {
+                            self.state.text_options.bold += 1;
+                            let align = tag
+                                .attrs
+                                .iter()
+                                .find(|attr| attr.name.local == local_name!("align"))
+                                .map(|attr| match attr.value.to_string().as_str() {
+                                    "left" => Some(Align::Left),
+                                    "center" => Some(Align::Center),
+                                    "right" => Some(Align::Right),
+                                    _ => None,
+                                })
+                                .unwrap_or_default();
+                            if let Some(align) = align {
+                                self.current_textbox.set_align(align);
+                            }
+                        }
+                        "td" => {
+                            let align = tag
+                                .attrs
+                                .iter()
+                                .find(|attr| attr.name.local == local_name!("align"))
+                                .map(|attr| match attr.value.to_string().as_str() {
+                                    "left" => Some(Align::Left),
+                                    "center" => Some(Align::Center),
+                                    "right" => Some(Align::Right),
+                                    _ => None,
+                                })
+                                .unwrap_or_default();
+                            if let Some(align) = align {
+                                self.current_textbox.set_align(align);
+                            }
+                        }
                         "table" => {
                             self.push_spacer();
                             self.state
