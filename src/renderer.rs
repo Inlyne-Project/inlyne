@@ -247,8 +247,6 @@ impl Renderer {
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if let Some(bg_color) = text_box.background_color {
                             bg_color
-                        } else if text_box.is_code_block {
-                            native_color(self.theme.code_block_color, &self.surface_format)
                         } else {
                             native_color(self.theme.quote_block_color, &self.surface_format)
                         };
