@@ -29,8 +29,6 @@ text-color = 0x9dacbb
 background-color = 0x1a1d22
 # Inline code text color
 code-color = 0xb38fac
-# Code block background color
-code-block-color = 0x181c21
 # Quote block background color
 quote-block-color = 0x1d2025
 # Hyperlink text color
@@ -55,7 +53,6 @@ code-highlighter = "base16-ocean-dark"
 text-color = 0x000000
 background-color = 0xffffff
 code-color = 0x95114e
-code-block-color = 0xeaedf3
 quote-block-color = 0xeef9fe
 link-color = 0x5466ff
 select-color = 0xcde8f0

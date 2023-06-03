@@ -30,7 +30,7 @@ comrak = { version = "0.18.0", default-features = false, features = ["shortcodes
 open = "4.1.0"
 html5ever = "0.26.0"
 image = "0.24.6"
-clap = { version = "4.2.7", features = ["cargo"] }
+clap = { version = "4.3.1", features = ["cargo"] }
 copypasta = { version = "0.8.2", default-features = false }
 resvg = "0.34.1"
 usvg = "0.34.1"
@@ -44,7 +44,7 @@ memmap2 = "0.6.1"
 log = "0.4.17"
 env_logger = "0.10.0"
 notify = "6.0.0"
-clap_complete = "4.2.1"
+clap_complete = "4.3.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
