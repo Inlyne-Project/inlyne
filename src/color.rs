@@ -36,7 +36,6 @@ pub struct Theme {
     pub text_color: u32,
     pub background_color: u32,
     pub code_color: u32,
-    pub code_block_color: u32,
     pub quote_block_color: u32,
     pub link_color: u32,
     pub select_color: u32,
@@ -50,7 +49,6 @@ impl Theme {
             text_color: 0x9DACBB,
             background_color: 0x1A1D22,
             code_color: 0xB38FAC,
-            code_block_color: 0x181C21,
             quote_block_color: 0x1D2025,
             link_color: 0x4182EB,
             select_color: 0x3675CB,
@@ -64,7 +62,6 @@ impl Theme {
             text_color: 0x000000,
             background_color: 0xFFFFFF,
             code_color: 0x95114E,
-            code_block_color: 0xEAEDF3,
             quote_block_color: 0xEEF9FE,
             link_color: 0x5466FF,
             select_color: 0xCDE8F0,
@@ -81,7 +78,6 @@ impl PartialEq for Theme {
             text_color: self_text_color,
             background_color: self_background_color,
             code_color: self_code_color,
-            code_block_color: self_code_block_color,
             quote_block_color: self_quote_block_color,
             link_color: self_link_color,
             select_color: self_select_color,
@@ -92,7 +88,6 @@ impl PartialEq for Theme {
             text_color: other_text_color,
             background_color: other_background_color,
             code_color: other_code_color,
-            code_block_color: other_code_block_color,
             quote_block_color: other_quote_block_color,
             link_color: other_link_color,
             select_color: other_select_color,
@@ -103,7 +98,6 @@ impl PartialEq for Theme {
         self_text_color == other_text_color
             && self_background_color == other_background_color
             && self_code_color == other_code_color
-            && self_code_block_color == other_code_block_color
             && self_quote_block_color == other_quote_block_color
             && self_link_color == other_link_color
             && self_select_color == other_select_color

@@ -139,9 +139,20 @@ const CHECKLIST_HAS_NO_TEXT_PREFIX: &str = "\
 - [x] Completed task
 - [ ] Incomplete task";
 
+const CODE_BLOCK_BG_COLOR: &str = "\
+```
+Fenced code block with no language tag
+```
+
+```rust
+// Rust code
+fn main() {}
+```";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
+    (code_block_bg_color, CODE_BLOCK_BG_COLOR),
 );
 
 /// Spin up a server, so we can test network requests without external services
