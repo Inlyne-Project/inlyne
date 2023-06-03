@@ -86,7 +86,7 @@ pub enum Hoverable<'a> {
     Summary(&'a Section),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),
@@ -94,6 +94,12 @@ pub enum Element {
     Table(Table),
     Row(Row),
     Section(Section),
+}
+
+impl AsRef<Element> for Element {
+    fn as_ref(&self) -> &Element {
+        self
+    }
 }
 
 impl From<Section> for Element {
@@ -503,8 +509,8 @@ impl Inlyne {
                                 self.renderer.zoom,
                             ) {
                                 if let Hoverable::Summary(summary) = hoverable {
-                                    let mut hidden = summary.hidden.borrow_mut();
-                                    *hidden = !*hidden;
+                                    let hidden = summary.hidden.load(Ordering::Relaxed);
+                                    summary.hidden.store(!hidden, Ordering::Relaxed);
                                     event_loop_proxy
                                         .send_event(InlyneEvent::Reposition)
                                         .unwrap();
@@ -768,7 +774,7 @@ impl Inlyne {
                             }
                         }
                     }
-                    if !*section.hidden.borrow() {
+                    if !section.hidden.load(Ordering::Relaxed) {
                         Self::find_hoverable(
                             text_system,
                             taffy,

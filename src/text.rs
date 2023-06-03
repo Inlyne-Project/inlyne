@@ -50,7 +50,14 @@ impl Measurable for TextBoxMeasure {
         };
         let width_bound = known_dimensions.width.unwrap_or(available_width);
 
-        let size = self.internal_measure((width_bound, f32::MAX));
+        let available_height = match available_space.height {
+            AvailableSpace::Definite(space) => space,
+            AvailableSpace::MinContent => 0.0,
+            AvailableSpace::MaxContent => f32::MAX,
+        };
+        let height_bound = known_dimensions.height.unwrap_or(available_height);
+
+        let size = self.internal_measure((width_bound, height_bound));
         TaffySize {
             width: known_dimensions.width.unwrap_or(size.0),
             height: known_dimensions.height.unwrap_or(size.1),

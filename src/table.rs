@@ -1,20 +1,67 @@
 use crate::{
-    text::{Text, TextBox, TextBoxMeasure, TextSystem},
+    positioner::Positioned,
+    text::{Text, TextBoxMeasure, TextCache, TextSystem},
     utils::{default, Point, Rect, Size},
+    Element,
 };
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use glyphon::FontSystem;
 use taffy::{
     prelude::{
         auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
     },
     style::JustifyContent,
-    tree::MeasureFunc,
+    tree::{Measurable, MeasureFunc},
 };
 
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
+
+pub struct TableMeasure {
+    pub table: Arc<Table>,
+    pub text_cache: Arc<Mutex<TextCache>>,
+    pub font_system: Arc<Mutex<FontSystem>>,
+    pub zoom: f32,
+}
+
+impl Measurable for TableMeasure {
+    fn measure(
+        &self,
+        known_dimensions: TaffySize<Option<f32>>,
+        available_space: TaffySize<taffy::style::AvailableSpace>,
+    ) -> TaffySize<f32> {
+        let available_width = match available_space.width {
+            AvailableSpace::Definite(space) => space,
+            AvailableSpace::MinContent => 0.0,
+            AvailableSpace::MaxContent => f32::MAX,
+        };
+        let width_bound = known_dimensions.width.unwrap_or(available_width);
+        let available_height = match available_space.height {
+            AvailableSpace::Definite(space) => space,
+            AvailableSpace::MinContent => 0.0,
+            AvailableSpace::MaxContent => f32::MAX,
+        };
+        let height_bound = known_dimensions.height.unwrap_or(available_height);
+
+        let size = self
+            .table
+            .layout_internal(
+                self.text_cache.clone(),
+                self.font_system.clone(),
+                &mut Taffy::new(),
+                (width_bound, height_bound),
+                self.zoom,
+            )
+            .unwrap()
+            .size;
+        TaffySize {
+            width: known_dimensions.width.unwrap_or(size.0),
+            height: known_dimensions.height.unwrap_or(size.1),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct TableLayout {
@@ -23,10 +70,10 @@ pub struct TableLayout {
     pub size: Size,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Table {
-    pub headers: Vec<TextBox>,
-    pub rows: Vec<Vec<TextBox>>,
+    pub headers: Vec<Positioned<Element>>,
+    pub rows: Vec<Vec<Positioned<Element>>>,
 }
 
 impl Table {
@@ -51,13 +98,29 @@ impl Table {
             )
             .contains(loc)
             {
-                return header.find_hoverable(
-                    text_system,
-                    loc,
-                    (pos.0 + layout.location.x, pos.1 + layout.location.y),
-                    (layout.size.width, layout.size.height),
-                    zoom,
-                );
+                let layout_bounds = Rect {
+                    pos: (pos.0 + layout.location.x, pos.1 + layout.location.y),
+                    size: (layout.size.width, layout.size.height),
+                };
+                let hoverable = match &header.inner {
+                    Element::TextBox(textbox) => textbox.find_hoverable(
+                        text_system,
+                        loc,
+                        layout_bounds.pos,
+                        layout_bounds.size,
+                        zoom,
+                    ),
+                    Element::Table(table) => table.find_hoverable(
+                        text_system,
+                        taffy,
+                        loc,
+                        layout_bounds.pos,
+                        layout_bounds.size,
+                        zoom,
+                    ),
+                    _ => None,
+                };
+                return hoverable;
             }
         }
         for (row, row_layout) in self.rows.iter().zip(table_layout.rows.iter()) {
@@ -68,13 +131,29 @@ impl Table {
                 )
                 .contains(loc)
                 {
-                    return item.find_hoverable(
-                        text_system,
-                        loc,
-                        (pos.0 + layout.location.x, pos.1 + layout.location.y),
-                        (layout.size.width, layout.size.height),
-                        zoom,
-                    );
+                    let layout_bounds = Rect {
+                        pos: (pos.0 + layout.location.x, pos.1 + layout.location.y),
+                        size: (layout.size.width, layout.size.height),
+                    };
+                    let hoverable = match &item.inner {
+                        Element::TextBox(textbox) => textbox.find_hoverable(
+                            text_system,
+                            loc,
+                            layout_bounds.pos,
+                            layout_bounds.size,
+                            zoom,
+                        ),
+                        Element::Table(table) => table.find_hoverable(
+                            text_system,
+                            taffy,
+                            loc,
+                            layout_bounds.pos,
+                            layout_bounds.size,
+                            zoom,
+                        ),
+                        _ => None,
+                    };
+                    return hoverable;
                 }
             }
         }
@@ -84,6 +163,23 @@ impl Table {
     pub fn layout(
         &self,
         text_system: &mut TextSystem,
+        taffy: &mut Taffy,
+        bounds: Size,
+        zoom: f32,
+    ) -> anyhow::Result<TableLayout> {
+        self.layout_internal(
+            text_system.text_cache.clone(),
+            text_system.font_system.clone(),
+            taffy,
+            bounds,
+            zoom,
+        )
+    }
+
+    pub fn layout_internal(
+        &self,
+        text_cache: Arc<Mutex<TextCache>>,
+        font_system: Arc<Mutex<FontSystem>>,
         taffy: &mut Taffy,
         bounds: Size,
         zoom: f32,
@@ -118,39 +214,112 @@ impl Table {
         let mut node_row = Vec::new();
         // Define the child nodes
         for (x, header) in self.headers.iter().enumerate() {
-            node_row.push(taffy.new_leaf_with_measure(
-                Style {
-                    grid_row: line(1),
-                    grid_column: line(x as i16 + 1),
-                    ..default()
-                },
-                MeasureFunc::Boxed(Box::new(TextBoxMeasure {
-                    font_system: text_system.font_system.clone(),
-                    text_cache: text_system.text_cache.clone(),
-                    textbox: Arc::new(header.clone()),
+            let measure: Box<dyn Measurable> = match &header.inner {
+                Element::TextBox(textbox) => Box::new(TextBoxMeasure {
+                    font_system: font_system.clone(),
+                    text_cache: text_cache.clone(),
+                    textbox: Arc::new(textbox.clone()),
                     zoom,
-                })),
-            )?);
+                }),
+                Element::Table(table) => Box::new(TableMeasure {
+                    table: Arc::new(table.clone()),
+                    font_system: font_system.clone(),
+                    text_cache: text_cache.clone(),
+                    zoom,
+                }),
+                _ => unimplemented!(),
+            };
+            if let Element::Table(_) = header.inner {
+                let table = taffy.new_leaf_with_measure(
+                    Style {
+                        display: Display::Grid,
+                        gap: TaffySize {
+                            width: length(TABLE_COL_GAP),
+                            height: length(TABLE_ROW_GAP),
+                        },
+                        grid_template_columns: vec![auto(); max_columns],
+                        grid_row: line(1),
+                        grid_column: line(x as i16 + 1),
+                        ..default()
+                    },
+                    MeasureFunc::Boxed(measure),
+                )?;
+                let flex_table = taffy.new_with_children(
+                    Style {
+                        display: Display::Flex,
+                        justify_content: Some(JustifyContent::Start),
+                        grid_row: line(1),
+                        grid_column: line(x as i16 + 1),
+                        ..Default::default()
+                    },
+                    &[table],
+                )?;
+                node_row.push(flex_table);
+            } else {
+                node_row.push(taffy.new_leaf_with_measure(
+                    Style {
+                        grid_row: line(1),
+                        grid_column: line(x as i16 + 1),
+                        ..default()
+                    },
+                    MeasureFunc::Boxed(measure),
+                )?);
+            }
         }
         nodes.push(node_row.clone());
         node_row.clear();
 
         for (y, row) in self.rows.iter().enumerate() {
             for (x, item) in row.iter().enumerate() {
-                let item = item.clone();
-                node_row.push(taffy.new_leaf_with_measure(
-                    Style {
-                        grid_row: line(1 + y as i16 + 1),
-                        grid_column: line(x as i16 + 1),
-                        ..default()
-                    },
-                    MeasureFunc::Boxed(Box::new(TextBoxMeasure {
-                        font_system: text_system.font_system.clone(),
-                        text_cache: text_system.text_cache.clone(),
-                        textbox: Arc::new(item.clone()),
+                let measure: Box<dyn Measurable> = match &item.inner {
+                    Element::TextBox(textbox) => Box::new(TextBoxMeasure {
+                        font_system: font_system.clone(),
+                        text_cache: text_cache.clone(),
+                        textbox: Arc::new(textbox.clone()),
                         zoom,
-                    })),
-                )?);
+                    }),
+                    Element::Table(table) => Box::new(TableMeasure {
+                        table: Arc::new(table.clone()),
+                        font_system: font_system.clone(),
+                        text_cache: text_cache.clone(),
+                        zoom,
+                    }),
+                    e => unimplemented!("{:?}", e),
+                };
+                if let Element::Table(_) = item.inner {
+                    let table = taffy.new_leaf_with_measure(
+                        Style {
+                            display: Display::Grid,
+                            gap: TaffySize {
+                                width: length(TABLE_COL_GAP),
+                                height: length(TABLE_ROW_GAP),
+                            },
+                            grid_template_columns: vec![auto(); max_columns],
+                            ..default()
+                        },
+                        MeasureFunc::Boxed(measure),
+                    )?;
+                    let flex_table = taffy.new_with_children(
+                        Style {
+                            display: Display::Flex,
+                            justify_content: Some(JustifyContent::Start),
+                            grid_row: line(1 + y as i16 + (!self.headers.is_empty()) as i16),
+                            grid_column: line(x as i16 + 1),
+                            ..Default::default()
+                        },
+                        &[table],
+                    )?;
+                    node_row.push(flex_table);
+                } else {
+                    node_row.push(taffy.new_leaf_with_measure(
+                        Style {
+                            grid_row: line(1 + y as i16 + (!self.headers.is_empty()) as i16),
+                            grid_column: line(x as i16 + 1),
+                            ..default()
+                        },
+                        MeasureFunc::Boxed(measure),
+                    )?);
+                }
             }
             nodes.push(node_row.clone());
             node_row.clear();
@@ -192,11 +361,11 @@ impl Table {
         })
     }
 
-    pub fn push_header(&mut self, header: TextBox) {
-        self.headers.push(header);
+    pub fn push_header(&mut self, header: Element) {
+        self.headers.push(Positioned::new(header));
     }
 
-    pub fn push_row(&mut self, row: Vec<TextBox>) {
+    pub fn push_row(&mut self, row: Vec<Positioned<Element>>) {
         self.rows.push(row);
     }
 }

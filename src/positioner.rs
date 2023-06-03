@@ -1,4 +1,11 @@
-use std::{cell::RefCell, collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use anyhow::Context;
 use taffy::Taffy;
@@ -13,7 +20,7 @@ use crate::{
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Positioned<T> {
     pub inner: T,
     pub bounds: Option<Rect>,
@@ -194,7 +201,7 @@ impl Positioner {
                         .size;
                     self.reserved_height +=
                         element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
-                    if !*section.hidden.borrow() {
+                    if !section.hidden.load(Ordering::Relaxed) {
                         section_bounds.size.1 +=
                             element_size.1 + DEFAULT_PADDING * self.hidpi_scale * zoom;
                         section_bounds.size.0 = section_bounds.size.0.max(element_size.0)
@@ -231,6 +238,7 @@ impl Positioner {
     }
 }
 
+#[derive(Clone)]
 pub struct Spacer {
     pub space: f32,
     pub visible: bool,
@@ -248,7 +256,7 @@ impl Spacer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Row {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
@@ -263,11 +271,11 @@ impl Row {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Section {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
-    pub hidden: RefCell<bool>,
+    pub hidden: Arc<AtomicBool>,
     pub summary: Box<Option<Positioned<Element>>>,
 }
 
@@ -280,7 +288,7 @@ impl Section {
         Self {
             elements,
             hidpi_scale,
-            hidden: RefCell::new(false),
+            hidden: Arc::new(AtomicBool::new(false)),
             summary: Box::new(summary.map(Positioned::new)),
         }
     }

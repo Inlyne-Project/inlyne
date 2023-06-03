@@ -15,6 +15,7 @@ use lyon::geom::Box2D;
 use lyon::path::Polygon;
 use lyon::tessellation::*;
 use std::borrow::Cow;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
@@ -204,9 +205,9 @@ impl Renderer {
         Ok(())
     }
 
-    fn render_elements(
+    fn render_elements<T: AsRef<Element>>(
         &mut self,
-        elements: &[Positioned<Element>],
+        elements: &[Positioned<T>],
     ) -> anyhow::Result<Vec<CachedTextArea>> {
         let mut text_areas: Vec<CachedTextArea> = Vec::new();
         let screen_size = self.screen_size();
@@ -223,7 +224,7 @@ impl Renderer {
 
             let centering = (screen_size.0 - self.page_width).max(0.) / 2.;
 
-            match &element.inner {
+            match &element.inner.as_ref() {
                 Element::TextBox(text_box) => {
                     let box_size = text_box.font_size * self.hidpi_scale * self.zoom * 0.75;
 
@@ -240,7 +241,7 @@ impl Renderer {
                     text_areas.push(text_box.text_areas(
                         &mut self.text_system,
                         pos,
-                        bounds,
+                        *size,
                         self.zoom,
                         self.scroll_y,
                     ));
@@ -368,96 +369,55 @@ impl Renderer {
                     )?;
 
                     for (col, node) in layout.headers.iter().enumerate() {
-                        if let Some(text_box) = table.headers.get(col) {
-                            text_areas.push(text_box.text_areas(
-                                &mut self.text_system,
-                                (pos.0 + node.location.x, pos.1 + node.location.y),
-                                (node.size.width, f32::MAX),
-                                self.zoom,
-                                self.scroll_y,
-                            ));
-                            if let Some(selection) = self.selection {
-                                let (selection_rects, selection_text) = text_box.render_selection(
-                                    &mut self.text_system,
-                                    (pos.0 + node.location.x, pos.1 + node.location.y),
-                                    (node.size.width, node.size.height),
-                                    self.zoom,
-                                    selection,
-                                );
-                                self.selection_text.push_str(&selection_text);
-                                self.selection_text.push('\n');
-                                for rect in selection_rects {
-                                    self.draw_rectangle(
-                                        Rect::from_min_max(
-                                            (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                            (rect.max().0, rect.max().1 - self.scroll_y),
-                                        ),
-                                        native_color(self.theme.select_color, &self.surface_format),
-                                    )?;
-                                }
-                            }
+                        if let Some(element) = table.headers.get(col) {
+                            let mut element: Positioned<&Element> = Positioned::new(&element.inner);
+                            element.bounds = Some(Rect {
+                                pos: (pos.0 + node.location.x, pos.1 + node.location.y),
+                                size: (node.size.width, node.size.height),
+                            });
+                            text_areas
+                                .append(&mut self.render_elements(std::slice::from_ref(&element))?);
                         }
                     }
-                    let last_header_node = layout.headers.last().unwrap();
-                    let y = last_header_node.location.y
-                        + last_header_node.size.height
-                        + TABLE_ROW_GAP / 2.;
-                    let x = layout
-                        .headers
-                        .last()
-                        .map(|f| f.location.x + f.size.width)
-                        .unwrap_or(0.);
-                    {
-                        let min = (
-                            scrolled_pos.0.max(DEFAULT_MARGIN + centering),
-                            scrolled_pos.1 + y,
-                        );
-                        let max = (
-                            (scrolled_pos.0 + x),
-                            scrolled_pos.1 + y + 2. * self.hidpi_scale * self.zoom,
-                        );
-                        self.draw_rectangle(
-                            Rect::from_min_max(min, max),
-                            native_color(self.theme.text_color, &self.surface_format),
-                        )?;
+                    if let Some(last_header_node) = layout.headers.last() {
+                        let y = last_header_node.location.y
+                            + last_header_node.size.height
+                            + TABLE_ROW_GAP / 2.;
+                        let x = layout
+                            .headers
+                            .last()
+                            .map(|f| f.location.x + f.size.width)
+                            .unwrap_or(0.);
+                        {
+                            let min = (
+                                scrolled_pos.0.max(DEFAULT_MARGIN + centering),
+                                scrolled_pos.1 + y,
+                            );
+                            let max = (
+                                (scrolled_pos.0 + x),
+                                scrolled_pos.1 + y + 2. * self.hidpi_scale * self.zoom,
+                            );
+                            self.draw_rectangle(
+                                Rect::from_min_max(min, max),
+                                native_color(self.theme.text_color, &self.surface_format),
+                            )?;
+                        }
                     }
 
                     for (row, node_row) in layout.rows.iter().enumerate() {
                         for (col, node) in node_row.iter().enumerate() {
                             if let Some(row) = table.rows.get(row) {
-                                if let Some(text_box) = row.get(col) {
-                                    text_areas.push(text_box.text_areas(
-                                        &mut self.text_system,
-                                        (pos.0 + node.location.x, pos.1 + node.location.y),
-                                        (node.size.width, f32::MAX),
-                                        self.zoom,
-                                        self.scroll_y,
-                                    ));
-
-                                    if let Some(selection) = self.selection {
-                                        let (selection_rects, selection_text) = text_box
-                                            .render_selection(
-                                                &mut self.text_system,
-                                                (pos.0 + node.location.x, pos.1 + node.location.y),
-                                                (node.size.width, node.size.height),
-                                                self.zoom,
-                                                selection,
-                                            );
-                                        self.selection_text.push_str(&selection_text);
-                                        self.selection_text.push('\n');
-                                        for rect in selection_rects {
-                                            self.draw_rectangle(
-                                                Rect::from_min_max(
-                                                    (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                                    (rect.max().0, rect.max().1 - self.scroll_y),
-                                                ),
-                                                native_color(
-                                                    self.theme.select_color,
-                                                    &self.surface_format,
-                                                ),
-                                            )?;
-                                        }
-                                    }
+                                if let Some(element) = row.get(col) {
+                                    let mut element: Positioned<&Element> =
+                                        Positioned::new(&element.inner);
+                                    element.bounds = Some(Rect {
+                                        pos: (pos.0 + node.location.x, pos.1 + node.location.y),
+                                        size: (node.size.width, node.size.height),
+                                    });
+                                    text_areas.append(
+                                        &mut self
+                                            .render_elements(std::slice::from_ref(&element))?,
+                                    )
                                 }
                             }
                         }
@@ -515,11 +475,11 @@ impl Renderer {
                             ),
                             10.,
                             native_color(self.theme.text_color, &self.surface_format),
-                            *section.hidden.borrow(),
+                            section.hidden.load(Ordering::Relaxed),
                         )?;
                         text_areas.append(&mut self.render_elements(std::slice::from_ref(summary))?)
                     }
-                    if !*section.hidden.borrow() {
+                    if !section.hidden.load(Ordering::Relaxed) {
                         text_areas.append(&mut self.render_elements(&section.elements)?)
                     }
                 }
@@ -681,7 +641,7 @@ impl Renderer {
                     }
                 }
                 Element::Section(ref mut section) => {
-                    if *section.hidden.borrow() {
+                    if section.hidden.load(Ordering::Relaxed) {
                         continue;
                     }
                     for element in section.elements.iter_mut() {

@@ -34,6 +34,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -86,6 +87,8 @@ struct State {
     inline_images: Option<(Row, usize)>,
     pending_anchor: Option<String>,
     pending_list_prefix: Option<String>,
+    table_header: usize,
+    table_item: usize,
 }
 
 // Images are loaded in a separate thread and use a callback to indicate when they're finished
@@ -297,7 +300,33 @@ impl HtmlInterpreter {
         self.push_element(Spacer::new(5., false));
     }
     fn push_element<I: Into<Element>>(&mut self, element: I) {
-        self.element_queue.lock().unwrap().push_back(element.into());
+        let element = element.into();
+        let mut table = None;
+        for element in self.state.element_stack.iter_mut().rev() {
+            if let html::Element::Table(ref mut html_table) = element {
+                table = Some(html_table);
+                break;
+            }
+        }
+        if let Some(table) = table {
+            match element {
+                Element::Table(_) => {
+                    if self.state.table_header > 0 {
+                        table.push_header(element);
+                        return;
+                    } else if self.state.table_item > 0 {
+                        if let Some(html::Element::TableRow(row)) =
+                            self.state.element_stack.last_mut()
+                        {
+                            row.push(Positioned::new(element));
+                            return;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.element_queue.lock().unwrap().push_back(element);
         if self.first_pass {
             self.window.request_redraw()
         }
@@ -329,6 +358,7 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "th" => {
                             self.state.text_options.bold += 1;
+                            self.state.table_header += 1;
                             let align = tag
                                 .attrs
                                 .iter()
@@ -345,6 +375,7 @@ impl TokenSink for HtmlInterpreter {
                             }
                         }
                         "td" => {
+                            self.state.table_item += 1;
                             let align = tag
                                 .attrs
                                 .iter()
@@ -655,7 +686,7 @@ impl TokenSink for HtmlInterpreter {
                             self.push_current_textbox();
                             self.push_spacer();
                             let section = Section::new(None, vec![], self.hidpi_scale);
-                            *section.hidden.borrow_mut() = true;
+                            section.hidden.store(true, Ordering::Relaxed);
                             self.state
                                 .element_stack
                                 .push(html::Element::Details(section));
@@ -681,16 +712,26 @@ impl TokenSink for HtmlInterpreter {
                                     break;
                                 }
                             }
-                            table.unwrap().push_header(self.current_textbox.clone());
+                            if !self.current_textbox.texts.is_empty() {
+                                table
+                                    .unwrap()
+                                    .push_header(Element::TextBox(self.current_textbox.clone()));
+                            }
                             self.current_textbox.texts.clear();
                             self.state.text_options.bold -= 1;
+                            self.state.table_header -= 1;
                         }
                         "td" => {
                             let table_row = self.state.element_stack.last_mut();
                             if let Some(html::Element::TableRow(ref mut row)) = table_row {
-                                row.push(self.current_textbox.clone());
+                                if !self.current_textbox.texts.is_empty() {
+                                    row.push(Positioned::new(Element::TextBox(
+                                        self.current_textbox.clone(),
+                                    )));
+                                }
                             }
                             self.current_textbox.texts.clear();
+                            self.state.table_item -= 1;
                         }
                         "tr" => {
                             let table_row = self.state.element_stack.pop();

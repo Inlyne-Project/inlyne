@@ -1,4 +1,8 @@
-use crate::{positioner::Section, table::Table, text::TextBox, utils::Align};
+use crate::{
+    positioner::{Positioned, Section},
+    table::Table,
+    utils::Align,
+};
 
 pub enum HeaderType {
     H1,
@@ -55,7 +59,7 @@ pub enum Element {
     List(List),
     Input,
     Table(Table),
-    TableRow(Vec<TextBox>),
+    TableRow(Vec<Positioned<crate::Element>>),
     Header(Header),
     Paragraph(Option<Align>),
     Div(Option<Align>),

@@ -86,7 +86,7 @@ impl ImageData {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Image {
     pub image_data: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,
