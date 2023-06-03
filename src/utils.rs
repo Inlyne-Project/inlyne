@@ -62,6 +62,19 @@ pub enum Align {
     Right,
 }
 
+impl Align {
+    pub fn new(s: &str) -> Option<Self> {
+        let align = match s {
+            "left" => Self::Left,
+            "center" => Self::Center,
+            "right" => Self::Right,
+            _ => return None,
+        };
+
+        Some(align)
+    }
+}
+
 #[derive(Default)]
 pub struct HoverInfo {
     pub cursor_icon: CursorIcon,

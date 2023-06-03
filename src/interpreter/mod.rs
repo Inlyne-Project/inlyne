@@ -333,12 +333,7 @@ impl TokenSink for HtmlInterpreter {
                                 .attrs
                                 .iter()
                                 .find(|attr| attr.name.local == local_name!("align"))
-                                .map(|attr| match attr.value.to_string().as_str() {
-                                    "left" => Some(Align::Left),
-                                    "center" => Some(Align::Center),
-                                    "right" => Some(Align::Right),
-                                    _ => None,
-                                })
+                                .map(|attr| Align::new(&attr.value))
                                 .unwrap_or_default();
                             if let Some(align) = align {
                                 self.current_textbox.set_align(align);
@@ -349,12 +344,7 @@ impl TokenSink for HtmlInterpreter {
                                 .attrs
                                 .iter()
                                 .find(|attr| attr.name.local == local_name!("align"))
-                                .map(|attr| match attr.value.to_string().as_str() {
-                                    "left" => Some(Align::Left),
-                                    "center" => Some(Align::Center),
-                                    "right" => Some(Align::Right),
-                                    _ => None,
-                                })
+                                .map(|attr| Align::new(&attr.value))
                                 .unwrap_or_default();
                             if let Some(align) = align {
                                 self.current_textbox.set_align(align);
@@ -386,11 +376,7 @@ impl TokenSink for HtmlInterpreter {
                             let mut size = None;
                             for attr in &tag.attrs {
                                 match attr.name.local {
-                                    local_name!("align") => match attr.value.to_string().as_str() {
-                                        "center" => align = Some(Align::Center),
-                                        "left" => align = Some(Align::Left),
-                                        _ => {}
-                                    },
+                                    local_name!("align") => align = Align::new(&attr.value),
                                     local_name!("width") => {
                                         if let Ok(px_width) = attr.value.parse::<u32>() {
                                             size = Some(ImageSize::PxWidth(px_width));
@@ -471,12 +457,7 @@ impl TokenSink for HtmlInterpreter {
                                 if attr.name.local == local_name!("align")
                                     || attr.name.local == *"text-align"
                                 {
-                                    match attr.value.to_string().as_str() {
-                                        "left" => align = Some(Align::Left),
-                                        "center" => align = Some(Align::Center),
-                                        "right" => align = Some(Align::Right),
-                                        _ => {}
-                                    }
+                                    align = Align::new(&attr.value);
                                 }
                             }
                             if let Some(align) = align.or_else(|| self.find_current_align()) {
@@ -555,23 +536,10 @@ impl TokenSink for HtmlInterpreter {
                                 if attr.name.local == local_name!("align")
                                     || attr.name.local == *"text-align"
                                 {
-                                    match attr.value.to_string().as_str() {
-                                        "left" => align = Some(Align::Left),
-                                        "center" => align = Some(Align::Center),
-                                        "right" => align = Some(Align::Right),
-                                        _ => {}
-                                    }
+                                    align = Align::new(&attr.value);
                                 }
                             }
-                            let header_type = match tag_name.as_str() {
-                                "h1" => html::HeaderType::H1,
-                                "h2" => html::HeaderType::H2,
-                                "h3" => html::HeaderType::H3,
-                                "h4" => html::HeaderType::H4,
-                                "h5" => html::HeaderType::H5,
-                                "h6" => html::HeaderType::H6,
-                                _ => unreachable!(),
-                            };
+                            let header_type = html::HeaderType::new(&tag_name).unwrap();
                             self.push_current_textbox();
                             self.push_spacer();
                             if let html::HeaderType::H1 = header_type {

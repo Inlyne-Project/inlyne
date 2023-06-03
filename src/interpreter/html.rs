@@ -10,6 +10,20 @@ pub enum HeaderType {
 }
 
 impl HeaderType {
+    pub fn new(s: &str) -> Option<Self> {
+        let header_type = match s {
+            "h1" => Self::H1,
+            "h2" => Self::H2,
+            "h3" => Self::H3,
+            "h4" => Self::H4,
+            "h5" => Self::H5,
+            "h6" => Self::H6,
+            _ => return None,
+        };
+
+        Some(header_type)
+    }
+
     pub fn text_size(&self) -> f32 {
         match &self {
             Self::H1 => 32.,
