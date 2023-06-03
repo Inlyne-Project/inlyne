@@ -7,6 +7,7 @@ use std::fmt;
 use crate::{
     positioner::Spacer,
     text::{Text, TextBox},
+    Image,
 };
 
 use glyphon::FamilyOwned;
@@ -46,6 +47,20 @@ fn debug_inline_some<T: fmt::Debug>(
 ) {
     if maybe_t.is_some() {
         debug.field(name, &DebugInline(maybe_t));
+    }
+}
+
+struct DebugBytesPrefix<'a>(&'a [u8]);
+
+impl<'a> fmt::Debug for DebugBytesPrefix<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            [x, y, z, _, ..] => {
+                let len = self.0.len();
+                f.write_fmt(format_args!("{{ len: {len}, data: [{x}, {y}, {z}, ..] }}"))
+            }
+            three_or_less => f.write_fmt(format_args!("{three_or_less:?}")),
+        }
     }
 }
 
@@ -200,4 +215,37 @@ pub fn spacer(spacer: &Spacer, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     } else {
         f.write_fmt(format_args!("InvisibleSpacer({space})"))
     }
+}
+
+pub fn image(image: &Image, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let Image {
+        image_data,
+        is_aligned,
+        size,
+        bind_group: _,
+        is_link,
+        hidpi_scale: _,
+    } = image;
+
+    let mut debug = f.debug_struct("Image");
+
+    debug.field("image_data", image_data);
+    debug_inline_some(&mut debug, "is_aligned", is_aligned);
+    debug_inline_some(&mut debug, "size", size);
+    debug_inline_some(&mut debug, "is_link", is_link);
+
+    debug.finish_non_exhaustive()
+}
+
+pub fn image_data(
+    (lz4_blob, scale, dimensions): (&[u8], &bool, &(u32, u32)),
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    let mut debug = f.debug_struct("ImageData");
+
+    debug.field("lz4_blob", &DebugBytesPrefix(lz4_blob));
+    debug.field("scale", scale);
+    debug.field("dimensions", &DebugInline(dimensions));
+
+    debug.finish()
 }
