@@ -17,14 +17,12 @@ use crate::utils::{markdown_to_html, Align};
 use crate::Element;
 
 use glyphon::FamilyOwned;
-use html5ever::local_name;
 use html5ever::tendril::*;
 use html5ever::tokenizer::BufferQueue;
 use html5ever::tokenizer::TagKind;
 use html5ever::tokenizer::TagToken;
 use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
 use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
-use html5ever::Attribute;
 use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
@@ -42,37 +40,7 @@ mod html;
 #[cfg(test)]
 mod tests;
 
-#[derive(Default, PartialEq, Eq)]
-enum FontWeight {
-    #[default]
-    Normal,
-    Bold,
-}
-
-impl FontWeight {
-    fn new(s: &str) -> Self {
-        match s {
-            "bold" => Self::Bold,
-            _ => Self::default(),
-        }
-    }
-}
-
-#[derive(Default, PartialEq, Eq)]
-enum FontStyle {
-    #[default]
-    Normal,
-    Italic,
-}
-
-impl FontStyle {
-    fn new(s: &str) -> Self {
-        match s {
-            "italic" => Self::Italic,
-            _ => Self::default(),
-        }
-    }
-}
+use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter};
 
 #[derive(Default)]
 struct State {
@@ -329,24 +297,12 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "th" => {
                             self.state.text_options.bold += 1;
-                            let align = tag
-                                .attrs
-                                .iter()
-                                .find(|attr| attr.name.local == local_name!("align"))
-                                .map(|attr| Align::new(&attr.value))
-                                .unwrap_or_default();
-                            if let Some(align) = align {
+                            if let Some(align) = html::find_align(&tag.attrs) {
                                 self.current_textbox.set_align(align);
                             }
                         }
                         "td" => {
-                            let align = tag
-                                .attrs
-                                .iter()
-                                .find(|attr| attr.name.local == local_name!("align"))
-                                .map(|attr| Align::new(&attr.value))
-                                .unwrap_or_default();
-                            if let Some(align) = align {
+                            if let Some(align) = html::find_align(&tag.attrs) {
                                 self.current_textbox.set_align(align);
                             }
                         }
@@ -357,13 +313,11 @@ impl TokenSink for HtmlInterpreter {
                                 .push(html::Element::Table(Table::new()));
                         }
                         "a" => {
-                            for Attribute { name, value } in tag.attrs {
-                                if name.local == local_name!("href") {
-                                    self.state.text_options.link.push(value.to_string());
-                                }
-                                if name.local == local_name!("id") {
-                                    let anchor_name = format!("#{}", value);
-                                    self.current_textbox.set_anchor(Some(anchor_name));
+                            for attr in AttrIter::new(&tag.attrs) {
+                                match attr {
+                                    Attr::Href(link) => self.state.text_options.link.push(link),
+                                    Attr::Anchor(a) => self.current_textbox.set_anchor(Some(a)),
+                                    _ => {}
                                 }
                             }
                         }
@@ -374,72 +328,60 @@ impl TokenSink for HtmlInterpreter {
                         "img" => {
                             let mut align = None;
                             let mut size = None;
-                            for attr in &tag.attrs {
-                                match attr.name.local {
-                                    local_name!("align") => align = Align::new(&attr.value),
-                                    local_name!("width") => {
-                                        if let Ok(px_width) = attr.value.parse::<u32>() {
-                                            size = Some(ImageSize::PxWidth(px_width));
-                                        }
-                                    }
-                                    local_name!("height") => {
-                                        if let Ok(px_height) = attr.value.parse::<u32>() {
-                                            size = Some(ImageSize::PxHeight(px_height));
-                                        }
-                                    }
+                            let mut src = None;
+                            for attr in AttrIter::new(&tag.attrs) {
+                                match attr {
+                                    Attr::Align(a) => align = Some(a),
+                                    Attr::Width(w) => size = Some(ImageSize::PxWidth(w)),
+                                    Attr::Height(h) => size = Some(ImageSize::PxHeight(h)),
+                                    Attr::Src(s) => src = Some(s),
                                     _ => {}
                                 }
                             }
                             align = align.or_else(|| self.find_current_align());
-                            for attr in tag.attrs {
-                                if attr.name.local == local_name!("src") {
-                                    let align = align.as_ref().unwrap_or(&Align::Left);
-                                    let src = attr.value.to_string();
-                                    let is_url =
-                                        src.starts_with("http://") || src.starts_with("https://");
-                                    let mut image = match self.image_cache.lock().unwrap().get(&src)
-                                    {
-                                        Some(image_data) if is_url => Image::from_image_data(
-                                            image_data.clone(),
-                                            self.hidpi_scale,
-                                        )
-                                        .with_align(*align),
-                                        _ => Image::from_src(
-                                            src.clone(),
-                                            self.file_path.clone(),
-                                            self.hidpi_scale,
-                                            self.window.image_callback(),
-                                        )
-                                        .unwrap()
-                                        .with_align(*align),
-                                    };
-
-                                    if let Some(link) = self.state.text_options.link.last() {
-                                        image.set_link((*link).clone())
+                            if let Some(src) = src {
+                                let align = align.as_ref().unwrap_or(&Align::Left);
+                                let is_url =
+                                    src.starts_with("http://") || src.starts_with("https://");
+                                let mut image = match self.image_cache.lock().unwrap().get(&src) {
+                                    Some(image_data) if is_url => {
+                                        Image::from_image_data(image_data.clone(), self.hidpi_scale)
+                                            .with_align(*align)
                                     }
-                                    if let Some(size) = size {
-                                        image = image.with_size(size);
-                                    }
+                                    _ => Image::from_src(
+                                        src.clone(),
+                                        self.file_path.clone(),
+                                        self.hidpi_scale,
+                                        self.window.image_callback(),
+                                    )
+                                    .unwrap()
+                                    .with_align(*align),
+                                };
 
-                                    if align == &Align::Left {
-                                        if let Some((row, count)) = &mut self.state.inline_images {
-                                            row.elements.push(Positioned::new(image));
-                                            // Restart newline count
-                                            *count = 1;
-                                        } else {
-                                            self.state.inline_images = Some((
-                                                Row::new(
-                                                    vec![Positioned::new(image)],
-                                                    self.hidpi_scale,
-                                                ),
-                                                1,
-                                            ));
-                                        }
+                                if let Some(link) = self.state.text_options.link.last() {
+                                    image.set_link((*link).clone())
+                                }
+                                if let Some(size) = size {
+                                    image = image.with_size(size);
+                                }
+
+                                if align == &Align::Left {
+                                    if let Some((row, count)) = &mut self.state.inline_images {
+                                        row.elements.push(Positioned::new(image));
+                                        // Restart newline count
+                                        *count = 1;
                                     } else {
-                                        self.push_element(image);
-                                        self.push_spacer();
+                                        self.state.inline_images = Some((
+                                            Row::new(
+                                                vec![Positioned::new(image)],
+                                                self.hidpi_scale,
+                                            ),
+                                            1,
+                                        ));
                                     }
-                                    break;
+                                } else {
+                                    self.push_element(image);
+                                    self.push_spacer();
                                 }
                             }
                         }
@@ -452,14 +394,7 @@ impl TokenSink for HtmlInterpreter {
                                 self.current_textbox.set_anchor(anchor_name);
                             }
 
-                            let mut align = None;
-                            for attr in tag.attrs {
-                                if attr.name.local == local_name!("align")
-                                    || attr.name.local == *"text-align"
-                                {
-                                    align = Align::new(&attr.value);
-                                }
-                            }
+                            let align = html::find_align(&tag.attrs);
                             if let Some(align) = align.or_else(|| self.find_current_align()) {
                                 self.current_textbox.set_align(align);
                             }
@@ -473,10 +408,9 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
-                            for Attribute { name, value } in tag.attrs {
-                                if name.local == local_name!("id") {
-                                    let anchor_name = format!("#{}", value);
-                                    self.state.pending_anchor = Some(anchor_name);
+                            for attr in AttrIter::new(&tag.attrs) {
+                                if let Attr::Anchor(anchor) = attr {
+                                    self.state.pending_anchor = Some(anchor);
                                 }
                             }
 
@@ -516,10 +450,9 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "ol" => {
                             let mut start_index = 1;
-                            for attr in tag.attrs {
-                                if attr.name.local == local_name!("start") {
-                                    start_index = attr.value.parse::<usize>().unwrap();
-                                    break;
+                            for attr in AttrIter::new(&tag.attrs) {
+                                if let Attr::Start(start) = attr {
+                                    start_index = start;
                                 }
                             }
                             self.push_current_textbox();
@@ -531,14 +464,7 @@ impl TokenSink for HtmlInterpreter {
                                 }));
                         }
                         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
-                            let mut align = None;
-                            for attr in tag.attrs {
-                                if attr.name.local == local_name!("align")
-                                    || attr.name.local == *"text-align"
-                                {
-                                    align = Align::new(&attr.value);
-                                }
-                            }
+                            let align = html::find_align(&tag.attrs);
                             let header_type = html::HeaderType::new(&tag_name).unwrap();
                             self.push_current_textbox();
                             self.push_spacer();
@@ -552,19 +478,12 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "pre" => {
                             self.push_current_textbox();
-                            for Attribute { name, value } in &tag.attrs {
-                                if &name.local == "style" {
-                                    let style = value.to_string();
-                                    if let Some(hex_str) = style
-                                        .split(';')
-                                        .find_map(|style| style.strip_prefix("background-color:#"))
-                                    {
-                                        if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
-                                            let bg_color = native_color(hex, &self.surface_format);
-                                            self.current_textbox
-                                                .set_background_color(Some(bg_color));
-                                        }
-                                    }
+                            let style_str = html::find_style(&tag.attrs).unwrap_or_default();
+                            for style in StyleIter::new(&style_str) {
+                                if let Style::BackgroundColor(color) = style {
+                                    let native_color = native_color(color, &self.surface_format);
+                                    self.current_textbox
+                                        .set_background_color(Some(native_color));
                                 }
                             }
                             self.state.text_options.pre_formatted += 1;
@@ -578,45 +497,34 @@ impl TokenSink for HtmlInterpreter {
                         // HACK: spans are only supported enough to get syntax highlighting in code
                         // blocks working
                         "span" => {
-                            for Attribute { name, value } in &tag.attrs {
-                                if &name.local == "style" {
-                                    let styles = value.to_string();
-                                    for style in styles.split(';') {
-                                        if let Some(hex_str) = style.strip_prefix("color:#") {
-                                            if let Ok(hex) = u32::from_str_radix(hex_str, 16) {
-                                                self.state.span_color =
-                                                    native_color(hex, &self.surface_format);
-                                            }
-                                        } else if let Some(font_weight) =
-                                            style.strip_prefix("font-weight:")
-                                        {
-                                            self.state.span_weight = FontWeight::new(font_weight);
-                                        } else if let Some(font_style) =
-                                            style.strip_prefix("font-style:")
-                                        {
-                                            self.state.span_style = FontStyle::new(font_style);
-                                        }
+                            let style_str = html::find_style(&tag.attrs).unwrap_or_default();
+                            for style in StyleIter::new(&style_str) {
+                                match style {
+                                    Style::Color(color) => {
+                                        self.state.span_color =
+                                            native_color(color, &self.surface_format)
                                     }
+                                    Style::FontWeight(weight) => self.state.span_weight = weight,
+                                    Style::FontStyle(style) => self.state.span_style = style,
+                                    _ => {}
                                 }
                             }
                         }
                         "input" => {
-                            for Attribute { name, value } in &tag.attrs {
-                                if &name.local == "type" {
-                                    let value = value.to_string();
-                                    if value == "checkbox" {
-                                        // Checkbox uses a custom prefix, so remove pending text
-                                        // prefix
-                                        let _ = self.state.pending_list_prefix.take();
-                                        self.push_current_textbox();
-                                        self.current_textbox.set_checkbox(Some(
-                                            tag.attrs
-                                                .iter()
-                                                .any(|attr| &attr.name.local == "checked"),
-                                        ));
-                                        self.state.element_stack.push(html::Element::Input);
-                                    }
+                            let mut is_checkbox = false;
+                            let mut is_checked = false;
+                            for attr in AttrIter::new(&tag.attrs) {
+                                match attr {
+                                    Attr::IsCheckbox => is_checkbox = true,
+                                    Attr::IsChecked => is_checked = true,
+                                    _ => {}
                                 }
+                            }
+                            if is_checkbox {
+                                // Checkbox uses a custom prefix, so remove pending text prefix
+                                let _ = self.state.pending_list_prefix.take();
+                                self.current_textbox.set_checkbox(Some(is_checked));
+                                self.state.element_stack.push(html::Element::Input);
                             }
                         }
                         "details" => {
