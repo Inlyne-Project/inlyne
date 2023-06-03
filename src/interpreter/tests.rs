@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
-    path::PathBuf,
+    fs,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU32, Ordering},
         mpsc, Arc, Mutex,
@@ -13,6 +14,7 @@ use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::{color::LIGHT_DEFAULT, image::ImageData, Element, ImageCache};
 
 use wgpu::TextureFormat;
+use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
 
 // We use a dummy window with an internal counter that keeps track of when rendering a single md
 // document is finished
@@ -123,4 +125,50 @@ const SANITY: &str = "\
 
 _Italicized text_";
 
-snapshot_interpreted_elements!((sanity, SANITY));
+const CHECKLIST_HAS_NO_TEXT_PREFIX: &str = "\
+- [x] Completed task
+- [ ] Incomplete task";
+
+snapshot_interpreted_elements!(
+    (sanity, SANITY),
+    (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
+);
+
+/// Spin up a server, so we can test network requests without external services
+fn mock_file_server(url_path: &str, mime: &str, file_path: &Path) -> (MockServer, String) {
+    let bytes = fs::read(file_path).unwrap();
+    let setup_server = async {
+        let mock_server = MockServer::start().await;
+        Mock::given(matchers::method("GET"))
+            .and(matchers::path(url_path))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(bytes, mime))
+            .mount(&mock_server)
+            .await;
+        mock_server
+    };
+    let server = pollster::block_on(setup_server);
+
+    let full_url = format!("{}{}", server.uri(), url_path);
+    (server, full_url)
+}
+
+#[test]
+fn centered_image_with_size_align_and_link() {
+    let logo_path = Path::new("tests").join("assets").join("bun_logo.png");
+    let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", &logo_path);
+
+    let text = format!(
+        r#"
+<p align="center">
+  <a href="https://bun.sh"><img src="{logo_url}" alt="Logo" height=170></a>
+</p>"#,
+    );
+
+    insta::with_settings!({
+        // The port for the URL here is non-deterministic, but the description changing doesn't
+        // invalidate the snapshot, so that's okay
+        description => &text,
+    }, {
+        insta::assert_debug_snapshot!(interpret_md(&text));
+    });
+}

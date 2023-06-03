@@ -1,9 +1,11 @@
+use crate::debug_impls;
 use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -25,11 +27,22 @@ pub enum ImageSize {
     PxHeight(u32),
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct ImageData {
     lz4_blob: Vec<u8>,
     scale: bool,
     dimensions: (u32, u32),
+}
+
+impl fmt::Debug for ImageData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            lz4_blob,
+            scale,
+            dimensions,
+        } = self;
+        debug_impls::image_data((lz4_blob, scale, dimensions), f)
+    }
 }
 
 impl ImageData {
@@ -73,7 +86,7 @@ impl ImageData {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Image {
     pub image_data: Arc<Mutex<Option<ImageData>>>,
     pub is_aligned: Option<Align>,
@@ -81,6 +94,12 @@ pub struct Image {
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
     pub is_link: Option<String>,
     pub hidpi_scale: f32,
+}
+
+impl fmt::Debug for Image {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::image(self, f)
+    }
 }
 
 impl Image {
