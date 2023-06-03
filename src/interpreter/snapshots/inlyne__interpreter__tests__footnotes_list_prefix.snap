@@ -11,22 +11,27 @@ expression: interpret_md(text)
                 Text {
                     text: "This sentence",
                     default_color: Color(BLACK),
+                    ..
                 },
                 Text {
                     text: "1",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     link: Some("#fn-1"),
+                    ..
                 },
                 Text {
                     text: " has two footnotes",
                     default_color: Color(BLACK),
+                    ..
                 },
                 Text {
                     text: "2",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     link: Some("#fn-2"),
+                    ..
                 },
             ],
+            ..
         },
     ),
     Spacer(
@@ -41,17 +46,21 @@ expression: interpret_md(text)
                     text: "1. ",
                     default_color: Color(BLACK),
                     style: BOLD ,
+                    ..
                 },
                 Text {
                     text: "1st footnote ",
                     default_color: Color(BLACK),
+                    ..
                 },
                 Text {
                     text: "↩",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     link: Some("#fnref-1"),
+                    ..
                 },
             ],
+            ..
         },
     ),
     Spacer(
@@ -66,17 +75,21 @@ expression: interpret_md(text)
                     text: "2. ",
                     default_color: Color(BLACK),
                     style: BOLD ,
+                    ..
                 },
                 Text {
                     text: "2nd footnote ",
                     default_color: Color(BLACK),
+                    ..
                 },
                 Text {
                     text: "↩",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     link: Some("#fnref-2"),
+                    ..
                 },
             ],
+            ..
         },
     ),
     Spacer(

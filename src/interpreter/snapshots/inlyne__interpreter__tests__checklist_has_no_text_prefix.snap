@@ -12,8 +12,10 @@ expression: interpret_md(text)
                 Text {
                     text: "Completed task",
                     default_color: Color(BLACK),
+                    ..
                 },
             ],
+            ..
         },
     ),
     TextBox(
@@ -24,8 +26,10 @@ expression: interpret_md(text)
                 Text {
                     text: "Incomplete task",
                     default_color: Color(BLACK),
+                    ..
                 },
             ],
+            ..
         },
     ),
     Spacer(
