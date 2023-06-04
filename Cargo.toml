@@ -63,14 +63,14 @@ version = "0.2"
 git = "https://github.com/trimental/glyphon"
 rev = "5bf8b6b6aa4a181824798836e1436809e78102e7"
 
- [profile.release]
- strip = true
+[profile.release]
+strip = true
 
 # Run `cargo run/build --profile release-debug` to use
- [profile.release-debug]
- inherits = "release"
- strip = false
- debug = true
+[profile.release-debug]
+inherits = "release"
+strip = false
+debug = true
 
 [profile.release-lto]
 inherits = "release"
@@ -80,3 +80,13 @@ lto = true
 insta = "1.29.0"
 pretty_assertions = "1.3.0"
 wiremock = "0.5.18"
+
+# Selectively bump up opt level for some dependencies to improve dev build perf
+[profile.dev.package.ttf-parser]
+opt-level = 2
+[profile.dev.package.rustybuzz]
+opt-level = 2
+[profile.dev.package.cosmic-text]
+opt-level = 2
+[profile.dev.package.png]
+opt-level = 2
