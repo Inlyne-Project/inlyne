@@ -46,6 +46,7 @@ pub struct Args {
 
 pub fn command() -> Command {
     let file_arg = Arg::new("file")
+        .required(true)
         .number_of_values(1)
         .value_name("FILE")
         .value_parser(value_parser!(PathBuf))
@@ -98,7 +99,7 @@ impl Args {
         let c = command();
         let matches = c.get_matches_from(args);
 
-        let file_path = matches.get_one("file").cloned().expect("required");
+        let file_path = matches.get_one("file").cloned().unwrap();
         let theme = matches.get_one("theme").cloned();
         let scale = matches.get_one("scale").cloned();
         let config = matches.get_one("config").cloned();
