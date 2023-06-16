@@ -231,3 +231,9 @@ fn custom_syntax_theme() {
         "Example Color Scheme"
     );
 }
+
+#[test]
+fn missing_file_arg() {
+    // A file arg should be required
+    assert!(Args::try_parse_from(gen_args(Vec::new())).is_err());
+}
