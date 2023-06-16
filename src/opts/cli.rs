@@ -96,8 +96,22 @@ impl Args {
     }
 
     pub fn parse_from(args: Vec<OsString>) -> Self {
+        #[cfg(test)]
+        {
+            let _ = args;
+            panic!("Use `Args::try_parse_from()` in tests");
+        }
+        #[cfg(not(test))]
+        match Self::try_parse_from(args) {
+            Ok(args) => args,
+            // Expose clap error normally
+            Err(clap_err) => clap_err.exit(),
+        }
+    }
+
+    pub fn try_parse_from(args: Vec<OsString>) -> Result<Self, clap::Error> {
         let c = command();
-        let matches = c.get_matches_from(args);
+        let matches = c.try_get_matches_from(args)?;
 
         let file_path = matches.get_one("file").cloned().unwrap();
         let theme = matches.get_one("theme").cloned();
@@ -105,12 +119,12 @@ impl Args {
         let config = matches.get_one("config").cloned();
         let page_width = matches.get_one("page_width").cloned();
 
-        Self {
+        Ok(Self {
             file_path,
             theme,
             scale,
             config,
             page_width,
-        }
+        })
     }
 }

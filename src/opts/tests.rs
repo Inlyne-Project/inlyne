@@ -47,7 +47,7 @@ fn debug_assert() {
 fn defaults() {
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["file.md"])),
+            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config::Config::default(),
             ResolvedTheme::Light,
         )
@@ -65,7 +65,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["file.md"])),
+            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
             ResolvedTheme::Light,
         )
@@ -83,7 +83,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["file.md"])),
+            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
             ResolvedTheme::Dark,
         )
@@ -100,7 +100,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["file.md"])),
+            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
             ResolvedTheme::Light,
         )
@@ -116,7 +116,7 @@ fn config_overrides_default() {
 fn from_cli() {
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["--theme", "dark", "file.md"])),
+            Args::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"])).unwrap(),
             config::Config::default(),
             ResolvedTheme::Light,
         )
@@ -135,7 +135,7 @@ fn from_cli() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(gen_args(vec!["--scale", "1.5", "file.md"])),
+            Args::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"])).unwrap(),
             config,
             ResolvedTheme::Light,
         )
@@ -160,7 +160,7 @@ fn cli_kitchen_sink() {
     ]);
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::parse_from(args),
+            Args::try_parse_from(args).unwrap(),
             config::Config::default(),
             ResolvedTheme::Light,
         )
@@ -183,7 +183,7 @@ fn builtin_syntax_theme() {
     });
 
     let opts = Opts::parse_and_load_with_system_theme(
-        Args::parse_from(gen_args(vec!["file.md"])),
+        Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
         config,
         ResolvedTheme::Light,
     )
@@ -206,7 +206,7 @@ fn custom_syntax_theme() {
         config
     }
 
-    let args = Args::parse_from(gen_args(vec!["file.md"]));
+    let args = Args::try_parse_from(gen_args(vec!["file.md"])).unwrap();
 
     let res = Opts::parse_and_load_with_system_theme(
         args.clone(),
