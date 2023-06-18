@@ -221,7 +221,7 @@ impl Inlyne {
                     // Some editors may remove/rename the file as a part of saving.
                     // Reregister file watching in this case
                     std::thread::sleep(Duration::from_millis(10));
-                    log::info!(
+                    log::debug!(
                         "File may have been renamed/removed. Attempting to re-register file watcher"
                     );
 
@@ -358,7 +358,7 @@ impl Inlyne {
                         Ok(contents) => self.load_file(contents),
                         Err(err) => {
                             log::warn!(
-                                "Failed reloading file at {}: {}",
+                                "Failed reloading file at {}\nError: {}",
                                 self.opts.file_path.display(),
                                 err
                             );
@@ -576,7 +576,7 @@ impl Inlyne {
                                                 }
                                                 Err(err) => {
                                                     log::warn!(
-                                                        "Failed loading markdown file at {}: {}",
+                                                        "Failed loading markdown file at {}\nError: {}",
                                                         path.display(),
                                                         err,
                                                     );
