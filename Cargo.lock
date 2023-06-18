@@ -1735,7 +1735,6 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "clap",
- "clap_complete",
  "comrak",
  "copypasta",
  "dark-light",
