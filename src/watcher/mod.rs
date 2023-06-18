@@ -1,4 +1,4 @@
-use std::{sync::mpsc::channel, time::Duration};
+use std::{path::PathBuf, sync::mpsc::channel, time::Duration};
 
 use crate::{Inlyne, InlyneEvent};
 
@@ -6,9 +6,26 @@ use notify::{
     event::{EventKind, ModifyKind},
     RecommendedWatcher, RecursiveMode, Watcher,
 };
+use winit::event_loop::EventLoopProxy;
+
+trait Callback {
+    fn update(&self);
+}
+
+impl Callback for EventLoopProxy<InlyneEvent> {
+    fn update(&self) {
+        let _ = self.send_event(InlyneEvent::FileReload);
+    }
+}
+
+pub fn spawn_watcher(inlyne: &Inlyne) {
+    let event_proxy = inlyne.event_loop.create_proxy();
+    let file_path = inlyne.opts.file_path.clone();
+    spawn_watcher_inner(event_proxy, file_path);
+}
 
 // TODO: doesn't follow watching file after file changes. Need to coordinate that
-pub fn spawn_watcher(inlyne: &Inlyne) {
+fn spawn_watcher_inner<C: Callback + Send + 'static>(reload_callback: C, file_path: PathBuf) {
     // Create a channel to receive the events.
     let (watch_tx, watch_rx) = channel();
 
@@ -17,8 +34,6 @@ pub fn spawn_watcher(inlyne: &Inlyne) {
     let mut watcher = RecommendedWatcher::new(watch_tx, notify::Config::default()).unwrap();
 
     // Add the file path to be watched.
-    let event_proxy = inlyne.event_loop.create_proxy();
-    let file_path = inlyne.opts.file_path.clone();
     std::thread::spawn(move || {
         watcher
             .watch(&file_path, RecursiveMode::NonRecursive)
@@ -55,14 +70,14 @@ pub fn spawn_watcher(inlyne: &Inlyne) {
                             .is_ok()
                         {
                             log::debug!("Sucessfully re-registered file watcher");
-                            let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                            reload_callback.update();
                             break;
                         }
                     }
                 }
                 EventKind::Modify(_) => {
                     log::debug!("Reloading file");
-                    let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                    reload_callback.update();
                 }
                 _ => {}
             }
