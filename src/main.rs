@@ -41,7 +41,10 @@ use anyhow::Context;
 use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
 #[cfg(feature = "x11")]
 use copypasta::{ClipboardContext, ClipboardProvider};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    event::{EventKind, ModifyKind},
+    RecommendedWatcher, RecursiveMode, Watcher,
+};
 
 use winit::event::ModifiersState;
 use winit::event::{ElementState, MouseButton};
@@ -212,20 +215,27 @@ impl Inlyne {
                 };
 
                 log::debug!("File event: {:#?}", event);
-                if event.kind.is_modify() {
-                    let _ = event_proxy.send_event(InlyneEvent::FileReload);
-                } else if event.kind.is_remove() {
-                    // Some editors may remove/rename the file as a part of saving.
-                    // Reregister file watching in this case
-                    std::thread::sleep(Duration::from_millis(10));
-                    log::info!(
-                        "File may have been renamed/removed. Attempting to re-register file watcher"
-                    );
+                match event.kind {
+                    EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_)) => {
+                        // Some editors may remove/rename the file as a part of saving.
+                        // Reregister file watching in this case
+                        log::debug!(
+                            "File may have been renamed/removed. Attempting to re-register file \
+                            watcher"
+                        );
 
-                    let _ = watcher.unwatch(&file_path);
-                    if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
-                        log::warn!("Unable to watch file. No longer reloading: {}", err);
+                        std::thread::sleep(Duration::from_millis(10));
+
+                        let _ = watcher.unwatch(&file_path);
+                        if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
+                            log::warn!("Unable to watch file. No longer reloading: {}", err);
+                        }
                     }
+                    EventKind::Modify(_) => {
+                        log::debug!("Reloading file");
+                        let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                    }
+                    _ => {}
                 }
             }
         });
