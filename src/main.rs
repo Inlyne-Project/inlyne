@@ -185,6 +185,7 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 }
 
 impl Inlyne {
+    // TODO: doesn't follow watching file after file changes. Need to coordinate that
     pub fn spawn_watcher(&self) {
         // Create a channel to receive the events.
         let (watch_tx, watch_rx) = channel();
