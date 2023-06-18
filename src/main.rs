@@ -17,6 +17,7 @@ use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
+use watcher::Watcher;
 
 use crate::image::ImageData;
 use keybindings::{
@@ -145,6 +146,7 @@ pub struct Inlyne {
     interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
     need_repositioning: bool,
+    watcher: Watcher,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -223,6 +225,8 @@ impl Inlyne {
 
         let lines_to_scroll = opts.lines_to_scroll;
 
+        let watcher = Watcher::spawn(event_loop.create_proxy(), opts.file_path.clone());
+
         Ok(Self {
             opts,
             window,
@@ -237,6 +241,7 @@ impl Inlyne {
             image_cache,
             keycombos,
             need_repositioning: false,
+            watcher,
         })
     }
 
@@ -508,9 +513,7 @@ impl Inlyne {
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
                                             self.opts.file_path = path;
-                                            event_loop_proxy
-                                                .send_event(InlyneEvent::FileReload)
-                                                .expect("new file to reload successfully");
+                                            self.watcher.update_path(&self.opts.file_path);
                                         }
                                     } else if let Some(anchor_pos) =
                                         self.renderer.positioner.anchors.get(link)
@@ -754,9 +757,8 @@ fn main() -> anyhow::Result<()> {
         }),
     };
     let opts = Opts::parse_and_load_from(args, config)?;
-    let inlyne = Inlyne::new(opts)?;
 
-    watcher::spawn_watcher(&inlyne);
+    let inlyne = Inlyne::new(opts)?;
     inlyne.run();
 
     Ok(())
