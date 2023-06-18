@@ -219,16 +219,22 @@ impl Inlyne {
                     EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_)) => {
                         // Some editors may remove/rename the file as a part of saving.
                         // Reregister file watching in this case
-                        log::debug!(
-                            "File may have been renamed/removed. Attempting to re-register file \
-                            watcher"
-                        );
+                        log::debug!("File may have been renamed/removed. Falling back to polling");
 
-                        std::thread::sleep(Duration::from_millis(10));
+                        let mut delay = Duration::from_millis(10);
+                        loop {
+                            std::thread::sleep(delay);
+                            delay = Duration::from_millis(100);
 
-                        let _ = watcher.unwatch(&file_path);
-                        if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
-                            log::warn!("Unable to watch file. No longer reloading: {}", err);
+                            let _ = watcher.unwatch(&file_path);
+                            if watcher
+                                .watch(&file_path, RecursiveMode::NonRecursive)
+                                .is_ok()
+                            {
+                                log::debug!("Sucessfully re-registered file watcher");
+                                let _ = event_proxy.send_event(InlyneEvent::FileReload);
+                                break;
+                            }
                         }
                     }
                     EventKind::Modify(_) => {
