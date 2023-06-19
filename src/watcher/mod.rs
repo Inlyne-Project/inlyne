@@ -12,6 +12,9 @@ use notify::{
 };
 use winit::event_loop::EventLoopProxy;
 
+#[cfg(test)]
+mod tests;
+
 trait Callback: Send + 'static {
     fn update(&self);
 }
