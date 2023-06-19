@@ -8,15 +8,11 @@ impl Callback for mpsc::Sender<()> {
     }
 }
 
-const SHORT_DURATION: Duration = Duration::from_millis(50);
-const LONG_DURATION: Duration = Duration::from_millis(200);
-
-fn short_sleep() {
-    std::thread::sleep(SHORT_DURATION);
-}
+const SHORT_DELAY: Duration = Duration::from_millis(10);
+const LONG_DELAY: Duration = Duration::from_millis(100);
 
 fn long_sleep() {
-    std::thread::sleep(LONG_DURATION);
+    std::thread::sleep(LONG_DELAY);
 }
 
 fn touch(file: &Path) {
@@ -24,17 +20,15 @@ fn touch(file: &Path) {
     filetime::set_file_mtime(file, now).unwrap();
 }
 
-macro_rules! assert_no_message {
-    ($callback:ident) => {
-        assert!($callback.recv_timeout(SHORT_DURATION).is_err());
-    };
+#[track_caller]
+fn assert_no_message(callback: &mpsc::Receiver<()>) {
+    assert!(callback.recv_timeout(SHORT_DELAY).is_err());
 }
 
-macro_rules! assert_at_least_one_message {
-    ($callback:ident) => {
-        assert!($callback.recv_timeout(LONG_DURATION).is_ok());
-        while $callback.try_recv().is_ok() {}
-    };
+#[track_caller]
+fn assert_at_least_one_message(callback: &mpsc::Receiver<()>) {
+    assert!(callback.recv_timeout(LONG_DELAY).is_ok());
+    while callback.recv_timeout(SHORT_DELAY).is_ok() {}
 }
 
 // Unfortunately this needs to be littered with sleeps to work :/
@@ -59,30 +53,30 @@ fn the_gauntlet() {
     let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
 
     // Give the watcher time to get comfy :)
-    short_sleep();
+    long_sleep();
 
     // Sanity check watching
     touch(&main_file);
-    assert_at_least_one_message!(callback_rx);
+    assert_at_least_one_message(&callback_rx);
 
     // Updating a file follows the new file and not the old one
     watcher.update_path(&rel_file);
-    assert_at_least_one_message!(callback_rx);
+    assert_at_least_one_message(&callback_rx);
     touch(&main_file);
-    assert_no_message!(callback_rx);
+    assert_no_message(&callback_rx);
     touch(&rel_file);
-    assert_at_least_one_message!(callback_rx);
+    assert_at_least_one_message(&callback_rx);
 
     // We can slowly swap out the file and it will only follow the file it's supposed to
     fs::rename(&rel_file, &swapped_out_file).unwrap();
     touch(&swapped_out_file);
-    assert_no_message!(callback_rx);
+    assert_no_message(&callback_rx);
     // The "slowly" part of this (give the watcher time to fail and start polling)
     long_sleep();
     fs::rename(&swapped_in_file, &rel_file).unwrap();
-    assert_at_least_one_message!(callback_rx);
+    assert_at_least_one_message(&callback_rx);
     fs::remove_file(&swapped_out_file).unwrap();
-    assert_no_message!(callback_rx);
+    assert_no_message(&callback_rx);
     touch(&rel_file);
-    assert_at_least_one_message!(callback_rx);
+    assert_at_least_one_message(&callback_rx);
 }
