@@ -10,7 +10,7 @@ impl Callback for mpsc::Sender<()> {
 
 const LONG_DELAY: Duration = Duration::from_millis(200);
 const LONG_TIMEOUT: Duration = Duration::from_millis(2_000);
-const SHORT_TIMEOUT: Duration = Duration::from_millis(20);
+const SHORT_TIMEOUT: Duration = Duration::from_millis(50);
 
 fn long_sleep() {
     std::thread::sleep(LONG_DELAY);
