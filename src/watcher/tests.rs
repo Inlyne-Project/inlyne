@@ -8,8 +8,9 @@ impl Callback for mpsc::Sender<()> {
     }
 }
 
-const SHORT_DELAY: Duration = Duration::from_millis(50);
 const LONG_DELAY: Duration = Duration::from_millis(200);
+const LONG_TIMEOUT: Duration = Duration::from_millis(2_000);
+const SHORT_TIMEOUT: Duration = Duration::from_millis(20);
 
 fn long_sleep() {
     std::thread::sleep(LONG_DELAY);
@@ -22,16 +23,16 @@ fn touch(file: &Path) {
 
 #[track_caller]
 fn assert_no_message(callback: &mpsc::Receiver<()>) {
-    assert!(callback.recv_timeout(SHORT_DELAY).is_err());
+    assert!(callback.recv_timeout(SHORT_TIMEOUT).is_err());
 }
 
 #[track_caller]
 fn assert_at_least_one_message(callback: &mpsc::Receiver<()>) {
-    assert!(callback.recv_timeout(LONG_DELAY).is_ok());
-    while callback.recv_timeout(SHORT_DELAY).is_ok() {}
+    assert!(callback.recv_timeout(LONG_TIMEOUT).is_ok());
+    while callback.recv_timeout(SHORT_TIMEOUT).is_ok() {}
 }
 
-// Unfortunately this needs to be littered with sleeps to work :/
+// Unfortunately this needs to be littered with sleeps/timeouts to work right :/
 #[test]
 fn the_gauntlet() {
     // Create our dummy test env

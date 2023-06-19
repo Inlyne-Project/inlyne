@@ -106,7 +106,7 @@ fn endlessly_handle_messages<C: Callback>(
                 ) {
                     log::debug!("File may have been renamed/removed. Falling back to polling");
                     poll_registering_watcher(&mut watcher, &file_path);
-                    log::debug!("Sucessfully re-registered file watcher");
+                    log::debug!("Successfully re-registered file watcher");
                     reload_callback.update();
                 } else if matches!(event.kind, EventKind::Modify(_)) {
                     log::debug!("Reloading file");
