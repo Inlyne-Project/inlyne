@@ -13,7 +13,7 @@ const LONG_TIMEOUT: Duration = Duration::from_millis(2_000);
 const SHORT_TIMEOUT: Duration = Duration::from_millis(50);
 
 fn delay() {
-    std::thread::sleep(LONG_DELAY);
+    std::thread::sleep(DELAY);
 }
 
 fn touch(file: &Path) {
