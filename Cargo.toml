@@ -44,7 +44,6 @@ memmap2 = "0.6.1"
 log = "0.4.17"
 env_logger = "0.10.0"
 notify = "6.0.0"
-clap_complete = "4.3.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
@@ -77,6 +76,8 @@ inherits = "release"
 lto = true
 
 [dev-dependencies]
+filetime = "0.2.21"
 insta = "1.29.0"
 pretty_assertions = "1.3.0"
+tempfile = "3.6.0"
 wiremock = "0.5.18"

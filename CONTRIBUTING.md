@@ -27,6 +27,8 @@ cargo insta review
 _If you're wondering 'Is this relevant to me?' Then the answer is probably no
 ;P_
 
+- [ ] Check for unused dependencies
+  - `$ cargo +nightly udeps`
 - [ ] Update static assets
   - `$ cargo xtask gen`
 - [ ] Update `rust-version` in `Cargo.toml`
