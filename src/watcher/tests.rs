@@ -3,7 +3,11 @@ use std::{fs, path::Path, sync::mpsc, time::Duration};
 use super::{Callback, Watcher};
 
 impl Callback for mpsc::Sender<()> {
-    fn update(&self) {
+    fn file_reload(&self) {
+        self.send(()).unwrap();
+    }
+
+    fn file_change(&self, _: String) {
         self.send(()).unwrap();
     }
 }
@@ -61,7 +65,7 @@ fn the_gauntlet() {
     assert_at_least_one_message(&callback_rx);
 
     // Updating a file follows the new file and not the old one
-    watcher.update_path(&rel_file);
+    watcher.update_file(&rel_file, fs::read_to_string(&rel_file).unwrap());
     assert_at_least_one_message(&callback_rx);
     touch(&main_file);
     assert_no_message(&callback_rx);

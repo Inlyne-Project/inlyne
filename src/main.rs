@@ -70,6 +70,7 @@ use std::sync::Mutex;
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
+    FileChange { contents: String },
     Reposition,
     PositionQueue,
 }
@@ -135,7 +136,9 @@ impl From<Table> for Element {
 pub struct Inlyne {
     opts: Opts,
     window: Arc<Window>,
-    event_loop: EventLoop<InlyneEvent>,
+    // HACK: `Option<_>` is used here to keep `Inlyne` valid while running the event loop. Consider
+    // splitting this out from the rest of the state
+    event_loop: Option<EventLoop<InlyneEvent>>,
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
@@ -230,7 +233,7 @@ impl Inlyne {
         Ok(Self {
             opts,
             window,
-            event_loop,
+            event_loop: Some(event_loop),
             renderer,
             element_queue,
             clipboard,
@@ -275,6 +278,17 @@ impl Inlyne {
         }
     }
 
+    fn load_file(&mut self, contents: String) {
+        self.interpreter_should_queue
+            .store(false, Ordering::Relaxed);
+        self.element_queue.lock().unwrap().clear();
+        self.elements.clear();
+        self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
+        self.renderer.positioner.anchors.clear();
+        self.interpreter_should_queue.store(true, Ordering::Relaxed);
+        self.interpreter_sender.send(contents).unwrap();
+    }
+
     pub fn run(mut self) {
         let mut pending_resize = None;
         let mut scrollbar_held = None;
@@ -283,8 +297,10 @@ impl Inlyne {
         let mut last_loc = (0.0, 0.0);
         let mut selection_cache = String::new();
         let mut selecting = false;
-        let event_loop_proxy = self.event_loop.create_proxy();
-        self.event_loop.run(move |event, _, control_flow| {
+
+        let event_loop = self.event_loop.take().unwrap();
+        let event_loop_proxy = event_loop.create_proxy();
+        event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
             match event {
@@ -293,25 +309,17 @@ impl Inlyne {
                         self.image_cache.lock().unwrap().insert(src, image_data);
                         self.need_repositioning = true;
                     }
-                    InlyneEvent::FileReload => {
-                        self.interpreter_should_queue
-                            .store(false, Ordering::Relaxed);
-                        self.element_queue.lock().unwrap().clear();
-                        self.elements.clear();
-                        self.renderer.positioner.reserved_height =
-                            DEFAULT_PADDING * self.renderer.hidpi_scale;
-                        self.renderer.positioner.anchors.clear();
-                        let md_string = read_to_string(&self.opts.file_path)
-                            .with_context(|| {
-                                format!(
-                                    "Could not read file at '{}'",
-                                    self.opts.file_path.display()
-                                )
-                            })
-                            .unwrap();
-                        self.interpreter_should_queue.store(true, Ordering::Relaxed);
-                        self.interpreter_sender.send(md_string).unwrap();
-                    }
+                    InlyneEvent::FileReload => match read_to_string(&self.opts.file_path) {
+                        Ok(contents) => self.load_file(contents),
+                        Err(err) => {
+                            log::warn!(
+                                "Failed reloading file at {}\nError: {}",
+                                self.opts.file_path.display(),
+                                err
+                            );
+                        }
+                    },
+                    InlyneEvent::FileChange { contents } => self.load_file(contents),
                     InlyneEvent::Reposition => {
                         self.need_repositioning = true;
                     }
@@ -512,8 +520,22 @@ impl Inlyne {
                                             .spawn()
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
-                                            self.opts.file_path = path;
-                                            self.watcher.update_path(&self.opts.file_path);
+                                            match read_to_string(&path) {
+                                                Ok(contents) => {
+                                                    self.opts.file_path = path;
+                                                    self.watcher.update_file(
+                                                        &self.opts.file_path,
+                                                        contents,
+                                                    );
+                                                }
+                                                Err(err) => {
+                                                    log::warn!(
+                                                        "Failed loading markdown file at {}\nError: {}",
+                                                        path.display(),
+                                                        err,
+                                                    );
+                                                }
+                                            }
                                         }
                                     } else if let Some(anchor_pos) =
                                         self.renderer.positioner.anchors.get(link)

@@ -16,12 +16,17 @@ use winit::event_loop::EventLoopProxy;
 mod tests;
 
 trait Callback: Send + 'static {
-    fn update(&self);
+    fn file_reload(&self);
+    fn file_change(&self, contents: String);
 }
 
 impl Callback for EventLoopProxy<InlyneEvent> {
-    fn update(&self) {
+    fn file_reload(&self) {
         let _ = self.send_event(InlyneEvent::FileReload);
+    }
+
+    fn file_change(&self, contents: String) {
+        let _ = self.send_event(InlyneEvent::FileChange { contents });
     }
 }
 
@@ -29,7 +34,7 @@ enum WatcherMsg {
     // Sent by the registered file watcher
     Notify(notify::Result<Event>),
     // Sent by the event loop
-    FileChange(PathBuf),
+    FileChange { new_path: PathBuf, contents: String },
 }
 
 struct MsgHandler(mpsc::Sender<WatcherMsg>);
@@ -62,8 +67,11 @@ impl Watcher {
         watcher
     }
 
-    pub fn update_path(&self, new_path: &Path) {
-        let msg = WatcherMsg::FileChange(new_path.to_owned());
+    pub fn update_file(&self, new_path: &Path, contents: String) {
+        let msg = WatcherMsg::FileChange {
+            new_path: new_path.to_owned(),
+            contents,
+        };
         let _ = self.0.send(msg);
     }
 }
@@ -102,19 +110,19 @@ fn endlessly_handle_messages<C: Callback>(
                     log::debug!("File may have been renamed/removed. Falling back to polling");
                     poll_registering_watcher(&mut watcher, &file_path);
                     log::debug!("Successfully re-registered file watcher");
-                    reload_callback.update();
+                    reload_callback.file_reload();
                 } else if matches!(event.kind, EventKind::Modify(_)) {
                     log::debug!("Reloading file");
-                    reload_callback.update();
+                    reload_callback.file_reload();
                 }
             }
             WatcherMsg::Notify(Err(err)) => log::warn!("File watcher error: {}", err),
-            WatcherMsg::FileChange(new_path) => {
+            WatcherMsg::FileChange { new_path, contents } => {
                 log::info!("Updating file watcher path: {}", new_path.display());
                 let _ = watcher.unwatch(&file_path);
                 poll_registering_watcher(&mut watcher, &new_path);
                 file_path = new_path;
-                reload_callback.update();
+                reload_callback.file_change(contents);
             }
         }
     }
