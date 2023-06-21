@@ -8,11 +8,11 @@ impl Callback for mpsc::Sender<()> {
     }
 }
 
-const LONG_DELAY: Duration = Duration::from_millis(200);
+const DELAY: Duration = Duration::from_millis(100);
 const LONG_TIMEOUT: Duration = Duration::from_millis(2_000);
 const SHORT_TIMEOUT: Duration = Duration::from_millis(50);
 
-fn long_sleep() {
+fn delay() {
     std::thread::sleep(LONG_DELAY);
 }
 
@@ -54,7 +54,7 @@ fn the_gauntlet() {
     let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
 
     // Give the watcher time to get comfy :)
-    long_sleep();
+    delay();
 
     // Sanity check watching
     touch(&main_file);
@@ -73,7 +73,7 @@ fn the_gauntlet() {
     touch(&swapped_out_file);
     assert_no_message(&callback_rx);
     // The "slowly" part of this (give the watcher time to fail and start polling)
-    long_sleep();
+    delay();
     fs::rename(&swapped_in_file, &rel_file).unwrap();
     assert_at_least_one_message(&callback_rx);
     fs::remove_file(&swapped_out_file).unwrap();

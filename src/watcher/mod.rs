@@ -78,27 +78,22 @@ fn endlessly_handle_messages<C: Callback>(
         .watch(&file_path, RecursiveMode::NonRecursive)
         .unwrap();
 
-    let poll_registering_watcher = |watcher: &mut RecommendedWatcher, file_path: &Path| {
-        let mut delay = Duration::from_millis(10);
+    let poll_registering_watcher = |watcher: &mut RecommendedWatcher, file_path: &Path| loop {
+        std::thread::sleep(Duration::from_millis(20));
 
-        loop {
-            std::thread::sleep(delay);
-            delay = Duration::from_millis(100);
-
-            let _ = watcher.unwatch(file_path);
-            if watcher
-                .watch(file_path, RecursiveMode::NonRecursive)
-                .is_ok()
-            {
-                break;
-            }
+        let _ = watcher.unwatch(file_path);
+        if watcher
+            .watch(file_path, RecursiveMode::NonRecursive)
+            .is_ok()
+        {
+            break;
         }
     };
 
     while let Ok(msg) = msg_rx.recv() {
         match msg {
             WatcherMsg::Notify(Ok(event)) => {
-                log::debug!("File event: {:#?}", event);
+                log::trace!("File event: {:#?}", event);
 
                 if matches!(
                     event.kind,
