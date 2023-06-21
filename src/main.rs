@@ -10,12 +10,14 @@ pub mod renderer;
 pub mod table;
 pub mod text;
 pub mod utils;
+mod watcher;
 
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
+use watcher::Watcher;
 
 use crate::image::ImageData;
 use keybindings::{
@@ -41,7 +43,6 @@ use anyhow::Context;
 use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
 #[cfg(feature = "x11")]
 use copypasta::{ClipboardContext, ClipboardProvider};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 use winit::event::ModifiersState;
 use winit::event::{ElementState, MouseButton};
@@ -65,7 +66,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
@@ -146,6 +146,7 @@ pub struct Inlyne {
     interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
     need_repositioning: bool,
+    watcher: Watcher,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -182,55 +183,6 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 }
 
 impl Inlyne {
-    pub fn spawn_watcher(&self) {
-        // Create a channel to receive the events.
-        let (watch_tx, watch_rx) = channel();
-
-        // Create a watcher object, delivering raw events.
-        // The notification back-end is selected based on the platform.
-        let mut watcher = RecommendedWatcher::new(watch_tx, notify::Config::default()).unwrap();
-
-        // Add the file path to be watched.
-        let event_proxy = self.event_loop.create_proxy();
-        let file_path = self.opts.file_path.clone();
-        std::thread::spawn(move || {
-            watcher
-                .watch(&file_path, RecursiveMode::NonRecursive)
-                .unwrap();
-
-            loop {
-                let event = match watch_rx.recv() {
-                    Ok(Ok(event)) => event,
-                    Ok(Err(err)) => {
-                        log::warn!("File watcher error: {}", err);
-                        continue;
-                    }
-                    Err(err) => {
-                        log::warn!("File watcher channel dropped unexpectedly: {}", err);
-                        break;
-                    }
-                };
-
-                log::debug!("File event: {:#?}", event);
-                if event.kind.is_modify() {
-                    let _ = event_proxy.send_event(InlyneEvent::FileReload);
-                } else if event.kind.is_remove() {
-                    // Some editors may remove/rename the file as a part of saving.
-                    // Reregister file watching in this case
-                    std::thread::sleep(Duration::from_millis(10));
-                    log::info!(
-                        "File may have been renamed/removed. Attempting to re-register file watcher"
-                    );
-
-                    let _ = watcher.unwatch(&file_path);
-                    if let Err(err) = watcher.watch(&file_path, RecursiveMode::NonRecursive) {
-                        log::warn!("Unable to watch file. No longer reloading: {}", err);
-                    }
-                }
-            }
-        });
-    }
-
     pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
@@ -273,6 +225,8 @@ impl Inlyne {
 
         let lines_to_scroll = opts.lines_to_scroll;
 
+        let watcher = Watcher::spawn(event_loop.create_proxy(), opts.file_path.clone());
+
         Ok(Self {
             opts,
             window,
@@ -287,6 +241,7 @@ impl Inlyne {
             image_cache,
             keycombos,
             need_repositioning: false,
+            watcher,
         })
     }
 
@@ -558,9 +513,7 @@ impl Inlyne {
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
                                             self.opts.file_path = path;
-                                            event_loop_proxy
-                                                .send_event(InlyneEvent::FileReload)
-                                                .expect("new file to reload successfully");
+                                            self.watcher.update_path(&self.opts.file_path);
                                         }
                                     } else if let Some(anchor_pos) =
                                         self.renderer.positioner.anchors.get(link)
@@ -804,9 +757,8 @@ fn main() -> anyhow::Result<()> {
         }),
     };
     let opts = Opts::parse_and_load_from(args, config)?;
-    let inlyne = Inlyne::new(opts)?;
 
-    inlyne.spawn_watcher();
+    let inlyne = Inlyne::new(opts)?;
     inlyne.run();
 
     Ok(())
