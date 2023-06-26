@@ -79,6 +79,7 @@ impl From<CursorIcon> for HoverInfo {
 
 pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     let mut options = ComrakOptions::default();
+    options.extension.autolink = true;
     options.extension.table = true;
     options.extension.strikethrough = true;
     options.extension.tasklist = true;
