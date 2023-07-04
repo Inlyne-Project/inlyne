@@ -1,6 +1,6 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n```toml\nkey = 123\n```\n\n\n --- html\n\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-toml\"><span style=\"color:#323232;\">key = 123\n</span></code></pre>\n"
+description: " --- md\n\n```toml\nkey = 123\n```\n\n\n --- html\n\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-toml\"><span style=\"color:#63a35c;\">key </span><span style=\"color:#323232;\">= </span><span style=\"color:#0086b3;\">123\n</span></code></pre>\n"
 expression: interpret_md(text)
 ---
 [
@@ -10,9 +10,21 @@ expression: interpret_md(text)
             is_code_block: true,
             texts: [
                 Text {
-                    text: "key = 123",
+                    text: "key ",
+                    font_family: Monospace,
+                    color: Some(Color { r: 0.12, g: 0.37, b: 0.11 }),
+                    ..
+                },
+                Text {
+                    text: "= ",
                     font_family: Monospace,
                     color: Some(Color { r: 0.03, g: 0.03, b: 0.03 }),
+                    ..
+                },
+                Text {
+                    text: "123",
+                    font_family: Monospace,
+                    color: Some(Color { r: 0.00, g: 0.24, b: 0.45 }),
                     ..
                 },
                 Text {

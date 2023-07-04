@@ -1765,6 +1765,7 @@ dependencies = [
  "tempfile",
  "tiny-skia",
  "toml",
+ "two-face",
  "twox-hash",
  "usvg",
  "wgpu",
@@ -3931,6 +3932,16 @@ name = "ttf-parser"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44dcf002ae3b32cd25400d6df128c5babec3927cd1eb7ce813cfff20eb6c3746"
+
+[[package]]
+name = "two-face"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "655eebf0a106a5b97728bfdc108e76a7f36f069625b328ddf02627ce3d5e9452"
+dependencies = [
+ "serde",
+ "syntect",
+]
 
 [[package]]
 name = "twox-hash"

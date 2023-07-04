@@ -57,6 +57,11 @@ twox-hash = "1.6.3"
 taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "d338f3731da519d182bbc074de46382984ab7c4a" }
 syntect = "5.0.0"
 
+[dependencies.two-face]
+version = "0.1.1"
+default-features = false
+features = ["extra-syntax"]
+
 [dependencies.glyphon]
 version = "0.2"
 git = "https://github.com/trimental/glyphon"
