@@ -1,10 +1,14 @@
 use std::{
     collections::HashMap,
+    io,
     sync::{Arc, Mutex},
 };
 
 use comrak::{
-    markdown_to_html_with_plugins, plugins::syntect::SyntectAdapterBuilder, ComrakOptions,
+    adapters::SyntaxHighlighterAdapter,
+    markdown_to_html_with_plugins,
+    plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder},
+    ComrakOptions,
 };
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -77,6 +81,39 @@ impl From<CursorIcon> for HoverInfo {
     }
 }
 
+// TODO(cosmic): Remove after `comrak` supports code block info strings that have a comma
+//     (like ```rust,ignore)
+//     https://github.com/kivikakk/comrak/issues/246
+struct CustomSyntectAdapter(SyntectAdapter);
+
+impl SyntaxHighlighterAdapter for CustomSyntectAdapter {
+    fn write_highlighted(
+        &self,
+        output: &mut dyn io::Write,
+        lang: Option<&str>,
+        code: &str,
+    ) -> io::Result<()> {
+        let norm_lang = lang.map(|l| l.split_once(',').map(|(lang, _)| lang).unwrap_or(l));
+        self.0.write_highlighted(output, norm_lang, code)
+    }
+
+    fn write_pre_tag(
+        &self,
+        output: &mut dyn io::Write,
+        attributes: HashMap<String, String>,
+    ) -> io::Result<()> {
+        self.0.write_pre_tag(output, attributes)
+    }
+
+    fn write_code_tag(
+        &self,
+        output: &mut dyn io::Write,
+        attributes: HashMap<String, String>,
+    ) -> io::Result<()> {
+        self.0.write_code_tag(output, attributes)
+    }
+}
+
 pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     let mut options = ComrakOptions::default();
     options.extension.autolink = true;
@@ -103,7 +140,8 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
         .build();
 
     let mut plugins = comrak::ComrakPlugins::default();
-    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    let custom = CustomSyntectAdapter(adapter);
+    plugins.render.codefence_syntax_highlighter = Some(&custom);
 
     let htmlified = markdown_to_html_with_plugins(md, &options, &plugins);
 
