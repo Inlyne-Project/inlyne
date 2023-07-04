@@ -1,0 +1,30 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n```toml\nkey = 123\n```\n\n\n --- html\n\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-toml\"><span style=\"color:#323232;\">key = 123\n</span></code></pre>\n"
+expression: interpret_md(text)
+---
+[
+    TextBox(
+        TextBox {
+            background_color: Some(Color { r: 0.92, g: 0.94, b: 0.96 }),
+            is_code_block: true,
+            texts: [
+                Text {
+                    text: "key = 123",
+                    font_family: Monospace,
+                    color: Some(Color { r: 0.03, g: 0.03, b: 0.03 }),
+                    ..
+                },
+                Text {
+                    text: "\n",
+                    default_color: Color(BLACK),
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]
