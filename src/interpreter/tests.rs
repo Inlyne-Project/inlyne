@@ -129,9 +129,23 @@ const CHECKLIST_HAS_NO_TEXT_PREFIX: &str = "\
 - [x] Completed task
 - [ ] Incomplete task";
 
+const TOML_GETS_HIGHLIGHTED: &str = "\
+```toml
+key = 123
+```
+";
+
+const HANDLES_COMMA_IN_INFO_STR: &str = "\
+```rust,ignore
+let v = 1;
+```
+";
+
 snapshot_interpreted_elements!(
     (sanity, SANITY),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
+    (toml_gets_highlighted, TOML_GETS_HIGHLIGHTED),
+    (handles_comma_in_info_str, HANDLES_COMMA_IN_INFO_STR),
 );
 
 /// Spin up a server, so we can test network requests without external services
