@@ -155,11 +155,25 @@ In a paragraph https://example.org
 - In a list https://example.org
 ";
 
+const TOML_GETS_HIGHLIGHTED: &str = "\
+```toml
+key = 123
+```
+";
+
+const HANDLES_COMMA_IN_INFO_STR: &str = "\
+```rust,ignore
+let v = 1;
+```
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
     (code_block_bg_color, CODE_BLOCK_BG_COLOR),
     (bare_link_gets_autolinked, BARE_LINK_GETS_AUTOLINKED),
+    (toml_gets_highlighted, TOML_GETS_HIGHLIGHTED),
+    (handles_comma_in_info_str, HANDLES_COMMA_IN_INFO_STR),
 );
 
 /// Spin up a server, so we can test network requests without external services

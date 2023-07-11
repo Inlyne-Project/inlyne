@@ -107,6 +107,9 @@ impl PartialEq for Theme {
     }
 }
 
+// TODO: the error message here degraded when switching this to allow for custom themes. It'd be
+//       good to still list all the default themes when passing in something else. Add a test for
+//       the error message
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum SyntaxTheme {
