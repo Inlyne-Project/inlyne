@@ -1,0 +1,11 @@
+---
+source: src/opts/tests/error_msg.rs
+description: "light-theme.code-highlighter = \"doesnt-exist\""
+expression: err
+---
+TOML parse error at line 1, column 32
+  |
+1 | light-theme.code-highlighter = "doesnt-exist"
+  |                                ^^^^^^^^^^^^^^
+data did not match any variant of untagged enum SyntaxTheme
+
