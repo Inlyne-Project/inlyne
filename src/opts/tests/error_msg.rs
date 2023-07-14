@@ -16,5 +16,9 @@ macro_rules! snapshot_config_parse_error {
 }
 
 const UNKNOWN_THEME: &str = r#"light-theme.code-highlighter = "doesnt-exist""#;
+const INVALID_THEME_TY: &str = "light-theme.code-highlighter = []";
 
-snapshot_config_parse_error!((unknown_theme, UNKNOWN_THEME));
+snapshot_config_parse_error!(
+    (unknown_theme, UNKNOWN_THEME),
+    (invalid_theme_ty, INVALID_THEME_TY),
+);

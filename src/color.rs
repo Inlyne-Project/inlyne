@@ -107,11 +107,21 @@ impl PartialEq for Theme {
     }
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(untagged)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyntaxTheme {
     Defaults(ThemeDefaults),
-    Custom { path: PathBuf },
+    Custom(ThemeCustom),
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ThemeCustom {
+    path: PathBuf,
+}
+
+impl SyntaxTheme {
+    pub fn custom(path: PathBuf) -> Self {
+        Self::Custom(ThemeCustom { path })
+    }
 }
 
 impl TryFrom<SyntaxTheme> for SyntectTheme {
@@ -120,7 +130,7 @@ impl TryFrom<SyntaxTheme> for SyntectTheme {
     fn try_from(syntax_theme: SyntaxTheme) -> Result<Self, Self::Error> {
         match syntax_theme {
             SyntaxTheme::Defaults(default) => Ok(SyntectTheme::from(default)),
-            SyntaxTheme::Custom { path } => {
+            SyntaxTheme::Custom(ThemeCustom { path }) => {
                 let mut reader = BufReader::new(File::open(&path).with_context(|| {
                     format!("Failed opening theme from path {}", path.display())
                 })?);
@@ -131,8 +141,51 @@ impl TryFrom<SyntaxTheme> for SyntectTheme {
     }
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+// Give better error messages than regular `#[serde(untagged)]`
+impl<'de> Deserialize<'de> for SyntaxTheme {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Untagged {
+            Defaults(String),
+            Custom(ThemeCustom),
+        }
+
+        let Ok(untagged) = Untagged::deserialize(deserializer) else {
+            return Err(serde::de::Error::custom(
+                "Expects either a default theme name or a path to a custom theme. E.g.\n\
+                default: \"inspired-github\"\n\
+                custom:  { path = \"/path/to/custom.tmTheme\" }"
+            ))
+        };
+
+        match untagged {
+            // Unfortunately #[serde(untagged)] uses private internals to reuse a deserializer
+            // mutliple times. We can't so now we have to fall back to other means to give a good
+            // error message ;-;
+            Untagged::Defaults(theme_name) => match ThemeDefaults::from_kebab(&theme_name) {
+                Some(theme) => Ok(Self::Defaults(theme)),
+                None => {
+                    let variants = ThemeDefaults::kebab_pairs()
+                        .iter()
+                        .map(|(kebab, _)| format!("\"{kebab}\""))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let msg = format!(
+                        "\"{theme_name}\" didn't match any of the expected variants: [{variants}]"
+                    );
+                    Err(serde::de::Error::custom(msg))
+                }
+            },
+            Untagged::Custom(custom) => Ok(Self::Custom(custom)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeDefaults {
     Base16OceanDark,
     Base16EightiesDark,
@@ -144,6 +197,24 @@ pub enum ThemeDefaults {
 }
 
 impl ThemeDefaults {
+    fn kebab_pairs() -> &'static [(&'static str, Self)] {
+        &[
+            ("base16-ocean-dark", Self::Base16OceanDark),
+            ("base16-eighties-dark", Self::Base16EightiesDark),
+            ("base16-mocha-dark", Self::Base16MochaDark),
+            ("base16-ocean-light", Self::Base16OceanLight),
+            ("inspired-github", Self::InspiredGithub),
+            ("solarized-dark", Self::SolarizedDark),
+            ("solarized-light", Self::SolarizedLight),
+        ]
+    }
+
+    fn from_kebab(kebab: &str) -> Option<Self> {
+        Self::kebab_pairs()
+            .iter()
+            .find_map(|&(hay, var)| (kebab == hay).then_some(var))
+    }
+
     pub fn as_syntect_name(self) -> &'static str {
         match self {
             Self::Base16OceanDark => "base16-ocean.dark",

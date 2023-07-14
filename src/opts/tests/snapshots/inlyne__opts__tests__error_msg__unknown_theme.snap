@@ -7,5 +7,5 @@ TOML parse error at line 1, column 32
   |
 1 | light-theme.code-highlighter = "doesnt-exist"
   |                                ^^^^^^^^^^^^^^
-data did not match any variant of untagged enum SyntaxTheme
+"doesnt-exist" didn't match any of the expected variants: ["base16-ocean-dark", "base16-eighties-dark", "base16-mocha-dark", "base16-ocean-light", "inspired-github", "solarized-dark", "solarized-light"]
 
