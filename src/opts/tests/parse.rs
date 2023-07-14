@@ -1,10 +1,12 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use super::{cli, config, Opts, ResolvedTheme, ThemeType};
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::keybindings::Keybindings;
-use crate::opts::config::{FontOptions, LinesToScroll};
-use crate::opts::Args;
+use crate::opts::{
+    cli,
+    config::{self, FontOptions, LinesToScroll},
+    Args, Opts, ResolvedTheme, ThemeType,
+};
 
 use pretty_assertions::assert_eq;
 
@@ -200,7 +202,7 @@ fn custom_syntax_theme() {
     fn config_with_theme_at(path: PathBuf) -> config::Config {
         let mut config = config::Config::default();
         config.light_theme = Some(config::OptionalTheme {
-            code_highlighter: Some(SyntaxTheme::Custom { path }),
+            code_highlighter: Some(SyntaxTheme::custom(path)),
             ..Default::default()
         });
         config

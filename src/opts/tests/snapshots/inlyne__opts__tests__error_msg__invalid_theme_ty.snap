@@ -1,0 +1,13 @@
+---
+source: src/opts/tests/error_msg.rs
+description: "light-theme.code-highlighter = []"
+expression: err
+---
+TOML parse error at line 1, column 32
+  |
+1 | light-theme.code-highlighter = []
+  |                                ^^
+Expects either a default theme name or a path to a custom theme. E.g.
+default: "inspired-github"
+custom:  { path = "/path/to/custom.tmTheme" }
+
