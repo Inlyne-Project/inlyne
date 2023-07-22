@@ -15,6 +15,11 @@ readme = "README.md"
 repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
 rust-version = "1.65"
+exclude = [
+    "/ci/*",
+    "/.github/*",
+    "/tests/manual_test_data/*",
+]
 
 [features]
 default = ["x11"]
