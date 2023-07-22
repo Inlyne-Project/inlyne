@@ -33,7 +33,7 @@ expression: interpret_md(text)
             indent: 100.0,
             texts: [
                 Text {
-                    text: "· ",
+                    text: "1. ",
                     default_color: Color(BLACK),
                     style: BOLD ,
                     ..
