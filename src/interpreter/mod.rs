@@ -509,20 +509,15 @@ impl TokenSink for HtmlInterpreter {
                             }
                             let list = list.expect("List ended unexpectedly");
                             if self.current_textbox.texts.is_empty() {
-                                if let html::List {
-                                    list_type: html::ListType::Ordered(index),
-                                    ..
-                                } = list
-                                {
-                                    self.state.pending_list_prefix = Some(format!("{}. ", index));
-                                    *index += 1;
-                                } else if let html::List {
-                                    list_type: html::ListType::Unordered,
-                                    ..
-                                } = list
-                                {
-                                    self.state.pending_list_prefix = Some("· ".to_owned());
-                                }
+                                let prefix = match &mut list.list_type {
+                                    html::ListType::Ordered(index) => {
+                                        *index += 1;
+                                        format!("{}. ", *index - 1)
+                                    }
+                                    html::ListType::Unordered => "· ".to_owned(),
+                                };
+
+                                self.state.pending_list_prefix = Some(prefix);
                             }
                         }
                         "ul" => {
