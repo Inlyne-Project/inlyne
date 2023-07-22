@@ -141,11 +141,32 @@ let v = 1;
 ```
 ";
 
+const UNORDERED_LIST_IN_ORDERED: &str = "\
+1. 1st outer
+    - bullet
+2. 2nd outer
+";
+
+const NESTED_ORDERED_LIST: &str = "\
+1. 1st outer
+    1. 1st inner
+2. 2nd outer
+";
+
+const ORDERED_LIST_IN_UNORDERED: &str = "\
+- bullet
+    1. 1st inner
+- bullet
+";
+
 snapshot_interpreted_elements!(
     (sanity, SANITY),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
     (toml_gets_highlighted, TOML_GETS_HIGHLIGHTED),
     (handles_comma_in_info_str, HANDLES_COMMA_IN_INFO_STR),
+    (unordered_list_in_ordered, UNORDERED_LIST_IN_ORDERED),
+    (nested_ordered_list, NESTED_ORDERED_LIST),
+    (ordered_list_in_unordered, ORDERED_LIST_IN_UNORDERED),
 );
 
 /// Spin up a server, so we can test network requests without external services

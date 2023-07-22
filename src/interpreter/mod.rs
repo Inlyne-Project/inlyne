@@ -747,6 +747,7 @@ impl TokenSink for HtmlInterpreter {
                         for element in self.state.element_stack.iter_mut().rev() {
                             if let html::Element::List(html_list) = element {
                                 list = Some(html_list);
+                                break;
                             }
                         }
                         let list = list.expect("List ended unexpectedly");
