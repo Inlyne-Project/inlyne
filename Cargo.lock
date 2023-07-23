@@ -1760,6 +1760,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_yaml",
+ "smart-debug",
  "syntect",
  "taffy",
  "tempfile",
@@ -3471,6 +3472,17 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "smart-debug"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91dddcfd8ca778ef2f1d2b57dfccaa12b8d4e8f715c99211c62802838446f14e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
 
 [[package]]
 name = "smithay-client-toolkit"

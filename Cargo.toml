@@ -61,6 +61,7 @@ fxhash = "0.2.1"
 twox-hash = "1.6.3"
 taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "d338f3731da519d182bbc074de46382984ab7c4a" }
 syntect = "5.0.0"
+smart-debug = "0.0.1"
 
 [dependencies.two-face]
 version = "0.1.1"
