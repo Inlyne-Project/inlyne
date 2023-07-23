@@ -40,10 +40,8 @@ dark-light = "1.0.0"
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
 pollster = "0.3.0"
+smart-debug = "0.0.2"
 syntect = "5.1.0"
-
-[profile.release]
-strip = true
 
 [dependencies.two-face]
 version = "0.1.1"

@@ -1,31 +1,34 @@
 use std::fmt;
 
-use crate::debug_impls;
+use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
 use crate::utils::{Align, Line, Point, Rect, Selection, Size};
+
+use smart_debug::SmartDebug;
 
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
 };
 
-#[derive(Clone)]
+#[derive(SmartDebug, Clone)]
+#[debug(ignore_defaults)]
 pub struct TextBox {
-    pub indent: f32,
-    pub texts: Vec<Text>,
-    pub is_code_block: bool,
-    pub is_quote_block: Option<usize>,
-    pub is_checkbox: Option<bool>,
-    pub is_anchor: Option<String>,
     pub align: Align,
-    pub hidpi_scale: f32,
+    pub indent: f32,
     pub padding_height: f32,
+    #[debug(wrapper = DebugInlineMaybeF32Color)]
     pub background_color: Option<[f32; 4]>,
-}
-
-impl fmt::Debug for TextBox {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        debug_impls::text_box(self, f)
-    }
+    pub is_code_block: bool,
+    #[debug(wrapper = DebugInline)]
+    pub is_quote_block: Option<usize>,
+    #[debug(wrapper = DebugInline)]
+    pub is_checkbox: Option<bool>,
+    #[debug(wrapper = DebugInline)]
+    pub is_anchor: Option<String>,
+    #[debug(no_ignore)]
+    pub texts: Vec<Text>,
+    #[debug(ignore)]
+    pub hidpi_scale: f32,
 }
 
 impl Default for TextBox {

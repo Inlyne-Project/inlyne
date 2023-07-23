@@ -1,11 +1,11 @@
-use crate::debug_impls;
+use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
-use std::fmt;
+use smart_debug::SmartDebug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -27,22 +27,13 @@ pub enum ImageSize {
     PxHeight(u32),
 }
 
-#[derive(Default, Clone)]
+#[derive(SmartDebug, Default, Clone)]
 pub struct ImageData {
+    #[debug(wrapper = DebugBytesPrefix)]
     lz4_blob: Vec<u8>,
     scale: bool,
+    #[debug(wrapper = DebugInline)]
     dimensions: (u32, u32),
-}
-
-impl fmt::Debug for ImageData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {
-            lz4_blob,
-            scale,
-            dimensions,
-        } = self;
-        debug_impls::image_data((lz4_blob, scale, dimensions), f)
-    }
 }
 
 impl ImageData {
@@ -86,20 +77,28 @@ impl ImageData {
     }
 }
 
-#[derive(Default)]
+#[derive(SmartDebug, Default)]
 pub struct Image {
+    #[debug(ignore_fn = debug_ignore_image_data)]
     pub image_data: Arc<Mutex<Option<ImageData>>>,
+    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
     pub is_aligned: Option<Align>,
+    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
     pub size: Option<ImageSize>,
+    #[debug(ignore)]
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
+    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
     pub is_link: Option<String>,
+    #[debug(ignore)]
     pub hidpi_scale: f32,
 }
 
-impl fmt::Debug for Image {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        debug_impls::image(self, f)
-    }
+fn debug_ignore_image_data(mutex: &Mutex<Option<ImageData>>) -> bool {
+    let data = match mutex.lock() {
+        Ok(data) => data,
+        Err(poison_error) => poison_error.into_inner(),
+    };
+    data.is_none()
 }
 
 impl Image {
