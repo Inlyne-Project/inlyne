@@ -4,13 +4,20 @@
 
 use std::fmt;
 
-use crate::{
-    positioner::Spacer,
-    text::{Text, TextBox},
-    Image,
-};
+use crate::{positioner::Spacer, text::Text};
 
 use glyphon::FamilyOwned;
+
+pub struct DebugInlineMaybeF32Color<'a>(pub &'a Option<[f32; 4]>);
+
+impl fmt::Debug for DebugInlineMaybeF32Color<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            None => f.write_str("None"),
+            Some(rgba) => f.write_fmt(format_args!("Some({:?})", DebugF32Color(*rgba))),
+        }
+    }
+}
 
 pub struct DebugF32Color(pub [f32; 4]);
 
@@ -32,9 +39,9 @@ impl fmt::Debug for DebugF32Color {
     }
 }
 
-struct DebugInline<'inner, T>(&'inner T);
+pub struct DebugInline<'inner, T>(pub &'inner T);
 
-impl<'inner, T: fmt::Debug> fmt::Debug for DebugInline<'inner, T> {
+impl<T: fmt::Debug> fmt::Debug for DebugInline<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{:?}", self.0))
     }
@@ -50,7 +57,7 @@ fn debug_inline_some<T: fmt::Debug>(
     }
 }
 
-struct DebugBytesPrefix<'a>(&'a [u8]);
+pub struct DebugBytesPrefix<'a>(pub &'a [u8]);
 
 impl<'a> fmt::Debug for DebugBytesPrefix<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -62,54 +69,6 @@ impl<'a> fmt::Debug for DebugBytesPrefix<'a> {
             three_or_less => f.write_fmt(format_args!("{three_or_less:?}")),
         }
     }
-}
-
-pub fn text_box(text_box: &TextBox, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let TextBox {
-        indent,
-        font_size,
-        texts,
-        is_code_block,
-        is_quote_block,
-        is_checkbox,
-        is_anchor,
-        align,
-        // Globally consistent so avoid displaying as noise
-        hidpi_scale: _,
-        padding_height,
-        background_color,
-    } = text_box;
-
-    let mut debug = f.debug_struct("TextBox");
-
-    let default = TextBox::default();
-
-    // Fields that we only display when set to unique values
-    if *font_size != default.font_size {
-        debug.field("font_size", font_size);
-    }
-    if align != &default.align {
-        debug.field("align", align);
-    }
-    if *indent != default.indent {
-        debug.field("indent", indent);
-    }
-    if *padding_height != default.padding_height {
-        debug.field("padding_height", padding_height);
-    }
-    let background_color = background_color.map(DebugF32Color);
-    debug_inline_some(&mut debug, "background_color", &background_color);
-    if *is_code_block {
-        debug.field("is_code_block", &is_code_block);
-    }
-    debug_inline_some(&mut debug, "is_quote_block", is_quote_block);
-    debug_inline_some(&mut debug, "is_checkbox", is_checkbox);
-    debug_inline_some(&mut debug, "is_anchor", is_anchor);
-
-    // Texts at the end so all the smaller fields for text box are easily visible
-    debug.field("texts", texts);
-
-    debug.finish_non_exhaustive()
 }
 
 pub fn text(text: &Text, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -215,37 +174,4 @@ pub fn spacer(spacer: &Spacer, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     } else {
         f.write_fmt(format_args!("InvisibleSpacer({space})"))
     }
-}
-
-pub fn image(image: &Image, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let Image {
-        image_data,
-        is_aligned,
-        size,
-        bind_group: _,
-        is_link,
-        hidpi_scale: _,
-    } = image;
-
-    let mut debug = f.debug_struct("Image");
-
-    debug.field("image_data", image_data);
-    debug_inline_some(&mut debug, "is_aligned", is_aligned);
-    debug_inline_some(&mut debug, "size", size);
-    debug_inline_some(&mut debug, "is_link", is_link);
-
-    debug.finish_non_exhaustive()
-}
-
-pub fn image_data(
-    (lz4_blob, scale, dimensions): (&[u8], &bool, &(u32, u32)),
-    f: &mut fmt::Formatter<'_>,
-) -> fmt::Result {
-    let mut debug = f.debug_struct("ImageData");
-
-    debug.field("lz4_blob", &DebugBytesPrefix(lz4_blob));
-    debug.field("scale", scale);
-    debug.field("dimensions", &DebugInline(dimensions));
-
-    debug.finish()
 }
