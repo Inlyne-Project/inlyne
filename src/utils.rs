@@ -132,7 +132,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     theme_set
         .themes
         .insert(String::from(dummy_name), syntax_theme);
-    let syn_set = two_face::syntax::extra();
+    let syn_set = two_face::syntax::extra_no_newlines();
     let adapter = SyntectAdapterBuilder::new()
         .syntax_set(syn_set)
         .theme_set(theme_set)
