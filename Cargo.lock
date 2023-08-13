@@ -1751,7 +1751,6 @@ dependencies = [
  "log",
  "lyon",
  "lz4_flex",
- "memmap2 0.6.2",
  "notify",
  "open",
  "pollster",
