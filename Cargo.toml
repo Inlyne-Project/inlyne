@@ -27,39 +27,39 @@ x11 = ["winit/x11", "copypasta/x11"]
 wayland = ["winit/wayland", "copypasta/wayland"]
 
 [dependencies]
-winit = { version = "0.28.5", default-features = false }
+winit = { version = "0.28.6", default-features = false }
 wgpu = "0.16"
 bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
 comrak = { version = "0.18.0", default-features = false, features = ["shortcodes", "syntect"] }
 open = "5.0.0"
 html5ever = "0.26.0"
-image = "0.24.6"
-clap = { version = "4.3.1", features = ["cargo"] }
+image = "0.24.7"
+clap = { version = "4.3.21", features = ["cargo"] }
 copypasta = { version = "0.8.2", default-features = false }
 resvg = "0.34.1"
 usvg = "0.34.1"
 tiny-skia = "0.10.0"
-anyhow = "1.0.71"
+anyhow = "1.0.72"
 dirs = "5.0.1"
-serde = { version = "1.0.162", features = ["derive"] }
-toml = "0.7.3"
-reqwest = { version = "0.11.17", features = ["blocking", "json", "stream"] }
-log = "0.4.17"
+serde = { version = "1.0.183", features = ["derive"] }
+toml = "0.7.6"
+reqwest = { version = "0.11.18", features = ["blocking", "json", "stream"] }
+log = "0.4.20"
 env_logger = "0.10.0"
-notify = "6.0.0"
+notify = "6.0.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
 lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", "safe-encode", "std"] }
 pollster = "0.3.0"
-serde_yaml = "0.9.21"
+serde_yaml = "0.9.25"
 indexmap = { version = "1.9.3", features = ["serde"] }
 html-escape = "0.2.13"
 fxhash = "0.2.1"
 twox-hash = "1.6.3"
 taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "d338f3731da519d182bbc074de46382984ab7c4a" }
-syntect = "5.0.0"
+syntect = "5.1.0"
 smart-debug = "0.0.1"
 two-face = "0.2.0"
 
@@ -82,11 +82,11 @@ inherits = "release"
 lto = true
 
 [dev-dependencies]
-filetime = "0.2.21"
-insta = "1.29.0"
-pretty_assertions = "1.3.0"
-tempfile = "3.6.0"
-wiremock = "0.5.18"
+filetime = "0.2.22"
+insta = "1.31.0"
+pretty_assertions = "1.4.0"
+tempfile = "3.7.1"
+wiremock = "0.5.19"
 
 # Selectively bump up opt level for some dependencies to improve dev build perf
 [profile.dev.package.ttf-parser]
