@@ -1,7 +1,5 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use crate::utils;
-
 use anyhow::Context;
 use serde::Deserialize;
 use syntect::highlighting::{
@@ -31,7 +29,7 @@ pub fn native_color(c: u32, format: &TextureFormat) -> [f32; 4] {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     pub text_color: u32,
     pub background_color: u32,
@@ -68,42 +66,6 @@ impl Theme {
             checkbox_color: 0x96ECAE,
             code_highlighter: SyntectTheme::from(ThemeDefaults::InspiredGithub),
         }
-    }
-}
-
-// TODO(cosmic): replace with derive after syntect theme impls PartialEq
-impl PartialEq for Theme {
-    fn eq(&self, other: &Self) -> bool {
-        let Self {
-            text_color: self_text_color,
-            background_color: self_background_color,
-            code_color: self_code_color,
-            quote_block_color: self_quote_block_color,
-            link_color: self_link_color,
-            select_color: self_select_color,
-            checkbox_color: self_checkbox_color,
-            code_highlighter: self_code_highlighter,
-        } = self;
-        let Self {
-            text_color: other_text_color,
-            background_color: other_background_color,
-            code_color: other_code_color,
-            quote_block_color: other_quote_block_color,
-            link_color: other_link_color,
-            select_color: other_select_color,
-            checkbox_color: other_checkbox_color,
-            code_highlighter: other_code_highlighter,
-        } = other;
-
-        self_text_color == other_text_color
-            && self_background_color == other_background_color
-            && self_code_color == other_code_color
-            && self_quote_block_color == other_quote_block_color
-            && self_link_color == other_link_color
-            && self_select_color == other_select_color
-            && self_checkbox_color == other_checkbox_color
-            && utils::SyntectThemePartialEq(self_code_highlighter)
-                == utils::SyntectThemePartialEq(other_code_highlighter)
     }
 }
 
@@ -158,8 +120,8 @@ impl<'de> Deserialize<'de> for SyntaxTheme {
             return Err(serde::de::Error::custom(
                 "Expects either a default theme name or a path to a custom theme. E.g.\n\
                 default: \"inspired-github\"\n\
-                custom:  { path = \"/path/to/custom.tmTheme\" }"
-            ))
+                custom:  { path = \"/path/to/custom.tmTheme\" }",
+            ));
         };
 
         match untagged {

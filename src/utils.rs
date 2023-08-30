@@ -226,17 +226,6 @@ impl Cell {
     }
 }
 
-// TODO(cosmic): Gonna send a PR upstream because the theme should impl `PartialEq`
-pub struct SyntectThemePartialEq<'a>(pub &'a SyntectTheme);
-
-impl PartialEq for SyntectThemePartialEq<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.name == other.0.name
-            && self.0.author == other.0.author
-            && self.0.scopes.len() == other.0.scopes.len()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
