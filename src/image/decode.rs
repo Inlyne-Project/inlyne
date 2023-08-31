@@ -1,6 +1,8 @@
 use crate::utils::usize_in_mib;
 use image::{
-    codecs::{jpeg::JpegDecoder, png::PngDecoder},
+    codecs::{
+        gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder, tiff::TiffDecoder, webp::WebPDecoder,
+    },
     ColorType, GenericImageView, ImageDecoder, ImageFormat,
 };
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
@@ -38,6 +40,18 @@ pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u3
         }
         ImageFormat::Jpeg => {
             let dec = JpegDecoder::new(io::Cursor::new(&contents))?;
+            stream_decode_and_compress(dec)
+        }
+        ImageFormat::Gif => {
+            let dec = GifDecoder::new(io::Cursor::new(&contents))?;
+            stream_decode_and_compress(dec)
+        }
+        ImageFormat::Tiff => {
+            let dec = TiffDecoder::new(io::Cursor::new(&contents))?;
+            stream_decode_and_compress(dec)
+        }
+        ImageFormat::WebP => {
+            let dec = WebPDecoder::new(io::Cursor::new(&contents))?;
             stream_decode_and_compress(dec)
         }
         _ => None,

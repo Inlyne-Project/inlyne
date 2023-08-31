@@ -36,7 +36,7 @@ impl Delays {
     fn increase_delays(&mut self) {
         self.delay *= 2;
         self.short_timeout *= 2;
-        self.long_timeout += Duration::from_millis(1);
+        self.long_timeout += Duration::from_secs(1);
     }
 
     fn delay(&self) {
