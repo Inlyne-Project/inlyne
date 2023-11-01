@@ -28,7 +28,7 @@ wayland = ["winit/wayland", "copypasta/wayland"]
 
 [dependencies]
 winit = { version = "0.28.6", default-features = false }
-wgpu = "0.16"
+wgpu = "0.18"
 bytemuck = { version = "1.13.1", features = [ "derive" ] }
 lyon = "1.0.1"
 comrak = { version = "0.18.0", default-features = false, features = ["shortcodes", "syntect"] }
