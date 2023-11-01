@@ -94,11 +94,10 @@ pub struct Image {
 }
 
 fn debug_ignore_image_data(mutex: &Mutex<Option<ImageData>>) -> bool {
-    let data = match mutex.lock() {
-        Ok(data) => data,
-        Err(poison_error) => poison_error.into_inner(),
-    };
-    data.is_none()
+    match mutex.lock() {
+        Ok(data) => data.is_none(),
+        Err(_) => true,
+    }
 }
 
 impl Image {
