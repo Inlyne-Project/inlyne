@@ -61,8 +61,8 @@ jobs:
           7z a "$staging.zip" "$staging"
           echo "ASSET=$staging.zip" >> $GITHUB_ENV
         else
-          tar czf "$staging.tar.gz" "$staging"
           cp "target/${{ matrix.target }}/release-lto/inlyne" "$staging/"
+          tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
         fi
 
