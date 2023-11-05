@@ -60,7 +60,7 @@ impl Measurable for TextBoxMeasure {
 }
 
 #[derive(SmartDebug, Clone)]
-#[debug(ignore_defaults)]
+#[debug(skip_defaults)]
 pub struct TextBox {
     pub font_size: f32,
     pub align: Align,
@@ -75,9 +75,9 @@ pub struct TextBox {
     pub is_checkbox: Option<bool>,
     #[debug(wrapper = DebugInline)]
     pub is_anchor: Option<String>,
-    #[debug(no_ignore)]
+    #[debug(no_skip)]
     pub texts: Vec<Text>,
-    #[debug(ignore)]
+    #[debug(skip)]
     pub hidpi_scale: f32,
 }
 
