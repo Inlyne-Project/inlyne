@@ -37,9 +37,9 @@ html5ever = "0.26.0"
 image = "0.24.7"
 clap = { version = "4.3.24", features = ["cargo"] }
 copypasta = { version = "0.10.0", default-features = false }
-resvg = "0.34.1"
-usvg = "0.34.1"
-tiny-skia = "0.10.0"
+resvg = "0.36.0"
+usvg = "0.36.0"
+tiny-skia = "0.11.2"
 anyhow = "1.0.75"
 dirs = "5.0.1"
 serde = { version = "1.0.190", features = ["derive"] }
