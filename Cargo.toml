@@ -63,6 +63,9 @@ syntect = "5.1.0"
 smart-debug = "0.0.3"
 two-face = "0.3.0"
 
+# Required for WGPU to work properly with Vulkan
+fontdb = { version = "0.13.1", features = ["fontconfig"] }
+
 [dependencies.glyphon]
 version = "0.2"
 git = "https://github.com/trimental/glyphon"

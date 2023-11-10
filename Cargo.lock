@@ -1231,6 +1231,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "237ff9f0813bbfc9de836016472e0c9ae7802f174a51594607e5f4ff334cb2f5"
 dependencies = [
+ "fontconfig-parser",
  "log",
  "memmap2 0.5.10",
  "slotmap",
@@ -1847,6 +1848,7 @@ dependencies = [
  "dirs 5.0.1",
  "env_logger",
  "filetime",
+ "fontdb 0.13.1",
  "fxhash",
  "glyphon",
  "html-escape",
