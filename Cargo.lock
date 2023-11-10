@@ -1811,6 +1811,7 @@ dependencies = [
  "env_logger",
  "filetime",
  "font-kit",
+ "fontdb",
  "html5ever",
  "image",
  "insta",

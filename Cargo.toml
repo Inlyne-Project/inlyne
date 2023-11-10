@@ -43,6 +43,9 @@ pollster = "0.3.0"
 smart-debug = "0.0.2"
 syntect = "5.1.0"
 
+# Required for WGPU to work properly with Vulkan
+fontdb = { version = "0.13.1", features = ["fontconfig"] }
+
 [dependencies.two-face]
 version = "0.1.1"
 default-features = false
