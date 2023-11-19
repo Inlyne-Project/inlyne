@@ -761,6 +761,8 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
+    human_panic::setup_panic!();
+
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
