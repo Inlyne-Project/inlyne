@@ -208,25 +208,23 @@ impl Image {
                 image
             } else {
                 let opt = usvg::Options::default();
-                let mut rtree = usvg::Tree::from_data(&image_data, &opt).unwrap();
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
-                rtree.convert_text(&fontdb);
-                let pixmap_size = rtree.size.to_screen_size();
-                let mut pixmap = tiny_skia::Pixmap::new(
-                    (pixmap_size.width() as f32 * hidpi_scale) as u32,
-                    (pixmap_size.height() as f32 * hidpi_scale) as u32,
-                )
-                .context("Couldn't create svg pixmap")
-                .unwrap();
-                resvg::render(
-                    &rtree,
-                    resvg::FitTo::Zoom(hidpi_scale),
-                    tiny_skia::Transform::default(),
-                    pixmap.as_mut(),
-                )
-                .context("Svg failed to render")
-                .unwrap();
+                let mut tree = usvg::Tree::from_data(&image_data, &opt).unwrap();
+                tree.size = tree.size.scale_to(
+                    tiny_skia::Size::from_wh(
+                        tree.size.width() * hidpi_scale,
+                        tree.size.height() * hidpi_scale,
+                    )
+                    .unwrap(),
+                );
+                tree.convert_text(&fontdb);
+                let rtree = resvg::Tree::from_usvg(&tree);
+                let mut pixmap =
+                    tiny_skia::Pixmap::new(rtree.size.width() as u32, rtree.size.height() as u32)
+                        .context("Couldn't create svg pixmap")
+                        .unwrap();
+                rtree.render(tiny_skia::Transform::default(), &mut pixmap.as_mut());
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")
