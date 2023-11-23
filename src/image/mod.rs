@@ -79,17 +79,17 @@ impl ImageData {
 
 #[derive(SmartDebug, Default)]
 pub struct Image {
-    #[debug(ignore_fn = debug_ignore_image_data)]
+    #[debug(skip_fn = debug_ignore_image_data)]
     pub image_data: Arc<Mutex<Option<ImageData>>>,
-    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub is_aligned: Option<Align>,
-    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub size: Option<ImageSize>,
-    #[debug(ignore)]
+    #[debug(skip)]
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
-    #[debug(ignore_fn = Option::is_none, wrapper = DebugInline)]
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub is_link: Option<String>,
-    #[debug(ignore)]
+    #[debug(skip)]
     pub hidpi_scale: f32,
 }
 

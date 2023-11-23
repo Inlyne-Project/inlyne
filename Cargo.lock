@@ -3934,18 +3934,18 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
 name = "smart-debug"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5502c61a245a5ded27cb2e4a49cac93b3527d0653ca517769aaa96138ff3241"
+checksum = "54708a918472ed0a5cb90775fd2bd649c949e1630c973901bc2cff987710d98b"
 dependencies = [
  "smart-debug-derive",
 ]
 
 [[package]]
 name = "smart-debug-derive"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34e5f490c4650ac837987490484f6b105ea9d317a93083a0f94f4de3ffc7b1ba"
+checksum = "e217678d06a85df0b9ac15c6c74ebc68b2d43c95ede39e126e21b4c89d314056"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4508,7 +4508,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
