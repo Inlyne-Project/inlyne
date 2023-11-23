@@ -1,9 +1,11 @@
+use crate::debug_impls::{DebugBytesPrefix, DebugInline};
+use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
-use crate::InlyneEvent;
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use smart_debug::SmartDebug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -12,7 +14,6 @@ use std::time::Instant;
 use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
-use winit::event_loop::EventLoopProxy;
 
 use std::borrow::Cow;
 
@@ -26,10 +27,12 @@ pub enum ImageSize {
     PxHeight(u32),
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(SmartDebug, Default, Clone)]
 pub struct ImageData {
+    #[debug(wrapper = DebugBytesPrefix)]
     lz4_blob: Vec<u8>,
     scale: bool,
+    #[debug(wrapper = DebugInline)]
     dimensions: (u32, u32),
 }
 
@@ -74,14 +77,27 @@ impl ImageData {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(SmartDebug, Default)]
 pub struct Image {
+    #[debug(skip_fn = debug_ignore_image_data)]
     pub image_data: Arc<Mutex<Option<ImageData>>>,
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub is_aligned: Option<Align>,
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub size: Option<ImageSize>,
+    #[debug(skip)]
     pub bind_group: Option<Arc<wgpu::BindGroup>>,
+    #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
     pub is_link: Option<String>,
+    #[debug(skip)]
     pub hidpi_scale: f32,
+}
+
+fn debug_ignore_image_data(mutex: &Mutex<Option<ImageData>>) -> bool {
+    match mutex.lock() {
+        Ok(data) => data.is_none(),
+        Err(_) => true,
+    }
 }
 
 impl Image {
@@ -166,7 +182,7 @@ impl Image {
         src: String,
         file_path: PathBuf,
         hidpi_scale: f32,
-        event_proxy: EventLoopProxy<InlyneEvent>,
+        image_callback: Box<dyn ImageCallback + Send>,
     ) -> anyhow::Result<Image> {
         let image_data = Arc::new(Mutex::new(None));
         let image_data_clone = image_data.clone();
@@ -192,25 +208,23 @@ impl Image {
                 image
             } else {
                 let opt = usvg::Options::default();
-                let mut rtree = usvg::Tree::from_data(&image_data, &opt).unwrap();
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
-                rtree.convert_text(&fontdb);
-                let pixmap_size = rtree.size.to_screen_size();
-                let mut pixmap = tiny_skia::Pixmap::new(
-                    (pixmap_size.width() as f32 * hidpi_scale) as u32,
-                    (pixmap_size.height() as f32 * hidpi_scale) as u32,
-                )
-                .context("Couldn't create svg pixmap")
-                .unwrap();
-                resvg::render(
-                    &rtree,
-                    resvg::FitTo::Zoom(hidpi_scale),
-                    tiny_skia::Transform::default(),
-                    pixmap.as_mut(),
-                )
-                .context("Svg failed to render")
-                .unwrap();
+                let mut tree = usvg::Tree::from_data(&image_data, &opt).unwrap();
+                tree.size = tree.size.scale_to(
+                    tiny_skia::Size::from_wh(
+                        tree.size.width() * hidpi_scale,
+                        tree.size.height() * hidpi_scale,
+                    )
+                    .unwrap(),
+                );
+                tree.convert_text(&fontdb);
+                let rtree = resvg::Tree::from_usvg(&tree);
+                let mut pixmap =
+                    tiny_skia::Pixmap::new(rtree.size.width() as u32, rtree.size.height() as u32)
+                        .context("Couldn't create svg pixmap")
+                        .unwrap();
+                rtree.render(tiny_skia::Transform::default(), &mut pixmap.as_mut());
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")
@@ -220,9 +234,7 @@ impl Image {
             };
 
             *image_data_clone.lock().unwrap() = Some(image);
-            event_proxy
-                .send_event(InlyneEvent::LoadedImage(src, image_data_clone))
-                .unwrap();
+            image_callback.loaded_image(src, image_data_clone);
         });
 
         let image = Image {

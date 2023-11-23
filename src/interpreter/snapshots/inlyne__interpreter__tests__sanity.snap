@@ -1,0 +1,43 @@
+---
+source: src/interpreter/tests.rs
+expression: interpret_md(text)
+---
+[
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    TextBox(
+        TextBox {
+            is_anchor: Some("#header"),
+            texts: [
+                Text {
+                    text: "Header",
+                    size: 32.0,
+                    default_color: Color(BLACK),
+                    style: BOLD UNDERLINED ,
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    TextBox(
+        TextBox {
+            texts: [
+                Text {
+                    text: "Italicized text",
+                    default_color: Color(BLACK),
+                    style: ITALIC ,
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]

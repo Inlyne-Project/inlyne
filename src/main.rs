@@ -1,4 +1,5 @@
 pub mod color;
+mod debug_impls;
 pub mod fonts;
 pub mod image;
 pub mod interpreter;
@@ -9,12 +10,14 @@ pub mod renderer;
 pub mod table;
 pub mod text;
 pub mod utils;
+mod watcher;
 
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
+use watcher::Watcher;
 
 use crate::image::ImageData;
 use keybindings::{Action, Key, KeyCombos, ModifiedKey};
@@ -32,7 +35,6 @@ use utils::{ImageCache, Point, Rect, Size};
 
 use anyhow::Context;
 use copypasta::{ClipboardContext, ClipboardProvider};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 use winit::event::ModifiersState;
 use winit::event::{ElementState, MouseButton};
@@ -60,6 +62,7 @@ use std::sync::Mutex;
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
+    FileChange { contents: String },
     Reposition,
 }
 
@@ -122,19 +125,22 @@ impl From<Table> for Element {
 }
 
 pub struct Inlyne {
+    opts: Opts,
     window: Arc<Window>,
-    event_loop: EventLoop<InlyneEvent>,
+    // HACK: `Option<_>` is used here to keep `Inlyne` valid while running the event loop. Consider
+    // splitting this out from the rest of the state
+    event_loop: Option<EventLoop<InlyneEvent>>,
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     clipboard: ClipboardContext,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
-    args: Args,
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
     interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
     need_repositioning: bool,
+    watcher: Watcher,
 }
 
 /// Gets a relative path extending from the repo root falling back to the full path
@@ -171,45 +177,12 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 }
 
 impl Inlyne {
-    pub fn spawn_watcher(&self) {
-        // Create a channel to receive the events.
-        let (watch_tx, watch_rx) = channel();
-
-        // Create a watcher object, delivering raw events.
-        // The notification back-end is selected based on the platform.
-        let mut watcher = RecommendedWatcher::new(watch_tx, notify::Config::default()).unwrap();
-
-        // Add the file path to be watched.
-        let event_proxy = self.event_loop.create_proxy();
-        let file_path = self.args.file_path.clone();
-        std::thread::spawn(move || {
-            watcher
-                .watch(&file_path, RecursiveMode::NonRecursive)
-                .unwrap();
-
-            loop {
-                let event = match watch_rx.recv() {
-                    Ok(event) => event,
-                    Err(err) => {
-                        log::warn!("Config watcher channel dropped unexpectedly: {}", err);
-                        break;
-                    }
-                };
-
-                if event.unwrap().kind.is_modify() {
-                    // Always reload the primary configuration file.
-                    let _ = event_proxy.send_event(InlyneEvent::FileReload);
-                }
-            }
-        });
-    }
-
-    pub fn new(opts: &Opts, args: Args) -> anyhow::Result<Self> {
+    pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(&args.file_path) {
+        match root_filepath_to_vcs_dir(&opts.file_path) {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
@@ -225,7 +198,7 @@ impl Inlyne {
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
         let md_string = read_to_string(&opts.file_path)
-            .with_context(|| format!("Could not read file at {:?}", opts.file_path))?;
+            .with_context(|| format!("Could not read file at '{}'", opts.file_path.display()))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),
@@ -233,7 +206,7 @@ impl Inlyne {
             renderer.theme.clone(),
             renderer.surface_format,
             renderer.hidpi_scale,
-            args.file_path.clone(),
+            opts.file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
         );
@@ -244,21 +217,67 @@ impl Inlyne {
 
         interpreter_sender.send(md_string)?;
 
+        let lines_to_scroll = opts.lines_to_scroll;
+
+        let watcher = Watcher::spawn(event_loop.create_proxy(), opts.file_path.clone());
+
         Ok(Self {
+            opts,
             window,
-            event_loop,
+            event_loop: Some(event_loop),
             renderer,
             element_queue,
             clipboard,
             elements: Vec::new(),
-            lines_to_scroll: opts.lines_to_scroll,
-            args,
+            lines_to_scroll,
             interpreter_sender,
             interpreter_should_queue,
             image_cache,
             keycombos,
             need_repositioning: false,
+            watcher,
         })
+    }
+
+    pub fn position_queued_elements(
+        element_queue: &Arc<Mutex<VecDeque<Element>>>,
+        renderer: &mut Renderer,
+        elements: &mut Vec<Positioned<Element>>,
+    ) {
+        let queue = {
+            element_queue
+                .try_lock()
+                .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
+        };
+        if let Ok(queue) = queue {
+            for element in queue {
+                // Position element and add it to elements
+                let mut positioned_element = Positioned::new(element);
+                renderer
+                    .positioner
+                    .position(
+                        &mut renderer.glyph_brush,
+                        &mut positioned_element,
+                        renderer.zoom,
+                    )
+                    .unwrap();
+                renderer.positioner.reserved_height +=
+                    DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
+                        + positioned_element.bounds.as_ref().unwrap().size.1;
+                elements.push(positioned_element);
+            }
+        }
+    }
+
+    fn load_file(&mut self, contents: String) {
+        self.interpreter_should_queue
+            .store(false, Ordering::Relaxed);
+        self.element_queue.lock().unwrap().clear();
+        self.elements.clear();
+        self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
+        self.renderer.positioner.anchors.clear();
+        self.interpreter_should_queue.store(true, Ordering::Relaxed);
+        self.interpreter_sender.send(contents).unwrap();
     }
 
     pub fn run(mut self) {
@@ -269,8 +288,10 @@ impl Inlyne {
         let mut last_loc = (0.0, 0.0);
         let mut selection_cache = String::new();
         let mut selecting = false;
-        let event_loop_proxy = self.event_loop.create_proxy();
-        self.event_loop.run(move |event, _, control_flow| {
+
+        let event_loop = self.event_loop.take().unwrap();
+        let event_loop_proxy = event_loop.create_proxy();
+        event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
             match event {
@@ -279,22 +300,17 @@ impl Inlyne {
                         self.image_cache.lock().unwrap().insert(src, image_data);
                         self.need_repositioning = true;
                     }
-                    InlyneEvent::FileReload => {
-                        self.interpreter_should_queue
-                            .store(false, Ordering::Relaxed);
-                        self.element_queue.lock().unwrap().clear();
-                        self.elements.clear();
-                        self.renderer.positioner.reserved_height =
-                            DEFAULT_PADDING * self.renderer.hidpi_scale;
-                        self.renderer.positioner.anchors.clear();
-                        let md_string = read_to_string(&self.args.file_path)
-                            .with_context(|| {
-                                format!("Could not read file at {:?}", self.args.file_path)
-                            })
-                            .unwrap();
-                        self.interpreter_should_queue.store(true, Ordering::Relaxed);
-                        self.interpreter_sender.send(md_string).unwrap();
-                    }
+                    InlyneEvent::FileReload => match read_to_string(&self.opts.file_path) {
+                        Ok(contents) => self.load_file(contents),
+                        Err(err) => {
+                            log::warn!(
+                                "Failed reloading file at {}\nError: {}",
+                                self.opts.file_path.display(),
+                                err
+                            );
+                        }
+                    },
+                    InlyneEvent::FileChange { contents } => self.load_file(contents),
                     InlyneEvent::Reposition => {
                         self.need_repositioning = true;
                     }
@@ -470,39 +486,55 @@ impl Inlyne {
                                     });
                                     if is_local_md {
                                         // Open markdown files ourselves
-                                        let mut args = self.args.clone();
                                         let path = maybe_path.expect("not a path");
                                         // Handle relative paths and make them
                                         // absolute by prepending current
                                         // parent
                                         let path = if path.is_relative() {
                                             // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
-                                            let current_parent =
-                                                args.file_path.parent().expect("no current parent");
-                                            let link_without_prefix: &Path = path
+                                            let current_parent = self
+                                                .opts
+                                                .file_path
+                                                .parent()
+                                                .expect("no current parent");
+                                            let mut normalized_link = path.as_path();
+                                            if let Ok(stripped) = normalized_link
                                                 .strip_prefix(std::path::Component::CurDir)
-                                                .expect("no CurDir prefix");
+                                            {
+                                                normalized_link = stripped;
+                                            }
                                             let mut link = current_parent.to_path_buf();
-                                            link.push(link_without_prefix);
+                                            link.push(normalized_link);
                                             link
                                         } else {
                                             path
                                         };
                                         // Open them in a new window, akin to what a browser does
                                         if modifiers.shift() {
-                                            args.file_path = path;
                                             Command::new(
                                                 std::env::current_exe()
                                                     .unwrap_or_else(|_| "inlyne".into()),
                                             )
-                                            .args(args.program_args())
+                                            .args(Opts::program_args(&path))
                                             .spawn()
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
-                                            self.args.file_path = path;
-                                            event_loop_proxy
-                                                .send_event(InlyneEvent::FileReload)
-                                                .expect("new file to reload successfully");
+                                            match read_to_string(&path) {
+                                                Ok(contents) => {
+                                                    self.opts.file_path = path;
+                                                    self.watcher.update_file(
+                                                        &self.opts.file_path,
+                                                        contents,
+                                                    );
+                                                }
+                                                Err(err) => {
+                                                    log::warn!(
+                                                        "Failed loading markdown file at {}\nError: {}",
+                                                        path.display(),
+                                                        err,
+                                                    );
+                                                }
+                                            }
                                         }
                                     } else if open::that(link).is_err() {
                                         if let Some(anchor_pos) =
@@ -704,27 +736,27 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
+    human_panic::setup_panic!();
+
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
         .parse_env("INLYNE_LOG")
         .init();
 
-    let config = match Config::load() {
-        Ok(config) => config,
-        Err(err) => {
+    let args = Args::new();
+    let config = match &args.config {
+        Some(config_path) => Config::load_from_file(config_path)?,
+        None => Config::load_from_system().unwrap_or_else(|err| {
             log::warn!(
                 "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
             Config::default()
-        }
+        }),
     };
-    let args = Args::new(&config);
-    let opts = Opts::parse_and_load_from(&args, config);
-    let inlyne = Inlyne::new(&opts, args)?;
-
-    inlyne.spawn_watcher();
+    let opts = Opts::parse_and_load_from(args, config);
+    let inlyne = Inlyne::new(opts)?;
     inlyne.run();
 
     Ok(())

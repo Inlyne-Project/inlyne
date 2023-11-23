@@ -1,0 +1,37 @@
+---
+source: src/interpreter/tests.rs
+expression: interpret_md(text)
+---
+[
+    TextBox(
+        TextBox {
+            indent: 50.0,
+            is_checkbox: Some(true),
+            texts: [
+                Text {
+                    text: "Completed task",
+                    default_color: Color(BLACK),
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    TextBox(
+        TextBox {
+            indent: 50.0,
+            is_checkbox: Some(false),
+            texts: [
+                Text {
+                    text: "Incomplete task",
+                    default_color: Color(BLACK),
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]

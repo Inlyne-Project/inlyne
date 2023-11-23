@@ -1,10 +1,10 @@
-use super::{Action, Key, KeyCombo, Keybindings, ModifiedKey};
+use super::{Action, Key, KeyCombo, ModifiedKey};
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
 
 const IS_MACOS: bool = cfg!(target_os = "macos");
 
-pub fn defaults() -> Keybindings {
+pub fn defaults() -> Vec<(Action, KeyCombo)> {
     let ctrl_or_command = if IS_MACOS {
         ModifiersState::LOGO
     } else {

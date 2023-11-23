@@ -1,23 +1,52 @@
+use std::fmt;
+
+use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
 use crate::utils::{Align, Line, Point, Rect, Selection, Size};
+
+use smart_debug::SmartDebug;
+
 use wgpu_glyph::{
     ab_glyph::{Font, FontArc, PxScale},
     Extra, FontId, GlyphCruncher, HorizontalAlign, Layout, Section, SectionGlyph,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(SmartDebug, Clone)]
+#[debug(skip_defaults)]
 pub struct TextBox {
-    pub indent: f32,
-    pub texts: Vec<Text>,
-    pub is_code_block: bool,
-    pub is_quote_block: Option<usize>,
-    pub is_checkbox: Option<bool>,
-    pub is_anchor: Option<String>,
     pub align: Align,
-    pub hidpi_scale: f32,
+    pub indent: f32,
     pub padding_height: f32,
+    #[debug(wrapper = DebugInlineMaybeF32Color)]
     pub background_color: Option<[f32; 4]>,
+    pub is_code_block: bool,
+    #[debug(wrapper = DebugInline)]
+    pub is_quote_block: Option<usize>,
+    #[debug(wrapper = DebugInline)]
+    pub is_checkbox: Option<bool>,
+    #[debug(wrapper = DebugInline)]
+    pub is_anchor: Option<String>,
+    #[debug(no_skip)]
+    pub texts: Vec<Text>,
+    #[debug(skip)]
+    pub hidpi_scale: f32,
 }
 
+impl Default for TextBox {
+    fn default() -> Self {
+        Self {
+            indent: 0.0,
+            texts: Vec::new(),
+            is_code_block: false,
+            is_quote_block: None,
+            is_checkbox: None,
+            is_anchor: None,
+            align: Align::default(),
+            hidpi_scale: 1.0,
+            padding_height: 0.0,
+            background_color: None,
+        }
+    }
+}
 impl TextBox {
     pub fn new(texts: Vec<Text>, hidpi_scale: f32) -> TextBox {
         TextBox {
@@ -249,7 +278,7 @@ impl TextBox {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Text {
     pub text: String,
     pub size: f32,
@@ -262,6 +291,12 @@ pub struct Text {
     pub font: usize,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
+}
+
+impl fmt::Debug for Text {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::text(self, f)
+    }
 }
 
 impl Text {
@@ -317,12 +352,13 @@ impl Text {
 
     fn font_id(&self) -> FontId {
         let base = self.font * 4;
-        let font = base + match (self.is_bold, self.is_italic) {
-            (false, false) => 0,
-            (false, true) => 1,
-            (true, false) => 2,
-            (true, true) => 3,
-        };
+        let font = base
+            + match (self.is_bold, self.is_italic) {
+                (false, false) => 0,
+                (false, true) => 1,
+                (true, false) => 2,
+                (true, true) => 3,
+            };
         FontId(font)
     }
 

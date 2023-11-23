@@ -1,4 +1,4 @@
-use super::{Action, Key, KeyCombo, KeyCombos, ModifiedKey};
+use super::{Action, Key, KeyCombo, KeyCombos, ModifiedKey, Keybindings};
 
 use serde::Deserialize;
 use winit::event::{ModifiersState, VirtualKeyCode};
@@ -25,6 +25,7 @@ inner = [
     let cap_g = ModifiedKey(Key::from(VirtualKeyCode::G), ModifiersState::SHIFT);
     let j = ModifiedKey::from(VirtualKeyCode::J);
 
+    let bindings = Keybindings::new(bindings);
     let mut key_combos = KeyCombos::new(bindings).unwrap();
 
     // Invalid combo 'gG' where the key that broke us out is a singlekey combo

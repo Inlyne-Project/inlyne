@@ -1,0 +1,42 @@
+---
+source: src/interpreter/tests.rs
+expression: interpret_md(text)
+---
+[
+    TextBox(
+        TextBox {
+            background_color: Some(Color { r: 0.86, g: 0.88, b: 0.91 }),
+            is_code_block: true,
+            texts: [
+                Text {
+                    text: "let",
+                    size: 18.0,
+                    color: Some(Color { r: 0.46, g: 0.27, b: 0.42 }),
+                    ..
+                },
+                Text {
+                    text: " v = ",
+                    size: 18.0,
+                    color: Some(Color { r: 0.08, g: 0.10, b: 0.13 }),
+                    ..
+                },
+                Text {
+                    text: "1",
+                    size: 18.0,
+                    color: Some(Color { r: 0.63, g: 0.24, b: 0.16 }),
+                    ..
+                },
+                Text {
+                    text: ";",
+                    size: 18.0,
+                    color: Some(Color { r: 0.08, g: 0.10, b: 0.13 }),
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]

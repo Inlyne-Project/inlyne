@@ -1,5 +1,6 @@
 use crate::color::native_color;
 use crate::image::Image;
+use crate::image::ImageData;
 use crate::image::ImageSize;
 use crate::positioner::Positioned;
 use crate::positioner::Row;
@@ -12,10 +13,9 @@ use crate::InlyneEvent;
 
 use crate::color::Theme;
 use crate::text::{Text, TextBox};
-use crate::utils::Align;
+use crate::utils::{markdown_to_html, Align};
 use crate::Element;
 
-use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use html5ever::local_name;
 use html5ever::tendril::*;
 use html5ever::tokenizer::BufferQueue;
@@ -37,73 +37,9 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-mod html {
-    use crate::{positioner::Section, table::Table, text::TextBox, utils::Align};
-
-    pub enum HeaderType {
-        H1,
-        H2,
-        H3,
-        H4,
-        H5,
-        H6,
-    }
-
-    impl HeaderType {
-        pub fn text_size(&self) -> f32 {
-            match &self {
-                Self::H1 => 32.,
-                Self::H2 => 24.,
-                Self::H3 => 18.72,
-                Self::H4 => 16.,
-                Self::H5 => 13.28,
-                Self::H6 => 10.72,
-            }
-        }
-    }
-
-    pub struct Header {
-        pub header_type: HeaderType,
-        pub align: Option<Align>,
-    }
-
-    #[derive(Debug)]
-    pub enum ListType {
-        Ordered(usize),
-        Unordered,
-    }
-
-    pub struct List {
-        pub list_type: ListType,
-    }
-
-    // Represents the number of parent text option tags the current element is a child of
-    #[derive(Default)]
-    pub struct TextOptions {
-        pub underline: usize,
-        pub bold: usize,
-        pub italic: usize,
-        pub strike_through: usize,
-        pub small: usize,
-        pub code: usize,
-        pub pre_formatted: usize,
-        pub block_quote: usize,
-        pub link: Vec<String>,
-    }
-
-    pub enum Element {
-        List(List),
-        ListItem,
-        Input,
-        Table(Table),
-        TableRow(Vec<TextBox>),
-        Header(Header),
-        Paragraph(Option<Align>),
-        Div(Option<Align>),
-        Details(Section),
-        Summary,
-    }
-}
+mod html;
+#[cfg(test)]
+mod tests;
 
 #[derive(Default)]
 struct State {
@@ -115,13 +51,55 @@ struct State {
     inline_images: Option<(Row, usize)>,
 }
 
+// Images are loaded in a separate thread and use a callback to indicate when they're finished
+pub trait ImageCallback {
+    fn loaded_image(&self, src: String, image_data: Arc<Mutex<Option<ImageData>>>);
+}
+
+// External state from the interpreter that we want to stub out for testing
+trait WindowInteractor {
+    fn finished_single_doc(&self);
+    fn request_redraw(&self);
+    fn image_callback(&self) -> Box<dyn ImageCallback + Send>;
+}
+
+struct EventLoopCallback(EventLoopProxy<InlyneEvent>);
+
+impl ImageCallback for EventLoopCallback {
+    fn loaded_image(&self, src: String, image_data: Arc<Mutex<Option<ImageData>>>) {
+        let event = InlyneEvent::LoadedImage(src, image_data);
+        self.0.send_event(event).unwrap();
+    }
+}
+
+// A real interactive window that is being used with `HtmlInterpreter`
+struct LiveWindow {
+    window: Arc<Window>,
+    event_proxy: EventLoopProxy<InlyneEvent>,
+}
+
+impl WindowInteractor for LiveWindow {
+    fn request_redraw(&self) {
+        self.window.request_redraw();
+    }
+
+    fn image_callback(&self) -> Box<dyn ImageCallback + Send> {
+        Box::new(EventLoopCallback(self.event_proxy.clone()))
+    }
+
+    fn finished_single_doc(&self) {
+        self.event_proxy
+            .send_event(InlyneEvent::Reposition)
+            .unwrap();
+    }
+}
+
 pub struct HtmlInterpreter {
     element_queue: Arc<Mutex<VecDeque<Element>>>,
     current_textbox: TextBox,
     hidpi_scale: f32,
     theme: Theme,
     surface_format: TextureFormat,
-    window: Arc<Window>,
     state: State,
     file_path: PathBuf,
     // Whether the interpreters is allowed to queue elements
@@ -130,7 +108,7 @@ pub struct HtmlInterpreter {
     stopped: bool,
     first_pass: bool,
     image_cache: ImageCache,
-    event_proxy: EventLoopProxy<InlyneEvent>,
+    window: Box<dyn WindowInteractor + Send>,
 }
 
 impl HtmlInterpreter {
@@ -143,6 +121,30 @@ impl HtmlInterpreter {
         file_path: PathBuf,
         image_cache: ImageCache,
         event_proxy: EventLoopProxy<InlyneEvent>,
+    ) -> Self {
+        let live_window = LiveWindow {
+            window,
+            event_proxy,
+        };
+        Self::new_with_interactor(
+            element_queue,
+            theme,
+            surface_format,
+            hidpi_scale,
+            file_path,
+            image_cache,
+            Box::new(live_window),
+        )
+    }
+
+    fn new_with_interactor(
+        element_queue: Arc<Mutex<VecDeque<Element>>>,
+        theme: Theme,
+        surface_format: TextureFormat,
+        hidpi_scale: f32,
+        file_path: PathBuf,
+        image_cache: ImageCache,
+        window: Box<dyn WindowInteractor + Send>,
     ) -> Self {
         Self {
             window,
@@ -160,25 +162,14 @@ impl HtmlInterpreter {
             stopped: false,
             first_pass: true,
             image_cache,
-            event_proxy,
         }
     }
 
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
         let mut input = BufferQueue::new();
-        let mut options = ComrakOptions::default();
-        options.extension.table = true;
-        options.extension.strikethrough = true;
-        options.extension.tasklist = true;
-        options.parse.smart = true;
-        options.render.unsafe_ = true;
 
-        let mut plugins = comrak::ComrakPlugins::default();
-        let adapter = comrak::plugins::syntect::SyntectAdapter::new(
-            self.theme.code_highlighter.as_syntect_name(),
-        );
-        plugins.render.codefence_syntax_highlighter = Some(&adapter);
         let span_color = native_color(self.theme.code_color, &self.surface_format);
+        let code_highlighter = self.theme.code_highlighter.clone();
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in receiver {
@@ -193,7 +184,7 @@ impl HtmlInterpreter {
                 };
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
-                let htmlified = markdown_to_html_with_plugins(&md_string, &options, &plugins);
+                let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
 
                 input.push_back(
                     Tendril::from_str(&htmlified)
@@ -361,7 +352,7 @@ impl TokenSink for HtmlInterpreter {
                                             src.clone(),
                                             self.file_path.clone(),
                                             self.hidpi_scale,
-                                            self.event_proxy.clone(),
+                                            self.window.image_callback(),
                                         )
                                         .unwrap()
                                         .with_align(*align),
@@ -756,6 +747,7 @@ impl TokenSink for HtmlInterpreter {
                         for element in self.state.element_stack.iter_mut().rev() {
                             if let html::Element::List(html_list) = element {
                                 list = Some(html_list);
+                                break;
                             }
                         }
                         let list = list.expect("List ended unexpectedly");
@@ -837,7 +829,7 @@ impl TokenSink for HtmlInterpreter {
                 self.should_queue
                     .store(false, std::sync::atomic::Ordering::Relaxed);
                 self.first_pass = false;
-                self.window.request_redraw();
+                self.window.finished_single_doc();
             }
             _ => {}
         }
