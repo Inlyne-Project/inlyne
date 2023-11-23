@@ -2094,7 +2094,7 @@ checksum = "64e9829a50b42bb782c1df523f78d332fe371b10c661e78b7a3c34b0198e9fac"
 
 [[package]]
 name = "inlyne"
-version = "0.3.2-alpha"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "bytemuck",
