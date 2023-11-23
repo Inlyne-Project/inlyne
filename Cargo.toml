@@ -44,15 +44,11 @@ lz4_flex = { version = "0.10.0", default-features = false, features = ["frame", 
 pollster = "0.3.0"
 smart-debug = "0.0.2"
 syntect = "5.1.0"
+two-face = "0.3.0"
 
 # Required for WGPU to work properly with Vulkan
 fontdb = { version = "0.13.1", features = ["fontconfig"] }
 human-panic = "1.2.2"
-
-[dependencies.two-face]
-version = "0.1.1"
-default-features = false
-features = ["extra-syntax"]
 
 [profile.release-lto]
 inherits = "release"

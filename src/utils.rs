@@ -128,7 +128,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntaxTheme) -> String {
     options.render.unsafe_ = true;
 
     let theme_set = SyntectThemeSet::load_defaults();
-    let syn_set = two_face::syntax::extra();
+    let syn_set = two_face::syntax::extra_no_newlines();
     let adapter = SyntectAdapterBuilder::new()
         .syntax_set(syn_set)
         .theme_set(theme_set)
