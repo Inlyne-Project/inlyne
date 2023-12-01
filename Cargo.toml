@@ -45,7 +45,7 @@ anyhow = "1.0.75"
 dirs = "5.0.1"
 serde = { version = "1.0.190", features = ["derive"] }
 toml = "0.7.6"
-reqwest = { version = "0.11.22", features = ["blocking", "json", "stream"] }
+reqwest = { version = "0.11.22", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 log = "0.4.20"
 env_logger = "0.10.0"
 notify = "6.1.1"
