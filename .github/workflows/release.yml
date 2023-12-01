@@ -34,9 +34,9 @@ jobs:
       run: |
         ci/ubuntu-install-packages
 
-
     - name: Set the version
       id: version
+      shell: bash
       run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
 
     - name: Install Rust
