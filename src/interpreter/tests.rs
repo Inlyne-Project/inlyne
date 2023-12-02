@@ -159,6 +159,24 @@ const ORDERED_LIST_IN_UNORDERED: &str = "\
 - bullet
 ";
 
+const PARA_IN_ORDERED_LIST: &str = "\
+1. 1st item
+
+    Nested paragraph
+
+2. 2nd item
+";
+
+const CODE_IN_ORDERED_LIST: &str = "\
+1. 1st item
+
+    ```rust
+    fn main() {}
+    ```
+
+2. 2nd item
+";
+
 snapshot_interpreted_elements!(
     (sanity, SANITY),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -167,6 +185,8 @@ snapshot_interpreted_elements!(
     (unordered_list_in_ordered, UNORDERED_LIST_IN_ORDERED),
     (nested_ordered_list, NESTED_ORDERED_LIST),
     (ordered_list_in_unordered, ORDERED_LIST_IN_UNORDERED),
+    (para_in_ordered_list, PARA_IN_ORDERED_LIST),
+    (code_in_ordered_list, CODE_IN_ORDERED_LIST),
 );
 
 /// Spin up a server, so we can test network requests without external services

@@ -49,6 +49,7 @@ struct State {
     span_color: [f32; 4],
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
+    pending_list_prefix: Option<String>,
 }
 
 // Images are loaded in a separate thread and use a callback to indicate when they're finished
@@ -415,7 +416,31 @@ impl TokenSink for HtmlInterpreter {
                         "bold" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
-                            self.state.element_stack.push(html::Element::ListItem);
+                            // Push a pending list prefix based on the list type
+                            let mut list = None;
+                            for element in self.state.element_stack.iter_mut().rev() {
+                                if let html::Element::List(html_list) = element {
+                                    list = Some(html_list);
+                                    break;
+                                }
+                            }
+                            let list = list.expect("List ended unexpectedly");
+                            if self.current_textbox.texts.is_empty() {
+                                if let html::List {
+                                    list_type: html::ListType::Ordered(index),
+                                    ..
+                                } = list
+                                {
+                                    self.state.pending_list_prefix = Some(format!("{}. ", index));
+                                    *index += 1;
+                                } else if let html::List {
+                                    list_type: html::ListType::Unordered,
+                                    ..
+                                } = list
+                                {
+                                    self.state.pending_list_prefix = Some("· ".to_owned());
+                                }
+                            }
                         }
                         "ul" => {
                             self.push_current_textbox();
@@ -523,6 +548,9 @@ impl TokenSink for HtmlInterpreter {
                                 if &name.local == "type" {
                                     let value = value.to_string();
                                     if value == "checkbox" {
+                                        // Checkbox uses a custom prefix, so remove pending text
+                                        // prefix
+                                        let _ = self.state.pending_list_prefix.take();
                                         self.push_current_textbox();
                                         self.current_textbox.set_checkbox(Some(
                                             tag.attrs
@@ -631,7 +659,6 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "li" => {
                             self.push_current_textbox();
-                            self.state.element_stack.pop();
                         }
                         "input" => {
                             self.push_current_textbox();
@@ -742,45 +769,16 @@ impl TokenSink for HtmlInterpreter {
                         self.hidpi_scale,
                         native_color(self.theme.text_color, &self.surface_format),
                     );
-                    if let Some(html::Element::ListItem) = self.state.element_stack.last() {
-                        let mut list = None;
-                        for element in self.state.element_stack.iter_mut().rev() {
-                            if let html::Element::List(html_list) = element {
-                                list = Some(html_list);
-                                break;
-                            }
-                        }
-                        let list = list.expect("List ended unexpectedly");
-
+                    if let Some(prefix) = self.state.pending_list_prefix.take() {
                         if self.current_textbox.texts.is_empty() {
-                            if let html::List {
-                                list_type: html::ListType::Ordered(index),
-                                ..
-                            } = list
-                            {
-                                self.current_textbox.texts.push(
-                                    Text::new(
-                                        format!("{}. ", index),
-                                        self.hidpi_scale,
-                                        native_color(self.theme.text_color, &self.surface_format),
-                                    )
-                                    .make_bold(true),
-                                );
-                                *index += 1;
-                            } else if let html::List {
-                                list_type: html::ListType::Unordered,
-                                ..
-                            } = list
-                            {
-                                self.current_textbox.texts.push(
-                                    Text::new(
-                                        "· ".to_string(),
-                                        self.hidpi_scale,
-                                        native_color(self.theme.text_color, &self.surface_format),
-                                    )
-                                    .make_bold(true),
+                            self.current_textbox.texts.push(
+                                Text::new(
+                                    prefix,
+                                    self.hidpi_scale,
+                                    native_color(self.theme.text_color, &self.surface_format),
                                 )
-                            }
+                                .make_bold(true),
+                            );
                         }
                     }
                     if self.state.text_options.block_quote >= 1 {
