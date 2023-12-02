@@ -14,7 +14,13 @@ keywords = ["markdown", "viewer", "gpu"]
 [dependencies]
 wgpu_glyph =  "0.21"
 winit = "0.28.7"
-wgpu = "0.17"
+# HACK: Pinning to the exact version `=` here because 0.17.1 introduced a bug
+# that can be a frequent source of panics. We can't go above 0.17.x because we
+# share a `wgpu` dependency with `wgpu_glyph` who is unlikely to be updated now
+# that text rendering with `cosmic-text` is a thing. This won't be a problem in
+# `inlyne` v0.4, so this is only temporary anyways
+wgpu-core = "=0.17.0"
+wgpu = "0.17.0"
 bytemuck = "1.14.0"
 lyon = "1.0.1"
 comrak = { version = "0.19.0", default-features = false, features = ["syntect"] }
