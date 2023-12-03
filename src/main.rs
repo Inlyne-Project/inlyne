@@ -8,6 +8,7 @@ pub mod opts;
 pub mod positioner;
 pub mod renderer;
 pub mod table;
+pub mod test_utils;
 pub mod text;
 pub mod utils;
 mod watcher;

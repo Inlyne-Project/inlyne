@@ -11,14 +11,13 @@ use std::{
 };
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
-use crate::{color::Theme, image::ImageData, Element, ImageCache};
+use crate::{color::Theme, image::ImageData, test_utils::init_test_log, Element, ImageCache};
 
 use wgpu::TextureFormat;
 use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
 
 // We use a dummy window with an internal counter that keeps track of when rendering a single md
 // document is finished
-#[derive(Default)]
 struct AtomicCounter(Arc<AtomicU32>);
 
 impl Clone for AtomicCounter {
@@ -113,6 +112,8 @@ macro_rules! snapshot_interpreted_elements {
         $(
             #[test]
             fn $test_name() {
+                $crate::test_utils::init_test_log();
+
                 let text = $md_text;
 
                 let syntect_theme = $crate::color::Theme::light_default().code_highlighter;
@@ -237,6 +238,8 @@ fn mock_file_server(url_path: &str, mime: &str, file_path: &Path) -> (MockServer
 
 #[test]
 fn centered_image_with_size_align_and_link() {
+    init_test_log();
+
     let logo_path = Path::new("tests").join("assets").join("bun_logo.png");
     let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", &logo_path);
 

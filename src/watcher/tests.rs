@@ -1,6 +1,7 @@
 use std::{fs, path::Path, sync::mpsc, time::Duration};
 
 use super::{Callback, Watcher};
+use crate::test_utils::init_test_log;
 
 impl Callback for mpsc::Sender<()> {
     fn file_reload(&self) {
@@ -57,6 +58,8 @@ impl Delays {
 
 #[test]
 fn the_gauntlet() {
+    init_test_log();
+
     // This test can be flaky, so give it a few chances to succeed
     let mut last_panic = None;
     let mut delays = Delays::new();

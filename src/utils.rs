@@ -242,9 +242,12 @@ impl Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::init_test_log;
 
     #[test]
     fn md_to_html() {
+        init_test_log();
+
         let text = "\
 ---
 title: Title
