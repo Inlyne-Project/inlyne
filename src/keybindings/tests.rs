@@ -2,12 +2,15 @@ use super::{
     action::{Action, VertDirection},
     Key, KeyCombo, KeyCombos, Keybindings, ModifiedKey,
 };
+use crate::test_utils::init_test_log;
 
 use serde::Deserialize;
 use winit::event::{ModifiersState, VirtualKeyCode};
 
 #[test]
 fn sanity() {
+    init_test_log();
+
     #[derive(Deserialize, Debug)]
     struct Holder {
         inner: Vec<(Action, KeyCombo)>,

@@ -1,6 +1,7 @@
 use std::{fmt, fs, path::Path};
 
 use super::ImageData;
+use crate::test_utils::init_test_log;
 
 // Checks that the image crate converting to RGBA8 is the same as our technique
 fn check(input_path: &Path) {
@@ -24,6 +25,8 @@ fn check(input_path: &Path) {
 
 #[test]
 fn source_image_variety() {
+    init_test_log();
+
     for file in [
         "rgb8.gif",
         "rgb8.jpg",

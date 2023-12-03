@@ -7,6 +7,7 @@ use crate::opts::{
     config::{self, FontOptions, LinesToScroll},
     Args, Opts, ResolvedTheme, ThemeType,
 };
+use crate::test_utils::init_test_log;
 
 use pretty_assertions::assert_eq;
 
@@ -42,11 +43,15 @@ impl ResolvedTheme {
 
 #[test]
 fn debug_assert() {
+    init_test_log();
+
     cli::command().debug_assert();
 }
 
 #[test]
 fn defaults() {
+    init_test_log();
+
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
@@ -60,6 +65,8 @@ fn defaults() {
 
 #[test]
 fn config_overrides_default() {
+    init_test_log();
+
     // Light system theme with dark in config
     let config = config::Config {
         theme: Some(ThemeType::Dark),
@@ -116,6 +123,8 @@ fn config_overrides_default() {
 
 #[test]
 fn from_cli() {
+    init_test_log();
+
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"])).unwrap(),
@@ -152,6 +161,8 @@ fn from_cli() {
 
 #[test]
 fn cli_kitchen_sink() {
+    init_test_log();
+
     #[rustfmt::skip]
     let args = gen_args(vec![
         "--theme", "dark",
@@ -178,6 +189,8 @@ fn cli_kitchen_sink() {
 
 #[test]
 fn builtin_syntax_theme() {
+    init_test_log();
+
     let mut config = config::Config::default();
     config.light_theme = Some(config::OptionalTheme {
         code_highlighter: Some(SyntaxTheme::Defaults(ThemeDefaults::SolarizedLight)),
@@ -199,6 +212,8 @@ fn builtin_syntax_theme() {
 
 #[test]
 fn custom_syntax_theme() {
+    init_test_log();
+
     fn config_with_theme_at(path: PathBuf) -> config::Config {
         let mut config = config::Config::default();
         config.light_theme = Some(config::OptionalTheme {
@@ -236,6 +251,8 @@ fn custom_syntax_theme() {
 
 #[test]
 fn missing_file_arg() {
+    init_test_log();
+
     // A file arg should be required
     assert!(Args::try_parse_from(gen_args(Vec::new())).is_err());
 }

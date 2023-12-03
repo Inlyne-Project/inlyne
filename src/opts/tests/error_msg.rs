@@ -3,6 +3,8 @@ macro_rules! snapshot_config_parse_error {
         $(
             #[test]
             fn $test_name() {
+                $crate::test_utils::init_test_log();
+
                 let err = ::toml::from_str::<$crate::opts::Config>($md_text).unwrap_err();
 
                 ::insta::with_settings!({
