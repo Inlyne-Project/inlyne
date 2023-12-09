@@ -240,7 +240,7 @@ fn mock_file_server(url_path: &str, mime: &str, file_path: &Path) -> (MockServer
 fn centered_image_with_size_align_and_link() {
     init_test_log();
 
-    let logo_path = Path::new("tests").join("assets").join("bun_logo.png");
+    let logo_path = Path::new("assets").join("test_data").join("bun_logo.png");
     let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", &logo_path);
 
     let text = format!(

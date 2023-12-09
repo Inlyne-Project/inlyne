@@ -9,7 +9,7 @@ inlyne README.md --theme dark/light
 ```
 
 <p align="center">
-<img src="example.png" width="800"/>
+<img src="assets/img/example.png" width="800"/>
 </p>
 
 ## About
