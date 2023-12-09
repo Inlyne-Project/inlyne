@@ -1,7 +1,6 @@
 use std::{
     collections::VecDeque,
-    fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         atomic::{AtomicU32, Ordering},
         mpsc, Arc, Mutex,
@@ -219,8 +218,7 @@ snapshot_interpreted_elements!(
 );
 
 /// Spin up a server, so we can test network requests without external services
-fn mock_file_server(url_path: &str, mime: &str, file_path: &Path) -> (MockServer, String) {
-    let bytes = fs::read(file_path).unwrap();
+fn mock_file_server(url_path: &str, mime: &str, bytes: &[u8]) -> (MockServer, String) {
     let setup_server = async {
         let mock_server = MockServer::start().await;
         Mock::given(matchers::method("GET"))
@@ -240,8 +238,8 @@ fn mock_file_server(url_path: &str, mime: &str, file_path: &Path) -> (MockServer
 fn centered_image_with_size_align_and_link() {
     init_test_log();
 
-    let logo_path = Path::new("assets").join("test_data").join("bun_logo.png");
-    let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", &logo_path);
+    let logo = include_bytes!("../../assets/test_data/bun_logo.png");
+    let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", logo);
 
     let text = format!(
         r#"
@@ -250,6 +248,26 @@ fn centered_image_with_size_align_and_link() {
 </p>"#,
     );
 
+    insta::with_settings!({
+        // The port for the URL here is non-deterministic, but the description changing doesn't
+        // invalidate the snapshot, so that's okay
+        description => &text,
+    }, {
+        insta::assert_debug_snapshot!(interpret_md(&text));
+    });
+}
+
+#[test]
+fn image_loading_fails_gracefully() {
+    init_test_log();
+
+    let json = r#"{"im": "not an image"}"#;
+    let (_server, json_url) =
+        mock_file_server("/snapshot.png", "application/json", json.as_bytes());
+
+    let text = format!("![This actually returns JSON 😈]({json_url})");
+
+    // TODO: Need to have some better way of either signaling or detecting errors here
     insta::with_settings!({
         // The port for the URL here is non-deterministic, but the description changing doesn't
         // invalidate the snapshot, so that's okay

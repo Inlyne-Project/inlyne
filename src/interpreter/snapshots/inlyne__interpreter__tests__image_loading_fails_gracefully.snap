@@ -1,0 +1,40 @@
+---
+source: src/interpreter/tests.rs
+description: "![This actually returns JSON 😈](http://127.0.0.1:36777/snapshot.png)"
+expression: interpret_md(&text)
+---
+[
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    Row(
+        Row {
+            elements: [
+                Positioned {
+                    inner: Image(
+                        Image {
+                            image_data: Mutex {
+                                data: Some(
+                                    ImageData {
+                                        lz4_blob: { len: 7762, data: [4, 34, 77, ..] },
+                                        scale: false,
+                                        dimensions: (63, 72),
+                                    },
+                                ),
+                                poisoned: false,
+                                ..
+                            },
+                            is_aligned: Some(Left),
+                            ..
+                        },
+                    ),
+                    bounds: None,
+                },
+            ],
+            hidpi_scale: 1.0,
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]
