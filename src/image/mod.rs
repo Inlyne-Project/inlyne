@@ -210,7 +210,20 @@ impl Image {
                 let opt = usvg::Options::default();
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
-                let mut tree = usvg::Tree::from_data(&image_data, &opt).unwrap();
+                // TODO: yes all of this image loading is very messy and could use a refactor
+                let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
+                    log::warn!(
+                        "Failed loading image:\n- src: {}\n- src_path: {}",
+                        src,
+                        src_path.display()
+                    );
+                    let image =
+                        ImageData::load(include_bytes!("../../assets/img/broken.png"), false)
+                            .unwrap();
+                    *image_data_clone.lock().unwrap() = Some(image);
+                    image_callback.loaded_image(src, image_data_clone);
+                    return;
+                };
                 tree.size = tree.size.scale_to(
                     tiny_skia::Size::from_wh(
                         tree.size.width() * hidpi_scale,

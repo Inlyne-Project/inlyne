@@ -35,7 +35,7 @@ fn source_image_variety() {
         "rgba8.jpg",
         "rgba8.png",
     ] {
-        check(&Path::new("tests").join("assets").join(file));
+        check(&Path::new("assets").join("test_data").join(file));
     }
 }
 

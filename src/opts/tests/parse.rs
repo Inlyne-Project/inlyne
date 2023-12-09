@@ -236,8 +236,8 @@ fn custom_syntax_theme() {
         args,
         config_with_theme_at(
             PathBuf::new()
-                .join("tests")
                 .join("assets")
+                .join("test_data")
                 .join("sample.tmTheme"),
         ),
         ResolvedTheme::Light,
