@@ -6,7 +6,7 @@ use std::{
         mpsc, Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
@@ -90,15 +90,23 @@ fn dummy_interpreter(counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecD
 }
 
 fn interpret_md(text: &str) -> VecDeque<Element> {
+    const TIMEOUT: Duration = Duration::from_secs(10);
+
     let counter = AtomicCounter::new();
     let (interpreter, element_queue) = dummy_interpreter(counter.clone());
     let (md_tx, md_rx) = mpsc::channel();
     md_tx.send(text.to_owned()).unwrap();
-    let _ = std::thread::spawn(|| {
+    let interpreter_handle = std::thread::spawn(|| {
         interpreter.interpret_md(md_rx);
     });
 
+    let start = Instant::now();
     while !counter.is_finished() {
+        if interpreter_handle.is_finished() {
+            panic!("The interpreter died >:V");
+        } else if start.elapsed() > TIMEOUT {
+            panic!("The interpreter appeared to hang. Some task probably panicked");
+        }
         thread::sleep(Duration::from_millis(1));
     }
 
@@ -203,6 +211,16 @@ const CODE_IN_ORDERED_LIST: &str = "\
 2. 2nd item
 ";
 
+const YAML_FRONTMATTER: &str = "\
+---
+title: Title
+date: 2018-05-01
+tags:
+  - another tag
+---
+# Markdown h1 header
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -215,6 +233,7 @@ snapshot_interpreted_elements!(
     (ordered_list_in_unordered, ORDERED_LIST_IN_UNORDERED),
     (para_in_ordered_list, PARA_IN_ORDERED_LIST),
     (code_in_ordered_list, CODE_IN_ORDERED_LIST),
+    (yaml_frontmatter, YAML_FRONTMATTER),
 );
 
 /// Spin up a server, so we can test network requests without external services
