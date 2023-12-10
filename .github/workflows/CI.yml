@@ -18,11 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cargo build cache
-        uses: actions/cache@v3
-        with:
-          path: target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Stable
         run: cargo test --workspace
@@ -32,11 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cargo build cache
-        uses: actions/cache@v3
-        with:
-          path: target/
-          key: macos-arm-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Install target
         run: rustup update && rustup target add aarch64-apple-darwin
