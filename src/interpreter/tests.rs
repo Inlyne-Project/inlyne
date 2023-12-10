@@ -6,7 +6,7 @@ use std::{
         mpsc, Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
@@ -90,15 +90,23 @@ fn dummy_interpreter(counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecD
 }
 
 fn interpret_md(text: &str) -> VecDeque<Element> {
+    const TIMEOUT: Duration = Duration::from_secs(10);
+
     let counter = AtomicCounter::new();
     let (interpreter, element_queue) = dummy_interpreter(counter.clone());
     let (md_tx, md_rx) = mpsc::channel();
     md_tx.send(text.to_owned()).unwrap();
-    let _ = std::thread::spawn(|| {
+    let interpreter_handle = std::thread::spawn(|| {
         interpreter.interpret_md(md_rx);
     });
 
+    let start = Instant::now();
     while !counter.is_finished() {
+        if interpreter_handle.is_finished() {
+            panic!("The interpreter died >:V");
+        } else if start.elapsed() > TIMEOUT {
+            panic!("The interpreter appeared to hang. Some task probably panicked");
+        }
         thread::sleep(Duration::from_millis(1));
     }
 
