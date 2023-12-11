@@ -1,4 +1,3 @@
-
 name: CI
 
 on: [push, pull_request]
@@ -23,12 +22,19 @@ jobs:
         run: |
           rustup update --no-self-update ${{ matrix.toolchain }}
           rustup default ${{ matrix.toolchain }}
+          rustup component add clippy rustfmt
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: "v0-rust-2"
 
+      # TODO: In the future clippy and rustfmt dont need to be run on all the
+      # `os`', but it should be fast enough to be fine still for now
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Linting
+        run: cargo clippy -- --deny warnings
       - name: Run test suite
         run: cargo test --workspace
 
