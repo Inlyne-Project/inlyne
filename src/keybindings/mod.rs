@@ -25,6 +25,11 @@ impl Keybindings {
     pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
         Self(bindings)
     }
+
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self(Vec::new())
+    }
 }
 
 impl Extend<(Action, KeyCombo)> for Keybindings {
