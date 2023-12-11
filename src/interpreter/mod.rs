@@ -624,6 +624,7 @@ impl TokenSink for HtmlInterpreter {
 
                             self.push_current_textbox();
                         }
+                        // FIXME: `input` is self closing. This never gets called
                         "input" => {
                             self.push_current_textbox();
                             self.state.element_stack.pop();
