@@ -7,23 +7,29 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-C debuginfo=0"
 
-# TODO: build/test on stable and beta?
-
 jobs:
   build:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
+        toolchain: [stable, beta]
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+
       - name: Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-rust-2"
 
-      - name: Stable
+      - name: Run test suite
         run: cargo test --workspace
 
   check-macos-arm:

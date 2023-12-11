@@ -286,7 +286,6 @@ fn image_loading_fails_gracefully() {
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
-    // TODO: Need to have some better way of either signaling or detecting errors here
     insta::with_settings!({
         // The port for the URL here is non-deterministic, but the description changing doesn't
         // invalidate the snapshot, so that's okay
