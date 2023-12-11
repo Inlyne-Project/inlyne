@@ -96,8 +96,6 @@ impl Opts {
             page_width: args_page_width,
         } = args;
 
-        let file_path = file_path;
-
         let theme = {
             let resolved_theme = args_theme
                 .or(config_theme)
@@ -120,7 +118,7 @@ impl Opts {
         let lines_to_scroll = lines_to_scroll.into();
         let mut keybindings = config_keybindings.base.unwrap_or_default();
         if let Some(extra) = config_keybindings.extra {
-            keybindings.extend(extra.into_iter());
+            keybindings.extend(extra);
         }
 
         Ok(Self {

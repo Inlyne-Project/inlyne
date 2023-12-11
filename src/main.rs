@@ -1,3 +1,8 @@
+#![allow(
+    // I don't really care enough about the names here to fix things atm
+    clippy::enum_variant_names,
+)]
+
 pub mod color;
 mod debug_impls;
 mod file_watcher;

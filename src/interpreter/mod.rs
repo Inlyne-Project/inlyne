@@ -102,6 +102,9 @@ pub struct HtmlInterpreter {
 }
 
 impl HtmlInterpreter {
+    // FIXME: clippy is probably right here, but I didn't want to hold up setting up clippy for the
+    // rest of the repo just because of here
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         window: Arc<Window>,
         element_queue: Arc<Mutex<VecDeque<Element>>>,

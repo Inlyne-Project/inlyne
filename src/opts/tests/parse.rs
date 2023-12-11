@@ -11,7 +11,7 @@ use pretty_assertions::assert_eq;
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
     std::iter::once("inlyne")
-        .chain(args.into_iter())
+        .chain(args)
         .map(OsString::from)
         .collect()
 }

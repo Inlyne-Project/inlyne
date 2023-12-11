@@ -42,7 +42,7 @@ impl<'attrs> Iterator for AttrIter<'attrs> {
         loop {
             let Attribute { name, value } = self.0.next()?;
             let attr = match name.local {
-                local_name!("align") => Align::new(&value).map(Attr::Align),
+                local_name!("align") => Align::new(value).map(Attr::Align),
                 local_name!("href") => Some(Attr::Href(value.to_string())),
                 local_name!("id") => Some(Attr::Anchor(format!("#{value}"))),
                 local_name!("width") => value.parse().ok().map(Attr::Width),
