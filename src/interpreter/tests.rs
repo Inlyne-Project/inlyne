@@ -214,7 +214,6 @@ const CODE_IN_ORDERED_LIST: &str = "\
 
 const YAML_FRONTMATTER: &str = "\
 ---
-title: Title
 date: 2018-05-01
 tags:
   - another tag
