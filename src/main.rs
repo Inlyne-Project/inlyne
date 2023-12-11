@@ -2,6 +2,12 @@
     // I don't really care enough about the names here to fix things atm
     clippy::enum_variant_names,
 )]
+#![deny(
+    // Generally we don't want this sneaking into `main`
+    clippy::todo,
+    // This should be used very sparingly compared between logging and clap
+    clippy::print_stdout, clippy::print_stderr,
+)]
 
 pub mod color;
 mod debug_impls;
