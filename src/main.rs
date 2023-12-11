@@ -1,5 +1,6 @@
 pub mod color;
 mod debug_impls;
+mod file_watcher;
 pub mod fonts;
 pub mod image;
 pub mod interpreter;
@@ -11,14 +12,13 @@ pub mod table;
 pub mod test_utils;
 pub mod text;
 pub mod utils;
-mod watcher;
 
 use crate::image::Image;
 use crate::interpreter::HtmlInterpreter;
 use crate::opts::Opts;
 use crate::table::Table;
 use crate::text::Text;
-use watcher::Watcher;
+use file_watcher::Watcher;
 
 use crate::image::ImageData;
 use keybindings::{
