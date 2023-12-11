@@ -5,7 +5,11 @@ mod serialization;
 #[cfg(test)]
 mod tests;
 
-use std::{collections::BTreeMap, fmt, slice::Iter, str::FromStr, vec::IntoIter};
+use std::collections::BTreeMap;
+use std::fmt;
+use std::slice::Iter;
+use std::str::FromStr;
+use std::vec::IntoIter;
 
 use action::Action;
 
@@ -24,6 +28,11 @@ pub enum Key {
 impl Keybindings {
     pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
         Self(bindings)
+    }
+
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self(Vec::new())
     }
 }
 

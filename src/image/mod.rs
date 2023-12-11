@@ -1,25 +1,25 @@
+mod decode;
+#[cfg(test)]
+mod tests;
+
+use std::borrow::Cow;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use std::{fs, io};
+
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{usize_in_mib, Align, Point, Size};
+
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
 use smart_debug::SmartDebug;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
-
-use std::borrow::Cow;
-
-mod decode;
-#[cfg(test)]
-mod tests;
 
 #[derive(Debug, Clone)]
 pub enum ImageSize {

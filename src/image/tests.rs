@@ -1,4 +1,5 @@
-use std::{fmt, fs, path::Path};
+use std::path::Path;
+use std::{fmt, fs};
 
 use super::ImageData;
 use crate::test_utils::init_test_log;

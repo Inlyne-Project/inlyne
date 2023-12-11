@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::sync::{Arc, Mutex};
+
 use crate::color::{native_color, Theme};
 use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
@@ -7,6 +10,7 @@ use crate::table::TABLE_ROW_GAP;
 use crate::text::{CachedTextArea, TextCache, TextSystem};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::Element;
+
 use anyhow::{anyhow, Context, Ok};
 use bytemuck::{Pod, Zeroable};
 use glyphon::{PrepareError, Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
@@ -14,8 +18,6 @@ use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
 use lyon::tessellation::*;
-use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
 use winit::window::Window;

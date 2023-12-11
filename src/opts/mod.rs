@@ -5,14 +5,13 @@ mod tests;
 
 use std::path::{Path, PathBuf};
 
-use crate::{color, keybindings::Keybindings};
+pub use self::cli::{Args, ThemeType};
+pub use self::config::{Config, FontOptions};
+use crate::color;
+use crate::keybindings::Keybindings;
 
 use anyhow::Result;
 use serde::Deserialize;
-
-pub use self::cli::{Args, ThemeType};
-pub use self::config::Config;
-pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {
@@ -97,8 +96,6 @@ impl Opts {
             page_width: args_page_width,
         } = args;
 
-        let file_path = file_path;
-
         let theme = {
             let resolved_theme = args_theme
                 .or(config_theme)
@@ -121,7 +118,7 @@ impl Opts {
         let lines_to_scroll = lines_to_scroll.into();
         let mut keybindings = config_keybindings.base.unwrap_or_default();
         if let Some(extra) = config_keybindings.extra {
-            keybindings.extend(extra.into_iter());
+            keybindings.extend(extra);
         }
 
         Ok(Self {

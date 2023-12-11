@@ -1,16 +1,17 @@
-use std::{
-    collections::VecDeque,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        mpsc, Arc, Mutex,
-    },
-    thread,
-    time::{Duration, Instant},
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    mpsc, Arc, Mutex,
 };
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
-use crate::{color::Theme, image::ImageData, test_utils::init_test_log, Element, ImageCache};
+use crate::color::Theme;
+use crate::image::ImageData;
+use crate::test_utils::init_test_log;
+use crate::{Element, ImageCache};
 
 use wgpu::TextureFormat;
 use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
@@ -213,7 +214,6 @@ const CODE_IN_ORDERED_LIST: &str = "\
 
 const YAML_FRONTMATTER: &str = "\
 ---
-title: Title
 date: 2018-05-01
 tags:
   - another tag
@@ -286,7 +286,6 @@ fn image_loading_fails_gracefully() {
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
-    // TODO: Need to have some better way of either signaling or detecting errors here
     insta::with_settings!({
         // The port for the URL here is non-deterministic, but the description changing doesn't
         // invalidate the snapshot, so that's okay

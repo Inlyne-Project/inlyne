@@ -1,4 +1,3 @@
-
 name: CI
 
 on: [push, pull_request]
@@ -7,23 +6,36 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-C debuginfo=0"
 
-# TODO: build/test on stable and beta?
-
 jobs:
   build:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
+        toolchain: [stable, beta]
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+          rustup component add clippy rustfmt
+
       - name: Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-rust-2"
 
-      - name: Stable
+      # TODO: In the future clippy and rustfmt dont need to be run on all the
+      # `os`', but it should be fast enough to be fine still for now
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Linting
+        run: cargo clippy -- --deny warnings
+      - name: Run test suite
         run: cargo test --workspace
 
   check-macos-arm:
@@ -31,13 +43,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # FIXME: This is in the wrong area. It should be below setting up the
-      # toolchain
-      - name: Cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Install target
         run: rustup update && rustup target add aarch64-apple-darwin
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Build
         run: cargo build --target=aarch64-apple-darwin

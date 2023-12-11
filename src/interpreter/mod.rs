@@ -1,46 +1,31 @@
-use crate::color::native_color;
-use crate::image::Image;
-use crate::image::ImageData;
-use crate::image::ImageSize;
-use crate::positioner::Positioned;
-use crate::positioner::Row;
-use crate::positioner::Section;
-use crate::positioner::Spacer;
-use crate::positioner::DEFAULT_MARGIN;
-use crate::table::Table;
-use crate::ImageCache;
-use crate::InlyneEvent;
-
-use crate::color::Theme;
-use crate::text::{Text, TextBox};
-use crate::utils::{markdown_to_html, Align};
-use crate::Element;
-
-use glyphon::FamilyOwned;
-use html5ever::tendril::*;
-use html5ever::tokenizer::BufferQueue;
-use html5ever::tokenizer::TagKind;
-use html5ever::tokenizer::TagToken;
-use html5ever::tokenizer::{Token, TokenSink, TokenSinkResult};
-use html5ever::tokenizer::{Tokenizer, TokenizerOpts};
-use wgpu::TextureFormat;
-use winit::event_loop::EventLoopProxy;
-use winit::window::Window;
-use Token::{CharacterTokens, EOFToken};
+mod html;
+#[cfg(test)]
+mod tests;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{mpsc, Arc, Mutex};
 
-mod html;
-#[cfg(test)]
-mod tests;
-
+use crate::color::{native_color, Theme};
+use crate::image::{Image, ImageData, ImageSize};
+use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
+use crate::table::Table;
+use crate::text::{Text, TextBox};
+use crate::utils::{markdown_to_html, Align};
+use crate::{Element, ImageCache, InlyneEvent};
 use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter};
+
+use glyphon::FamilyOwned;
+use html5ever::tendril::*;
+use html5ever::tokenizer::{
+    BufferQueue, TagKind, TagToken, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
+};
+use wgpu::TextureFormat;
+use winit::event_loop::EventLoopProxy;
+use winit::window::Window;
+use Token::{CharacterTokens, EOFToken};
 
 #[derive(Default)]
 struct State {
@@ -117,6 +102,9 @@ pub struct HtmlInterpreter {
 }
 
 impl HtmlInterpreter {
+    // FIXME: clippy is probably right here, but I didn't want to hold up setting up clippy for the
+    // rest of the repo just because of here
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         window: Arc<Window>,
         element_queue: Arc<Mutex<VecDeque<Element>>>,

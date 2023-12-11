@@ -1,4 +1,7 @@
-use std::{fs, path::Path, sync::mpsc, time::Duration};
+use std::fs;
+use std::path::Path;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use super::{Callback, Watcher};
 use crate::test_utils::init_test_log;

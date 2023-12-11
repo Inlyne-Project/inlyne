@@ -1,7 +1,5 @@
-use super::{
-    action::{Action, VertDirection, Zoom},
-    Key, KeyCombo, ModifiedKey,
-};
+use super::action::{Action, VertDirection, Zoom};
+use super::{Key, KeyCombo, ModifiedKey};
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
 

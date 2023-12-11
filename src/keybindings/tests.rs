@@ -1,23 +1,18 @@
-use super::{
-    action::{Action, VertDirection},
-    Key, KeyCombo, KeyCombos, Keybindings, ModifiedKey,
-};
+use super::action::{Action, VertDirection};
+use super::{Key, KeyCombos, ModifiedKey};
+use crate::keybindings::Keybindings;
+use crate::opts::Config;
 use crate::test_utils::init_test_log;
 
-use serde::Deserialize;
 use winit::event::{ModifiersState, VirtualKeyCode};
 
 #[test]
 fn sanity() {
     init_test_log();
 
-    #[derive(Deserialize, Debug)]
-    struct Holder {
-        inner: Vec<(Action, KeyCombo)>,
-    }
-
-    let slim_config = r#"
-inner = [
+    let config = r#"
+[keybindings]
+base = [
     ["ToTop", ["g", "g"]],
     ["ToBottom", { key = "g", mod = ["Shift"] }],
     ["ScrollDown", ["g", "j"]],
@@ -25,14 +20,14 @@ inner = [
 ]
 "#;
 
-    let Holder { inner: bindings } = toml::from_str(slim_config).unwrap();
+    let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
+    let mut bindings = keybindings.base.unwrap_or_else(Keybindings::empty);
+    bindings.extend(keybindings.extra.unwrap_or_else(Keybindings::empty));
+    let mut key_combos = KeyCombos::new(bindings).unwrap();
 
     let g = ModifiedKey::from(VirtualKeyCode::G);
     let cap_g = ModifiedKey(Key::from(VirtualKeyCode::G), ModifiersState::SHIFT);
     let j = ModifiedKey::from(VirtualKeyCode::J);
-
-    let bindings = Keybindings::new(bindings);
-    let mut key_combos = KeyCombos::new(bindings).unwrap();
 
     // Invalid combo 'gG' where the key that broke us out is a singlekey combo
     assert!(key_combos.munch(g).is_none());

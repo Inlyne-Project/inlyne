@@ -2,7 +2,8 @@ use std::fs::read_to_string;
 use std::path::Path;
 
 use super::ThemeType;
-use crate::{color, keybindings::Keybindings};
+use crate::color;
+use crate::keybindings::Keybindings;
 
 use anyhow::Context;
 use serde::Deserialize;
