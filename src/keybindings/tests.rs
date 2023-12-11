@@ -1,8 +1,8 @@
-use super::{
-    action::{Action, VertDirection},
-    Key, KeyCombos, ModifiedKey,
-};
-use crate::{keybindings::Keybindings, opts::Config, test_utils::init_test_log};
+use super::action::{Action, VertDirection};
+use super::{Key, KeyCombos, ModifiedKey};
+use crate::keybindings::Keybindings;
+use crate::opts::Config;
+use crate::test_utils::init_test_log;
 
 use winit::event::{ModifiersState, VirtualKeyCode};
 

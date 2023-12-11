@@ -1,12 +1,10 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::ffi::OsString;
+use std::path::PathBuf;
 
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::keybindings::Keybindings;
-use crate::opts::{
-    cli,
-    config::{self, FontOptions, LinesToScroll},
-    Args, Opts, ResolvedTheme, ThemeType,
-};
+use crate::opts::config::{self, FontOptions, LinesToScroll};
+use crate::opts::{cli, Args, Opts, ResolvedTheme, ThemeType};
 use crate::test_utils::init_test_log;
 
 use pretty_assertions::assert_eq;

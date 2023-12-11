@@ -1,21 +1,16 @@
-use std::{
-    collections::HashMap,
-    io,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
+use std::io;
+use std::sync::{Arc, Mutex};
 
-use comrak::{
-    adapters::SyntaxHighlighterAdapter,
-    markdown_to_html_with_plugins,
-    plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder},
-    ComrakOptions,
-};
+use crate::image::ImageData;
+
+use comrak::adapters::SyntaxHighlighterAdapter;
+use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
+use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use winit::window::CursorIcon;
-
-use crate::image::ImageData;
 
 pub(crate) fn default<T: Default>() -> T {
     Default::default()

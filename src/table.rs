@@ -1,17 +1,13 @@
-use crate::{
-    text::{Text, TextBox, TextBoxMeasure, TextSystem},
-    utils::{default, Point, Rect, Size},
-};
-
 use std::sync::Arc;
 
-use taffy::{
-    prelude::{
-        auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
-    },
-    style::JustifyContent,
-    tree::MeasureFunc,
+use crate::text::{Text, TextBox, TextBoxMeasure, TextSystem};
+use crate::utils::{default, Point, Rect, Size};
+
+use taffy::prelude::{
+    auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
 };
+use taffy::style::JustifyContent;
+use taffy::tree::MeasureFunc;
 
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;

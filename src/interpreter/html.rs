@@ -1,8 +1,11 @@
 use std::slice;
 
-use html5ever::{local_name, Attribute};
+use crate::positioner::Section;
+use crate::table::Table;
+use crate::text::TextBox;
+use crate::utils::Align;
 
-use crate::{positioner::Section, table::Table, text::TextBox, utils::Align};
+use html5ever::{local_name, Attribute};
 
 pub fn find_align(attrs: &[Attribute]) -> Option<Align> {
     AttrIter::new(attrs).find_map(|attr| {

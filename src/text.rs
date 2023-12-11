@@ -1,12 +1,11 @@
-use std::{
-    borrow::BorrowMut,
-    collections::hash_map,
-    fmt,
-    hash::{BuildHasher, Hash, Hasher},
-    sync::{Arc, Mutex},
-};
+use std::borrow::BorrowMut;
+use std::collections::hash_map;
+use std::fmt;
+use std::hash::{BuildHasher, Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
+use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
@@ -14,12 +13,8 @@ use glyphon::{
     SwashCache, TextArea, TextBounds, Weight,
 };
 use smart_debug::SmartDebug;
-use taffy::{
-    prelude::{AvailableSpace, Size as TaffySize},
-    tree::Measurable,
-};
-
-use crate::utils::{Align, Line, Point, Rect, Selection, Size};
+use taffy::prelude::{AvailableSpace, Size as TaffySize};
+use taffy::tree::Measurable;
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;

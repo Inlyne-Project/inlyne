@@ -13,60 +13,40 @@ pub mod test_utils;
 pub mod text;
 pub mod utils;
 
-use crate::image::Image;
-use crate::interpreter::HtmlInterpreter;
-use crate::opts::Opts;
-use crate::table::Table;
-use crate::text::Text;
-use file_watcher::Watcher;
-
-use crate::image::ImageData;
-use keybindings::{
-    action::{Action, VertDirection, Zoom},
-    Key, KeyCombos, ModifiedKey,
-};
-use opts::Args;
-use opts::Config;
-use positioner::Positioned;
-use positioner::Row;
-use positioner::Section;
-use positioner::Spacer;
-use positioner::DEFAULT_MARGIN;
-use positioner::DEFAULT_PADDING;
-use renderer::Renderer;
-use taffy::Taffy;
-use text::TextBox;
-use text::TextSystem;
-use utils::{ImageCache, Point, Rect, Size};
-
-use anyhow::Context;
-#[cfg(feature = "wayland")]
-use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
-#[cfg(feature = "x11")]
-use copypasta::{ClipboardContext, ClipboardProvider};
-
-use winit::event::ModifiersState;
-use winit::event::{ElementState, MouseButton};
-use winit::event_loop::EventLoopBuilder;
-use winit::{
-    event::{Event, KeyboardInput, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{CursorIcon, Window},
-};
-
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, channel};
+use std::sync::{Arc, Mutex};
+
+use file_watcher::Watcher;
+use image::{Image, ImageData};
+use interpreter::HtmlInterpreter;
+use keybindings::action::{Action, VertDirection, Zoom};
+use keybindings::{Key, KeyCombos, ModifiedKey};
+use opts::{Args, Config, Opts};
+use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
+use renderer::Renderer;
+use table::Table;
+use text::{Text, TextBox, TextSystem};
+use utils::{ImageCache, Point, Rect, Size};
+
+#[cfg(feature = "wayland")]
+use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
+#[cfg(feature = "x11")]
+use copypasta::{ClipboardContext, ClipboardProvider};
+
+use anyhow::Context;
+use taffy::Taffy;
+use winit::event::{
+    ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent,
+};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
+use winit::window::{CursorIcon, Window};
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),

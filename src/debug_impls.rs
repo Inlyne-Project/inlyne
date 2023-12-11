@@ -4,7 +4,8 @@
 
 use std::fmt;
 
-use crate::{positioner::Spacer, text::Text};
+use crate::positioner::Spacer;
+use crate::text::Text;
 
 use glyphon::FamilyOwned;
 

@@ -1,14 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, fmt};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt;
 
 use anyhow::Context;
 use taffy::Taffy;
 
-use crate::{
-    debug_impls,
-    text::{TextBox, TextSystem},
-    utils::{Align, Point, Rect, Size},
-    Element,
-};
+use crate::text::{TextBox, TextSystem};
+use crate::utils::{Align, Point, Rect, Size};
+use crate::{debug_impls, Element};
 
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;

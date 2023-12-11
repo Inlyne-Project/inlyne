@@ -1,10 +1,8 @@
 // NOTE: Good example to look at:
 // https://github.com/rust-lang/rust-analyzer/tree/master/xtask
 
-use std::{
-    env,
-    path::{Path, PathBuf},
-};
+use std::env;
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 

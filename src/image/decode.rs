@@ -1,14 +1,14 @@
-use crate::utils::usize_in_mib;
-use image::{
-    codecs::{
-        gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder, tiff::TiffDecoder, webp::WebPDecoder,
-    },
-    ColorType, GenericImageView, ImageDecoder, ImageFormat,
-};
-use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 use std::cmp;
 use std::io;
 use std::time::Instant;
+
+use crate::utils::usize_in_mib;
+
+use image::codecs::{
+    gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder, tiff::TiffDecoder, webp::WebPDecoder,
+};
+use image::{ColorType, GenericImageView, ImageDecoder, ImageFormat};
+use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
 pub fn lz4_compress<R: io::Read>(reader: &mut R) -> anyhow::Result<Vec<u8>> {
     let mut frame_info = FrameInfo::new();

@@ -1,9 +1,7 @@
 use std::str::FromStr;
 
-use super::{
-    action::{Action, VertDirection, Zoom},
-    Key, KeyCombo, ModifiedKey,
-};
+use super::action::{Action, VertDirection, Zoom};
+use super::{Key, KeyCombo, ModifiedKey};
 
 use serde::{de, Deserialize, Deserializer};
 use winit::event::ModifiersState;

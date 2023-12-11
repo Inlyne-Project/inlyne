@@ -1,19 +1,15 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::mpsc,
-    time::Duration,
-};
+#[cfg(test)]
+mod tests;
+
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use crate::InlyneEvent;
 
-use notify::{
-    event::{EventKind, ModifyKind},
-    Event, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as _,
-};
+use notify::event::{EventKind, ModifyKind};
+use notify::{Event, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as _};
 use winit::event_loop::EventLoopProxy;
-
-#[cfg(test)]
-mod tests;
 
 trait Callback: Send + 'static {
     fn file_reload(&self);

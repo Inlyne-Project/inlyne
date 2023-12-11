@@ -5,14 +5,13 @@ mod tests;
 
 use std::path::{Path, PathBuf};
 
-use crate::{color, keybindings::Keybindings};
+pub use self::cli::{Args, ThemeType};
+pub use self::config::{Config, FontOptions};
+use crate::color;
+use crate::keybindings::Keybindings;
 
 use anyhow::Result;
 use serde::Deserialize;
-
-pub use self::cli::{Args, ThemeType};
-pub use self::config::Config;
-pub use self::config::FontOptions;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {

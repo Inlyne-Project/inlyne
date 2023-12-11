@@ -1,16 +1,17 @@
-use std::{
-    collections::VecDeque,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        mpsc, Arc, Mutex,
-    },
-    thread,
-    time::{Duration, Instant},
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    mpsc, Arc, Mutex,
 };
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
-use crate::{color::Theme, image::ImageData, test_utils::init_test_log, Element, ImageCache};
+use crate::color::Theme;
+use crate::image::ImageData;
+use crate::test_utils::init_test_log;
+use crate::{Element, ImageCache};
 
 use wgpu::TextureFormat;
 use wiremock::{matchers, Mock, MockServer, ResponseTemplate};

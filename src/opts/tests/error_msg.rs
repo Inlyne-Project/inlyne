@@ -1,7 +1,5 @@
-use crate::{
-    keybindings::{KeyCombos, Keybindings},
-    opts::Config,
-};
+use crate::keybindings::{KeyCombos, Keybindings};
+use crate::opts::Config;
 
 macro_rules! snapshot_config_parse_error {
     ( $( ($test_name:ident, $config_text:ident) ),* $(,)? ) => {
