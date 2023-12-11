@@ -10,14 +10,14 @@ use std::{collections::BTreeMap, fmt, slice::Iter, str::FromStr, vec::IntoIter};
 use action::Action;
 
 use serde::Deserialize;
-use winit::event::{ModifiersState, ScanCode, VirtualKeyCode};
+use winit::event::{ModifiersState, ScanCode, VirtualKeyCode as VirtKey};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Keybindings(Vec<(Action, KeyCombo)>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
-    Resolved(VirtualKeyCode),
+    Resolved(VirtKey),
     ScanCode(ScanCode),
 }
 
@@ -49,7 +49,7 @@ impl Default for Keybindings {
 }
 
 impl Key {
-    pub fn new(resolved: Option<VirtualKeyCode>, scan_code: ScanCode) -> Self {
+    pub fn new(resolved: Option<VirtKey>, scan_code: ScanCode) -> Self {
         match resolved {
             Some(key_code) => Self::Resolved(key_code),
             None => Self::ScanCode(scan_code),
@@ -57,8 +57,8 @@ impl Key {
     }
 }
 
-impl From<VirtualKeyCode> for Key {
-    fn from(key_code: VirtualKeyCode) -> Self {
+impl From<VirtKey> for Key {
+    fn from(key_code: VirtKey) -> Self {
         Self::Resolved(key_code)
     }
 }
@@ -72,10 +72,10 @@ impl fmt::Display for Key {
                     .find_map(|&(key_str, key)| (*resolved == key).then_some(key_str));
                 match maybe_key {
                     Some(key) => f.write_str(key),
-                    None => write!(f, "<unsupported: {:?}>", resolved),
+                    None => write!(f, "<unsupported: {resolved:?}>"),
                 }
             }
-            Key::ScanCode(_) => write!(f, "{:?}", self),
+            Key::ScanCode(scan_code) => write!(f, "<scan code: {scan_code}>"),
         }
     }
 }
@@ -97,7 +97,43 @@ pub struct ModifiedKey(pub Key, pub ModifiersState);
 impl fmt::Display for ModifiedKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.1 == ModifiersState::default() {
-            write!(f, "{}", self.0)
+            let is_not_visible = [
+                VirtKey::F1,
+                VirtKey::F2,
+                VirtKey::F3,
+                VirtKey::F4,
+                VirtKey::F5,
+                VirtKey::F6,
+                VirtKey::F7,
+                VirtKey::F8,
+                VirtKey::F9,
+                VirtKey::F10,
+                VirtKey::F11,
+                VirtKey::F12,
+                VirtKey::Up,
+                VirtKey::Right,
+                VirtKey::Down,
+                VirtKey::Left,
+                VirtKey::Escape,
+                VirtKey::Tab,
+                VirtKey::Insert,
+                VirtKey::Delete,
+                VirtKey::Back,
+                VirtKey::Return,
+                VirtKey::Home,
+                VirtKey::End,
+                VirtKey::PageUp,
+                VirtKey::PageDown,
+                VirtKey::Space,
+            ]
+            .map(Key::from)
+            .contains(&self.0);
+
+            if is_not_visible {
+                write!(f, "<{}>", self.0)
+            } else {
+                write!(f, "{}", self.0)
+            }
         } else {
             let mut mod_list = Vec::new();
 
@@ -114,14 +150,14 @@ impl fmt::Display for ModifiedKey {
                 mod_list.push("Shift");
             }
 
-            let mods = mod_list.join(", ");
-            write!(f, "{{ {}, [{mods}] }}", self.0)
+            let mods = mod_list.join("+");
+            write!(f, "<{}+{}>", mods, self.0)
         }
     }
 }
 
-impl From<VirtualKeyCode> for ModifiedKey {
-    fn from(keycode: VirtualKeyCode) -> Self {
+impl From<VirtKey> for ModifiedKey {
+    fn from(keycode: VirtKey) -> Self {
         Self(Key::from(keycode), ModifiersState::empty())
     }
 }
@@ -131,12 +167,11 @@ pub struct KeyCombo(pub Vec<ModifiedKey>);
 
 impl fmt::Display for KeyCombo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let keys = self
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        write!(f, "[{}]", keys)
+        for key in self.iter() {
+            write!(f, "{key}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -158,8 +193,8 @@ impl KeyCombo {
     }
 }
 
-impl From<VirtualKeyCode> for KeyCombo {
-    fn from(key_code: VirtualKeyCode) -> Self {
+impl From<VirtKey> for KeyCombo {
+    fn from(key_code: VirtKey) -> Self {
         KeyCombo(vec![ModifiedKey::from(key_code)])
     }
 }
@@ -267,14 +302,14 @@ impl KeyCombos {
         // We ignore modifier keys since they aren't considered part of combos
         if let Key::Resolved(key) = &modified_key.0 {
             if [
-                VirtualKeyCode::LAlt,
-                VirtualKeyCode::RAlt,
-                VirtualKeyCode::LControl,
-                VirtualKeyCode::RControl,
-                VirtualKeyCode::LWin,
-                VirtualKeyCode::RWin,
-                VirtualKeyCode::LShift,
-                VirtualKeyCode::RShift,
+                VirtKey::LAlt,
+                VirtKey::RAlt,
+                VirtKey::LControl,
+                VirtKey::RControl,
+                VirtKey::LWin,
+                VirtKey::RWin,
+                VirtKey::LShift,
+                VirtKey::RShift,
             ]
             .contains(key)
             {

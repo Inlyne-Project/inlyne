@@ -1,0 +1,11 @@
+---
+source: src/opts/tests/error_msg.rs
+description: "\n[keybindings]\nbase = [\n    [\"ToBottom\", { key = \" \", mod = [\"Ctrl\", \"shift\"] }],\n    [\"ZoomOut\", [{ key = \" \", mod = [\"ctrl\", \"shift\"] }, \"Enter\"]],\n]\n"
+expression: err
+---
+TOML parse error at line 4, column 5
+  |
+4 |     ["ToBottom", { key = " ", mod = ["Ctrl", "shift"] }],
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+data did not match any variant of untagged enum ModifiedKeyOrModifiedKeys
+

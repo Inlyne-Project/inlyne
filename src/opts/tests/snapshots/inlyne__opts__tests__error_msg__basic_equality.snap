@@ -1,0 +1,8 @@
+---
+source: src/opts/tests/error_msg.rs
+description: "\n[keybindings]\nbase = [\n    [\"ToTop\", \"a\"],\n    [\"ZoomReset\", \"a\"],\n]\n"
+expression: err
+---
+A keycombo starts with another keycombo making it unreachable
+	Combo: a
+	Prefix: a
