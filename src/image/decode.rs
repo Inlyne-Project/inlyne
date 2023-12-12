@@ -7,7 +7,7 @@ use crate::utils::usize_in_mib;
 use image::codecs::{
     gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder, tiff::TiffDecoder, webp::WebPDecoder,
 };
-use image::{ColorType, GenericImageView, ImageDecoder, ImageFormat};
+use image::{ColorType, GenericImageView, ImageDecoder, ImageFormat, ImageResult};
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
 pub fn lz4_compress<R: io::Read>(reader: &mut R) -> anyhow::Result<Vec<u8>> {
@@ -30,30 +30,17 @@ pub fn lz4_decompress(blob: &[u8], size: usize) -> anyhow::Result<Vec<u8>> {
     Ok(decompressed)
 }
 
-pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u32))> {
+pub type ImageParts = (Vec<u8>, (u32, u32));
+
+pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<ImageParts> {
     // We can stream decoding some formats although decoding may still load everything into memory
     // at once depending on how the decoder behaves
     let maybe_streamed = match image::guess_format(contents)? {
-        ImageFormat::Png => {
-            let dec = PngDecoder::new(io::Cursor::new(&contents))?;
-            stream_decode_and_compress(dec)
-        }
-        ImageFormat::Jpeg => {
-            let dec = JpegDecoder::new(io::Cursor::new(&contents))?;
-            stream_decode_and_compress(dec)
-        }
-        ImageFormat::Gif => {
-            let dec = GifDecoder::new(io::Cursor::new(&contents))?;
-            stream_decode_and_compress(dec)
-        }
-        ImageFormat::Tiff => {
-            let dec = TiffDecoder::new(io::Cursor::new(&contents))?;
-            stream_decode_and_compress(dec)
-        }
-        ImageFormat::WebP => {
-            let dec = WebPDecoder::new(io::Cursor::new(&contents))?;
-            stream_decode_and_compress(dec)
-        }
+        ImageFormat::Png => stream_decode_and_compress(contents, PngDecoder::new)?,
+        ImageFormat::Jpeg => stream_decode_and_compress(contents, JpegDecoder::new)?,
+        ImageFormat::Gif => stream_decode_and_compress(contents, GifDecoder::new)?,
+        ImageFormat::Tiff => stream_decode_and_compress(contents, TiffDecoder::new)?,
+        ImageFormat::WebP => stream_decode_and_compress(contents, WebPDecoder::new)?,
         _ => None,
     };
 
@@ -63,16 +50,24 @@ pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u3
     }
 }
 
-fn stream_decode_and_compress<'img, Dec>(dec: Dec) -> Option<(Vec<u8>, (u32, u32))>
+fn stream_decode_and_compress<'img, Dec>(
+    contents: &'img [u8],
+    decoder_constructor: fn(io::Cursor<&'img [u8]>) -> ImageResult<Dec>,
+) -> anyhow::Result<Option<ImageParts>>
 where
     Dec: ImageDecoder<'img>,
 {
+    let dec = decoder_constructor(io::Cursor::new(contents))?;
+
     let total_size = dec.total_bytes();
     let dimensions = dec.dimensions();
     let start = Instant::now();
 
-    let mut adapter = Rgba8Adapter::new(dec)?;
-    lz4_compress(&mut adapter).ok().map(|lz4_blob| {
+    let Some(mut adapter) = Rgba8Adapter::new(dec) else {
+        return Ok(None);
+    };
+
+    let maybe_image_parts = lz4_compress(&mut adapter).ok().map(|lz4_blob| {
         log::debug!(
             "Streaming image decode & compression:\n\
             - Full {:.2} MiB\n\
@@ -84,7 +79,8 @@ where
         );
 
         (lz4_blob, dimensions)
-    })
+    });
+    Ok(maybe_image_parts)
 }
 
 /// An adapter that can do a streaming transformation from some pixel formats to RGBA8
