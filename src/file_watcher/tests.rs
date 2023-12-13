@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
 use super::{Callback, Watcher};
-use crate::test_utils::init_test_log;
+
+use tempfile::TempDir;
 
 impl Callback for mpsc::Sender<()> {
     fn file_reload(&self) {
@@ -59,52 +60,101 @@ impl Delays {
     }
 }
 
-#[test]
-fn the_gauntlet() {
-    init_test_log();
-
-    // This test can be flaky, so give it a few chances to succeed
-    let mut last_panic = None;
-    let mut delays = Delays::new();
-    for _ in 0..3 {
-        let result = std::panic::catch_unwind(|| the_gauntlet_flaky(delays.clone()));
-        let Err(panic) = result else {
-            return;
-        };
-        last_panic = Some(panic);
-        delays.increase_delays();
-    }
-
-    std::panic::resume_unwind(last_panic.unwrap());
+struct TestEnv {
+    temp_dir: TempDir,
+    main_file: PathBuf,
+    rel_file: PathBuf,
+    watcher: Watcher,
+    callback_rx: mpsc::Receiver<()>,
 }
 
-// Unfortunately this needs to be littered with sleeps/timeouts to work right :/
-fn the_gauntlet_flaky(delays: Delays) {
-    // Create our dummy test env
-    let temp_dir = tempfile::Builder::new()
-        .prefix("inlyne-tests-")
-        .tempdir()
-        .unwrap();
-    let base = temp_dir.path();
-    let main_file = base.join("main.md");
-    let rel_file = base.join("rel.md");
-    let swapped_in_file = base.join("swap_me_in.md");
-    let swapped_out_file = base.join("swap_out_to_me.md");
-    fs::write(&main_file, "# Main\n\n[rel](./rel.md)").unwrap();
-    fs::write(&rel_file, "# Rel").unwrap();
-    fs::write(&swapped_in_file, "# Swapped").unwrap();
+impl TestEnv {
+    fn init() -> Self {
+        // Create our dummy test env
+        let temp_dir = tempfile::Builder::new()
+            .prefix("inlyne-tests-")
+            .tempdir()
+            .unwrap();
+        let base = temp_dir.path();
+        let main_file = base.join("main.md");
+        let rel_file = base.join("rel.md");
+        fs::write(&main_file, "# Main\n\n[rel](./rel.md)").unwrap();
+        fs::write(&rel_file, "# Rel").unwrap();
 
-    // Setup our watcher
-    let (callback_tx, callback_rx) = mpsc::channel::<()>();
-    let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
+        // Setup our watcher
+        let (callback_tx, callback_rx) = mpsc::channel();
+        let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
 
+        Self {
+            temp_dir,
+            main_file,
+            rel_file,
+            watcher,
+            callback_rx,
+        }
+    }
+}
+
+macro_rules! gen_watcher_test {
+    ( $( ($test_name:ident, $test_fn:ident) ),* $(,)? ) => {
+        $(
+            #[test]
+            fn $test_name() {
+                $crate::test_utils::init_test_log();
+
+                // Give the test a few chances
+                let mut last_panic = None;
+                let mut delays = Delays::new();
+                for _ in 0..3 {
+                    let result = std::panic::catch_unwind(|| {
+                        let test_dir = TestEnv::init();
     // Give the watcher time to get comfy :)
     delays.delay();
 
+                        $test_fn(test_dir, delays.clone())
+                    });
+                    let Err(panic) = result else {
+                        return;
+                    };
+                    last_panic = Some(panic);
+                    delays.increase_delays();
+                }
+
+                std::panic::resume_unwind(last_panic.unwrap());
+            }
+        )*
+    }
+}
+
+gen_watcher_test!(
+    (sanity, sanity_fn),
+    (update_moves_watcher, update_moves_watcher_fn),
+    (slowly_swap_file, slowly_swap_file_fn),
+);
+
+fn sanity_fn(
+    TestEnv {
+        main_file,
+        callback_rx,
+        ..
+    }: TestEnv,
+    delays: Delays,
+) {
     // Sanity check watching
     touch(&main_file);
     delays.assert_at_least_one_message(&callback_rx);
+}
 
+fn update_moves_watcher_fn(
+    TestEnv {
+        main_file,
+        rel_file,
+        watcher,
+        callback_rx,
+        ..
+    }: TestEnv,
+    delays: Delays,
+) {
     // Updating a file follows the new file and not the old one
     watcher.update_file(&rel_file, fs::read_to_string(&rel_file).unwrap());
     delays.assert_at_least_one_message(&callback_rx);
@@ -112,17 +162,31 @@ fn the_gauntlet_flaky(delays: Delays) {
     delays.assert_no_message(&callback_rx);
     touch(&rel_file);
     delays.assert_at_least_one_message(&callback_rx);
+}
+
+fn slowly_swap_file_fn(
+    TestEnv {
+        temp_dir,
+        callback_rx,
+        main_file,
+        ..
+    }: TestEnv,
+    delays: Delays,
+) {
+    let swapped_in_file = temp_dir.path().join("swap_me_in.md");
+    let swapped_out_file = temp_dir.path().join("swap_out_to_me.md");
+    fs::write(&swapped_in_file, "# Swapped").unwrap();
 
     // We can slowly swap out the file and it will only follow the file it's supposed to
-    fs::rename(&rel_file, &swapped_out_file).unwrap();
+    fs::rename(&main_file, &swapped_out_file).unwrap();
     touch(&swapped_out_file);
     delays.assert_no_message(&callback_rx);
     // The "slowly" part of this (give the watcher time to fail and start polling)
     delays.delay();
-    fs::rename(&swapped_in_file, &rel_file).unwrap();
+    fs::rename(&swapped_in_file, &main_file).unwrap();
     delays.assert_at_least_one_message(&callback_rx);
     fs::remove_file(&swapped_out_file).unwrap();
     delays.assert_no_message(&callback_rx);
-    touch(&rel_file);
+    touch(&main_file);
     delays.assert_at_least_one_message(&callback_rx);
 }
