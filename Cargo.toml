@@ -94,11 +94,8 @@ tempfile = "3.8.1"
 wiremock = "0.5.21"
 
 # Selectively bump up opt level for some dependencies to improve dev build perf
-[profile.dev.package.ttf-parser]
-opt-level = 2
-[profile.dev.package.rustybuzz]
-opt-level = 2
-[profile.dev.package.cosmic-text]
-opt-level = 2
-[profile.dev.package.png]
-opt-level = 2
+[profile.dev.package]
+ttf-parser.opt-level = 2
+rustybuzz.opt-level = 2
+cosmic-text.opt-level = 2
+png.opt-level = 2

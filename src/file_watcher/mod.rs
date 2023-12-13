@@ -83,7 +83,7 @@ fn endlessly_handle_messages<C: Callback>(
         .unwrap();
 
     let poll_registering_watcher = |watcher: &mut RecommendedWatcher, file_path: &Path| loop {
-        std::thread::sleep(Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(15));
 
         let _ = watcher.unwatch(file_path);
         if watcher

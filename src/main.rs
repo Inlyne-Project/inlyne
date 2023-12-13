@@ -2,7 +2,7 @@
     // I don't really care enough about the names here to fix things atm
     clippy::enum_variant_names,
 )]
-#![deny(
+#![warn(
     // Generally we don't want this sneaking into `main`
     clippy::todo,
     // This should be used very sparingly compared between logging and clap

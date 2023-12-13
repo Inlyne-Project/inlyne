@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::image::ImageData;
 
@@ -10,6 +10,7 @@ use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
+use syntect::parsing::SyntaxSet;
 use winit::window::CursorIcon;
 
 pub(crate) fn default<T: Default>() -> T {
@@ -140,7 +141,11 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     theme_set
         .themes
         .insert(String::from(dummy_name), syntax_theme);
-    let syn_set = two_face::syntax::extra_no_newlines();
+    static CACHED_SYN_SET: OnceLock<SyntaxSet> = OnceLock::new();
+    // Initializing this is non-trivial. Cache so it only runs once
+    let syn_set = CACHED_SYN_SET
+        .get_or_init(two_face::syntax::extra_no_newlines)
+        .to_owned();
     let adapter = SyntectAdapterBuilder::new()
         .syntax_set(syn_set)
         .theme_set(theme_set)

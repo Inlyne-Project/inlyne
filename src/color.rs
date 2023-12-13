@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -45,6 +46,11 @@ pub struct Theme {
 
 impl Theme {
     pub fn dark_default() -> Self {
+        static CACHED_CODE_HIGHLIGHTER: OnceLock<SyntectTheme> = OnceLock::new();
+        // Initializing this is non-trivial. Cache so it only runs once
+        let code_highlighter = CACHED_CODE_HIGHLIGHTER
+            .get_or_init(|| ThemeDefaults::Base16OceanDark.into())
+            .to_owned();
         Self {
             text_color: 0x9DACBB,
             background_color: 0x1A1D22,
@@ -53,11 +59,16 @@ impl Theme {
             link_color: 0x4182EB,
             select_color: 0x3675CB,
             checkbox_color: 0x0A5301,
-            code_highlighter: SyntectTheme::from(ThemeDefaults::Base16OceanDark),
+            code_highlighter,
         }
     }
 
     pub fn light_default() -> Self {
+        static CACHED_CODE_HIGHLIGHTER: OnceLock<SyntectTheme> = OnceLock::new();
+        // Initializing this is non-trivial. Cache so it only runs once
+        let code_highlighter = CACHED_CODE_HIGHLIGHTER
+            .get_or_init(|| ThemeDefaults::InspiredGithub.into())
+            .to_owned();
         Self {
             text_color: 0x000000,
             background_color: 0xFFFFFF,
@@ -66,7 +77,7 @@ impl Theme {
             link_color: 0x5466FF,
             select_color: 0xCDE8F0,
             checkbox_color: 0x96ECAE,
-            code_highlighter: SyntectTheme::from(ThemeDefaults::InspiredGithub),
+            code_highlighter,
         }
     }
 }
