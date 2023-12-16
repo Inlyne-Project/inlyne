@@ -32,9 +32,9 @@ struct Delays {
 impl Delays {
     fn new() -> Self {
         Self {
-            delay: Duration::from_millis(100),
-            short_timeout: Duration::from_millis(50),
-            long_timeout: Duration::from_millis(2_000),
+            delay: Duration::from_millis(75),
+            short_timeout: Duration::from_millis(25),
+            long_timeout: Duration::from_millis(1_500),
         }
     }
 
@@ -105,7 +105,7 @@ macro_rules! gen_watcher_test {
                 // Give the test a few chances
                 let mut last_panic = None;
                 let mut delays = Delays::new();
-                for _ in 0..3 {
+                for _ in 0..4 {
                     let result = std::panic::catch_unwind(|| {
                         let test_dir = TestEnv::init();
     // Give the watcher time to get comfy :)
