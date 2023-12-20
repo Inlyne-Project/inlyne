@@ -756,6 +756,7 @@ fn main() -> anyhow::Result<()> {
     human_panic::setup_panic!();
 
     env_logger::Builder::new()
+        .format_timestamp_micros()
         .filter_level(log::LevelFilter::Error)
         .filter_module("inlyne", log::LevelFilter::Info)
         .parse_env("INLYNE_LOG")
