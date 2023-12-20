@@ -8,7 +8,10 @@ use std::time::Duration;
 use crate::InlyneEvent;
 
 use notify::event::{EventKind, ModifyKind};
-use notify::{Event, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify_debouncer_full::{
+    new_debouncer, DebounceEventHandler, DebounceEventResult, Debouncer, FileIdMap,
+};
 use winit::event_loop::EventLoopProxy;
 
 trait Callback: Send + 'static {
@@ -35,10 +38,43 @@ enum WatcherMsg {
 
 struct MsgHandler(mpsc::Sender<WatcherMsg>);
 
-impl EventHandler for MsgHandler {
-    fn handle_event(&mut self, event: notify::Result<Event>) {
-        let msg = WatcherMsg::Notify(event);
-        let _ = self.0.send(msg);
+impl DebounceEventHandler for MsgHandler {
+    fn handle_event(&mut self, debounced_event: DebounceEventResult) {
+        log::debug!("Received debounced file events: {:#?}", debounced_event);
+
+        match debounced_event {
+            Ok(events) => {
+                let mut selected_event: Option<Event> = None;
+
+                // select the most interesting event
+                // Remove is more interesting than Modify
+                for ev in events {
+                    match ev.event.kind {
+                        EventKind::Modify(_) => {
+                            let _ = selected_event.get_or_insert(ev.event);
+                        }
+                        EventKind::Remove(_) => {
+                            let _ = selected_event.insert(ev.event);
+                        }
+                        _ => {}
+                    }
+                }
+
+                if let Some(event) = selected_event {
+                    let msg = WatcherMsg::Notify(Ok(event));
+                    let _ = self.0.send(msg);
+                } else {
+                    log::trace!("Ignoring events")
+                }
+            }
+            Err(err) => {
+                // log all errors
+                for e in err {
+                    let msg = WatcherMsg::Notify(Err(e));
+                    let _ = self.0.send(msg);
+                }
+            }
+        }
     }
 }
 
@@ -54,7 +90,7 @@ impl Watcher {
         let watcher = Self(msg_tx.clone());
 
         let notify_watcher =
-            RecommendedWatcher::new(MsgHandler(msg_tx), notify::Config::default()).unwrap();
+            new_debouncer(Duration::from_millis(10), None, MsgHandler(msg_tx)).unwrap();
 
         std::thread::spawn(move || {
             endlessly_handle_messages(notify_watcher, msg_rx, reload_callback, file_path);
@@ -73,11 +109,12 @@ impl Watcher {
 }
 
 fn endlessly_handle_messages<C: Callback>(
-    mut watcher: RecommendedWatcher,
+    mut watcher: Debouncer<RecommendedWatcher, FileIdMap>,
     msg_rx: mpsc::Receiver<WatcherMsg>,
     reload_callback: C,
     mut file_path: PathBuf,
 ) {
+    let watcher = watcher.watcher();
     watcher
         .watch(&file_path, RecursiveMode::NonRecursive)
         .unwrap();
@@ -97,14 +134,14 @@ fn endlessly_handle_messages<C: Callback>(
     while let Ok(msg) = msg_rx.recv() {
         match msg {
             WatcherMsg::Notify(Ok(event)) => {
-                log::trace!("File event: {:#?}", event);
+                log::debug!("Processing file event: {:#?}", event);
 
                 if matches!(
                     event.kind,
                     EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
                 ) {
                     log::debug!("File may have been renamed/removed. Falling back to polling");
-                    poll_registering_watcher(&mut watcher, &file_path);
+                    poll_registering_watcher(watcher, &file_path);
                     log::debug!("Successfully re-registered file watcher");
                     reload_callback.file_reload();
                 } else if matches!(event.kind, EventKind::Modify(_)) {
@@ -116,7 +153,7 @@ fn endlessly_handle_messages<C: Callback>(
             WatcherMsg::FileChange { new_path, contents } => {
                 log::info!("Updating file watcher path: {}", new_path.display());
                 let _ = watcher.unwatch(&file_path);
-                poll_registering_watcher(&mut watcher, &new_path);
+                poll_registering_watcher(watcher, &new_path);
                 file_path = new_path;
                 reload_callback.file_change(contents);
             }

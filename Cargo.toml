@@ -67,6 +67,7 @@ two-face = "0.3.0"
 # Required for WGPU to work properly with Vulkan
 fontdb = { version = "0.13.1", features = ["fontconfig"] }
 human-panic = "1.2.2"
+notify-debouncer-full = { version = "0.3.1", default-features = false }
 
 [dependencies.glyphon]
 version = "0.2"
