@@ -47,14 +47,14 @@ impl DebounceEventHandler for MsgHandler {
                 let mut selected_event: Option<Event> = None;
 
                 // select the most interesting event
-                // Remove is more interesting than Modify
+                // Rename/Remove is more interesting than changing the contents
                 for ev in events {
                     match ev.event.kind {
+                        EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_) => {
+                            let _ = selected_event.insert(ev.event);
+                        }
                         EventKind::Create(_) | EventKind::Modify(_) => {
                             let _ = selected_event.get_or_insert(ev.event);
-                        }
-                        EventKind::Remove(_) => {
-                            let _ = selected_event.insert(ev.event);
                         }
                         _ => {}
                     }
