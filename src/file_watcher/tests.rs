@@ -61,6 +61,8 @@ impl Delays {
 }
 
 struct TestEnv {
+    // TODO: no need to pass this into the test env. Keep it external and limit what gets passed to
+    // tests
     temp_dir: TempDir,
     main_file: PathBuf,
     rel_file: PathBuf,
@@ -108,8 +110,13 @@ macro_rules! gen_watcher_test {
                 for _ in 0..4 {
                     let result = std::panic::catch_unwind(|| {
                         let test_dir = TestEnv::init();
-    // Give the watcher time to get comfy :)
-    delays.delay();
+                        // Give the watcher time to get comfy :)
+                        delays.delay();
+
+                        // For some reason it looks like MacOS gets a create event even though the
+                        // watcher gets registered after the file is already created. Drain any
+                        // initial notifications to start
+                        while test_dir.callback_rx.recv_timeout(delays.short_timeout).is_ok() {}
 
                         $test_fn(test_dir, delays.clone())
                     });
