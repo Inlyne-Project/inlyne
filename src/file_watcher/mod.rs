@@ -50,7 +50,7 @@ impl DebounceEventHandler for MsgHandler {
                 // Remove is more interesting than Modify
                 for ev in events {
                     match ev.event.kind {
-                        EventKind::Modify(_) => {
+                        EventKind::Create(_) | EventKind::Modify(_) => {
                             let _ = selected_event.get_or_insert(ev.event);
                         }
                         EventKind::Remove(_) => {
@@ -144,7 +144,7 @@ fn endlessly_handle_messages<C: Callback>(
                     poll_registering_watcher(watcher, &file_path);
                     log::debug!("Successfully re-registered file watcher");
                     reload_callback.file_reload();
-                } else if matches!(event.kind, EventKind::Modify(_)) {
+                } else if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
                     log::debug!("Reloading file");
                     reload_callback.file_reload();
                 }
