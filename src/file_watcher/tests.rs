@@ -60,41 +60,39 @@ impl Delays {
     }
 }
 
+fn init_test_env() -> (TestEnv, TempDir) {
+    // Create our dummy test env
+    let temp_dir = tempfile::Builder::new()
+        .prefix("inlyne-tests-")
+        .tempdir()
+        .unwrap();
+    let base = temp_dir.path();
+    let main_file = base.join("main.md");
+    let rel_file = base.join("rel.md");
+    fs::write(&main_file, "# Main\n\n[rel](./rel.md)").unwrap();
+    fs::write(&rel_file, "# Rel").unwrap();
+
+    // Setup our watcher
+    let (callback_tx, callback_rx) = mpsc::channel();
+    let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
+
+    let test_env = TestEnv {
+        base_dir: temp_dir.path().to_owned(),
+        main_file,
+        rel_file,
+        watcher,
+        callback_rx,
+    };
+
+    (test_env, temp_dir)
+}
+
 struct TestEnv {
-    // TODO: no need to pass this into the test env. Keep it external and limit what gets passed to
-    // tests
-    temp_dir: TempDir,
+    base_dir: PathBuf,
     main_file: PathBuf,
     rel_file: PathBuf,
     watcher: Watcher,
     callback_rx: mpsc::Receiver<()>,
-}
-
-impl TestEnv {
-    fn init() -> Self {
-        // Create our dummy test env
-        let temp_dir = tempfile::Builder::new()
-            .prefix("inlyne-tests-")
-            .tempdir()
-            .unwrap();
-        let base = temp_dir.path();
-        let main_file = base.join("main.md");
-        let rel_file = base.join("rel.md");
-        fs::write(&main_file, "# Main\n\n[rel](./rel.md)").unwrap();
-        fs::write(&rel_file, "# Rel").unwrap();
-
-        // Setup our watcher
-        let (callback_tx, callback_rx) = mpsc::channel();
-        let watcher = Watcher::spawn_inner(callback_tx, main_file.clone());
-
-        Self {
-            temp_dir,
-            main_file,
-            rel_file,
-            watcher,
-            callback_rx,
-        }
-    }
 }
 
 macro_rules! gen_watcher_test {
@@ -109,16 +107,16 @@ macro_rules! gen_watcher_test {
                 let mut delays = Delays::new();
                 for _ in 0..4 {
                     let result = std::panic::catch_unwind(|| {
-                        let test_dir = TestEnv::init();
+                        let (test_env, _temp_dir) = init_test_env();
+
                         // Give the watcher time to get comfy :)
                         delays.delay();
-
                         // For some reason it looks like MacOS gets a create event even though the
                         // watcher gets registered after the file is already created. Drain any
                         // initial notifications to start
-                        while test_dir.callback_rx.recv_timeout(delays.short_timeout).is_ok() {}
+                        while test_env.callback_rx.recv_timeout(delays.short_timeout).is_ok() {}
 
-                        $test_fn(test_dir, delays.clone())
+                        $test_fn(test_env, delays.clone())
                     });
                     let Err(panic) = result else {
                         return;
@@ -173,15 +171,15 @@ fn update_moves_watcher_fn(
 
 fn slowly_swap_file_fn(
     TestEnv {
-        temp_dir,
+        base_dir,
         callback_rx,
         main_file,
         ..
     }: TestEnv,
     delays: Delays,
 ) {
-    let swapped_in_file = temp_dir.path().join("swap_me_in.md");
-    let swapped_out_file = temp_dir.path().join("swap_out_to_me.md");
+    let swapped_in_file = base_dir.join("swap_me_in.md");
+    let swapped_out_file = base_dir.join("swap_out_to_me.md");
     fs::write(&swapped_in_file, "# Swapped").unwrap();
 
     // We can slowly swap out the file and it will only follow the file it's supposed to
