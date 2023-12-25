@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::InlyneEvent;
 
 use notify::event::{EventKind, ModifyKind};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
 use notify_debouncer_full::{
     new_debouncer, DebounceEventHandler, DebounceEventResult, Debouncer, FileIdMap,
 };
@@ -29,11 +29,27 @@ impl Callback for EventLoopProxy<InlyneEvent> {
     }
 }
 
+struct FileChange {
+    new_path: PathBuf,
+    contents: String,
+}
+
+enum DebouncerAction {
+    ReregisterWatcher,
+    FileReload,
+}
+
 enum WatcherMsg {
-    // Sent by the registered file watcher
-    Notify(notify::Result<Event>),
+    // Sent by the file watcher debouncer
+    Action(DebouncerAction),
     // Sent by the event loop
-    FileChange { new_path: PathBuf, contents: String },
+    FileChange(FileChange),
+}
+
+impl WatcherMsg {
+    fn file_change(new_path: PathBuf, contents: String) -> Self {
+        Self::FileChange(FileChange { new_path, contents })
+    }
 }
 
 struct MsgHandler(mpsc::Sender<WatcherMsg>);
@@ -44,34 +60,32 @@ impl DebounceEventHandler for MsgHandler {
 
         match debounced_event {
             Ok(events) => {
-                let mut selected_event: Option<Event> = None;
+                let mut maybe_action = None;
 
                 // select the most interesting event
                 // Rename/Remove is more interesting than changing the contents
                 for ev in events {
                     match ev.event.kind {
                         EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_) => {
-                            let _ = selected_event.insert(ev.event);
+                            let _ = maybe_action.insert(DebouncerAction::ReregisterWatcher);
                         }
                         EventKind::Create(_) | EventKind::Modify(_) => {
-                            let _ = selected_event.get_or_insert(ev.event);
+                            let _ = maybe_action.get_or_insert(DebouncerAction::FileReload);
                         }
                         _ => {}
                     }
                 }
 
-                if let Some(event) = selected_event {
-                    let msg = WatcherMsg::Notify(Ok(event));
+                if let Some(action) = maybe_action {
+                    let msg = WatcherMsg::Action(action);
                     let _ = self.0.send(msg);
                 } else {
                     log::trace!("Ignoring events")
                 }
             }
-            Err(err) => {
-                // log all errors
-                for e in err {
-                    let msg = WatcherMsg::Notify(Err(e));
-                    let _ = self.0.send(msg);
+            Err(errs) => {
+                for err in errs {
+                    log::warn!("File watcher error: {err}");
                 }
             }
         }
@@ -100,10 +114,7 @@ impl Watcher {
     }
 
     pub fn update_file(&self, new_path: &Path, contents: String) {
-        let msg = WatcherMsg::FileChange {
-            new_path: new_path.to_owned(),
-            contents,
-        };
+        let msg = WatcherMsg::file_change(new_path.to_owned(), contents);
         let _ = self.0.send(msg);
     }
 }
@@ -133,24 +144,17 @@ fn endlessly_handle_messages<C: Callback>(
 
     while let Ok(msg) = msg_rx.recv() {
         match msg {
-            WatcherMsg::Notify(Ok(event)) => {
-                log::debug!("Processing file event: {:#?}", event);
-
-                if matches!(
-                    event.kind,
-                    EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
-                ) {
-                    log::debug!("File may have been renamed/removed. Falling back to polling");
-                    poll_registering_watcher(watcher, &file_path);
-                    log::debug!("Successfully re-registered file watcher");
-                    reload_callback.file_reload();
-                } else if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
-                    log::debug!("Reloading file");
-                    reload_callback.file_reload();
-                }
+            WatcherMsg::Action(DebouncerAction::ReregisterWatcher) => {
+                log::debug!("File may have been renamed/removed. Falling back to polling");
+                poll_registering_watcher(watcher, &file_path);
+                log::debug!("Successfully re-registered file watcher");
+                reload_callback.file_reload();
             }
-            WatcherMsg::Notify(Err(err)) => log::warn!("File watcher error: {}", err),
-            WatcherMsg::FileChange { new_path, contents } => {
+            WatcherMsg::Action(DebouncerAction::FileReload) => {
+                log::debug!("Reloading file");
+                reload_callback.file_reload();
+            }
+            WatcherMsg::FileChange(FileChange { new_path, contents }) => {
                 log::info!("Updating file watcher path: {}", new_path.display());
                 let _ = watcher.unwatch(&file_path);
                 poll_registering_watcher(watcher, &new_path);
