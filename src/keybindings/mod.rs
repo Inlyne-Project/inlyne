@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::slice::Iter;
 use std::str::FromStr;
-use std::vec::IntoIter;
+use std::vec;
 
 use action::Action;
 
@@ -189,7 +189,7 @@ impl KeyCombo {
         self.0.iter()
     }
 
-    fn into_iter(self) -> IntoIter<ModifiedKey> {
+    fn into_iter(self) -> vec::IntoIter<ModifiedKey> {
         self.0.into_iter()
     }
 
@@ -208,23 +208,25 @@ impl From<VirtKey> for KeyCombo {
     }
 }
 
+type Node = BTreeMap<ModifiedKey, Connection>;
+type Ptr = usize;
+const ROOT_INDEX: Ptr = 0;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Connection {
-    Branch(usize),
+    Branch(Ptr),
     Leaf(Action),
 }
-
-const ROOT_INDEX: usize = 0;
 
 /// Maps single or multi key combos to their actions
 ///
 /// Internally this is implemented as a trie (a tree where prefixes are shared) where the
-/// "pointers" are all just indices into `storage`. Each entry in storage represents a node with
+/// "pointers" are all just indices into `storage`. Each entry in `storage` represents a node with
 /// its connections to other nodes stored in a map
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct KeyCombos {
-    position: usize,
-    storage: Vec<BTreeMap<ModifiedKey, Connection>>,
+    position: Ptr,
+    storage: Vec<Node>,
     in_multikey_combo: bool,
 }
 
@@ -259,8 +261,7 @@ impl KeyCombos {
                 !keys.is_empty(),
                 "A keycombo for {action:?} contained no keys"
             );
-            let keys = keys.into_iter();
-            Self::insert_action(&mut storage, ROOT_INDEX, keys, action);
+            Self::insert_action(&mut storage, keys, action);
         }
 
         Ok(Self {
@@ -270,11 +271,15 @@ impl KeyCombos {
         })
     }
 
-    fn insert_action(
-        storage: &mut Vec<BTreeMap<ModifiedKey, Connection>>,
-        position: usize,
-        mut keys: IntoIter<ModifiedKey>,
+    fn insert_action(storage: &mut Vec<Node>, keys: KeyCombo, action: Action) {
+        Self::insert_action_(storage, keys.into_iter(), action, ROOT_INDEX)
+    }
+
+    fn insert_action_(
+        storage: &mut Vec<Node>,
+        mut keys: vec::IntoIter<ModifiedKey>,
         action: Action,
+        position: Ptr,
     ) {
         let key = keys.next().unwrap();
 
@@ -288,11 +293,8 @@ impl KeyCombos {
 
         match value {
             Some(Connection::Branch(common_branch)) => {
-                if keys.len() == 0 {
-                    unreachable!("Prefixes are checked before inserting");
-                } else {
-                    Self::insert_action(storage, common_branch, keys, action);
-                }
+                assert_ne!(keys.len(), 0, "Prefixes are checked before inserting");
+                Self::insert_action_(storage, keys, action, common_branch);
             }
             Some(Connection::Leaf(_)) => unreachable!("Prefixes are checked before inserting"),
             None => {
@@ -300,7 +302,7 @@ impl KeyCombos {
                     let _ = node.insert(key, Connection::Leaf(action));
                 } else {
                     let _ = node.insert(key, Connection::Branch(next_free_position));
-                    Self::insert_action(storage, next_free_position, keys, action);
+                    Self::insert_action_(storage, keys, action, next_free_position);
                 }
             }
         }
@@ -351,13 +353,13 @@ impl KeyCombos {
                 None
             }
             None => {
-                // If we were broken out of a multi-key combo the key that broke us out could be
-                // part of a new keycombo. In that case reset the combo and run it
-                if self.in_multikey_combo {
-                    self.reset();
+                let in_multikey_combo = self.in_multikey_combo;
+                self.reset();
+                if in_multikey_combo {
+                    // If we were broken out of a multi-key combo the key that broke us out could be
+                    // part of a new keycombo
                     self.munch_(modified_key)
                 } else {
-                    self.reset();
                     None
                 }
             }
@@ -365,6 +367,7 @@ impl KeyCombos {
     }
 
     fn reset(&mut self) {
+        // Wipe everything, but the nodes
         self.position = ROOT_INDEX;
         self.in_multikey_combo = false;
     }

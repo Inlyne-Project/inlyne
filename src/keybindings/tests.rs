@@ -1,10 +1,10 @@
 use super::action::{Action, VertDirection};
-use super::{Key, KeyCombos, ModifiedKey};
+use super::{KeyCombos, ModifiedKey};
 use crate::keybindings::Keybindings;
 use crate::opts::Config;
 use crate::test_utils::init_test_log;
 
-use winit::event::{ModifiersState, VirtualKeyCode};
+use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
 
 #[test]
 fn sanity() {
@@ -20,32 +20,30 @@ base = [
 ]
 "#;
 
+    // TODO: move this to a helper somewhere
     let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
     let mut bindings = keybindings.base.unwrap_or_else(Keybindings::empty);
     bindings.extend(keybindings.extra.unwrap_or_else(Keybindings::empty));
     let mut key_combos = KeyCombos::new(bindings).unwrap();
 
-    let g = ModifiedKey::from(VirtualKeyCode::G);
-    let cap_g = ModifiedKey(Key::from(VirtualKeyCode::G), ModifiersState::SHIFT);
-    let j = ModifiedKey::from(VirtualKeyCode::J);
+    let g: ModifiedKey = VirtKey::G.into();
+    let l_shift = VirtKey::LShift.into();
+    let cap_g = ModifiedKey(g.0, ModifiersState::SHIFT);
+    let j = VirtKey::J.into();
 
-    // Invalid combo 'gG' where the key that broke us out is a singlekey combo
-    assert!(key_combos.munch(g).is_none());
-    assert_eq!(
-        Action::ToEdge(VertDirection::Down),
-        key_combos.munch(cap_g).unwrap()
-    );
+    let test_vectors = [
+        // Invalid combo 'gG' where the key that broke us out is a singlekey combo
+        (g, None),
+        (l_shift, None),
+        (cap_g, Some(Action::ToEdge(VertDirection::Down))),
+        // Valid combo 'gg' that shares a branch with 'gj'
+        (g, None),
+        (g, Some(Action::ToEdge(VertDirection::Up))),
+        // Valid singlekey combo for a shared action
+        (j, Some(Action::Scroll(VertDirection::Down))),
+    ];
 
-    // Valid combo 'gj' that shares a branch with 'gg'
-    assert!(key_combos.munch(g).is_none());
-    assert_eq!(
-        Action::Scroll(VertDirection::Down),
-        key_combos.munch(j).unwrap()
-    );
-
-    // Valid singlekey combo for a shared action
-    assert_eq!(
-        Action::Scroll(VertDirection::Down),
-        key_combos.munch(j).unwrap()
-    );
+    for (key, maybe_action) in test_vectors {
+        assert_eq!(key_combos.munch(key), maybe_action);
+    }
 }
