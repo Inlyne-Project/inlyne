@@ -68,7 +68,7 @@ where
     };
 
     let maybe_image_parts = lz4_compress(&mut adapter).ok().map(|lz4_blob| {
-        log::debug!(
+        tracing::debug!(
             "Streaming image decode & compression:\n\
             - Full {:.2} MiB\n\
             - Compressed {:.2} MiB\n\
@@ -183,7 +183,7 @@ fn fallback_decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u3
     let image = image::load_from_memory(contents)?;
     let dimensions = image.dimensions();
     let image_data = image.into_rgba8().into_raw();
-    log::debug!(
+    tracing::debug!(
         "Decoded full image in memory {:.3} MiB",
         usize_in_mib(image_data.len()),
     );

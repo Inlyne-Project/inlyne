@@ -57,7 +57,7 @@ impl ImageData {
         let start = Instant::now();
         let lz4_blob =
             decode::lz4_compress(&mut io::Cursor::new(image.as_raw())).expect("I/O is in memory");
-        log::debug!(
+        tracing::debug!(
             "Compressing SVG image:\n- Full {:.2} MiB\n- Compressed {:.2} MiB\n- Time {:.2?}",
             usize_in_mib(image.as_raw().len()),
             usize_in_mib(lz4_blob.len()),
@@ -110,7 +110,7 @@ impl Image {
     ) -> Option<Arc<BindGroup>> {
         let dimensions = self.buffer_dimensions()?;
         if dimensions.0 == 0 || dimensions.1 == 0 {
-            log::warn!("Invalid buffer dimensions");
+            tracing::warn!("Invalid buffer dimensions");
             return None;
         }
 
@@ -122,7 +122,7 @@ impl Image {
             .as_ref()
             .map(|image| image.to_bytes())?;
 
-        log::debug!("Decompressing image: Time {:.2?}", start.elapsed());
+        tracing::debug!("Decompressing image: Time {:.2?}", start.elapsed());
 
         let texture_size = wgpu::Extent3d {
             width: dimensions.0,
@@ -200,7 +200,7 @@ impl Image {
             } else if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
                 bytes.to_vec()
             } else {
-                log::warn!("Request for image from {} failed", src_path.display());
+                tracing::warn!("Request for image from {} failed", src_path.display());
                 return;
             };
 
@@ -212,7 +212,7 @@ impl Image {
                 fontdb.load_system_fonts();
                 // TODO: yes all of this image loading is very messy and could use a refactor
                 let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
-                    log::warn!(
+                    tracing::warn!(
                         "Failed loading image:\n- src: {}\n- src_path: {}",
                         src,
                         src_path.display()

@@ -328,12 +328,12 @@ impl KeyCombos {
             }
         }
 
-        log::debug!("Received key: {modified_key}");
+        tracing::debug!("Received key: {modified_key}");
 
         let maybe_action = self.munch_(modified_key);
 
         if let Some(action) = maybe_action {
-            log::debug!("Emitting action: {:?}", action);
+            tracing::debug!("Emitting action: {:?}", action);
         }
 
         maybe_action

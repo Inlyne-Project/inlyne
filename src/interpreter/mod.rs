@@ -166,7 +166,7 @@ impl HtmlInterpreter {
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
         for md_string in receiver {
-            log::debug!(
+            tracing::debug!(
                 "Recieved markdown for interpretation: {} bytes",
                 md_string.len()
             );

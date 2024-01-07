@@ -46,8 +46,6 @@ dirs = "5.0.1"
 serde = { version = "1.0.190", features = ["derive"] }
 toml = "0.7.6"
 reqwest = { version = "0.11.22", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
-log = "0.4.20"
-env_logger = "0.10.0"
 notify = "6.1.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
@@ -63,11 +61,12 @@ taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "d338f3731da519d182
 syntect = "5.1.0"
 smart-debug = "0.0.3"
 two-face = "0.3.0"
-
 # Required for WGPU to work properly with Vulkan
 fontdb = { version = "0.13.1", features = ["fontconfig"] }
 human-panic = "1.2.2"
 notify-debouncer-full = { version = "0.3.1", default-features = false }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [dependencies.glyphon]
 version = "0.2"

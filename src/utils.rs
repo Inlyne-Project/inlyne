@@ -173,7 +173,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
                 |front_matter| match serde_yaml::from_str::<FrontMatter>(front_matter) {
                     Ok(front_matter) => Some(front_matter.to_table()),
                     Err(err) => {
-                        log::warn!(
+                        tracing::warn!(
                             "Failed parsing front matter. Error: {}\n{}",
                             err,
                             front_matter
@@ -232,7 +232,7 @@ impl Cell {
                 html_escape::encode_safe_to_string(s, buf);
             }
             Self::Table(_v) => {
-                log::warn!("Nested tables aren't supported yet. Skipping");
+                tracing::warn!("Nested tables aren't supported yet. Skipping");
                 buf.push_str("{Skipped nested table}");
             }
         }
