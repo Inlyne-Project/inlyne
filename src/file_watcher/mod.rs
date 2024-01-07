@@ -56,7 +56,7 @@ struct MsgHandler(mpsc::Sender<WatcherMsg>);
 
 impl DebounceEventHandler for MsgHandler {
     fn handle_event(&mut self, debounced_event: DebounceEventResult) {
-        log::debug!("Received debounced file events: {:#?}", debounced_event);
+        tracing::debug!("Received debounced file events: {:#?}", debounced_event);
 
         match debounced_event {
             Ok(events) => {
@@ -80,12 +80,12 @@ impl DebounceEventHandler for MsgHandler {
                     let msg = WatcherMsg::Action(action);
                     let _ = self.0.send(msg);
                 } else {
-                    log::trace!("Ignoring events")
+                    tracing::trace!("Ignoring events")
                 }
             }
             Err(errs) => {
                 for err in errs {
-                    log::warn!("File watcher error: {err}");
+                    tracing::warn!("File watcher error: {err}");
                 }
             }
         }
@@ -145,17 +145,17 @@ fn endlessly_handle_messages<C: Callback>(
     while let Ok(msg) = msg_rx.recv() {
         match msg {
             WatcherMsg::Action(DebouncerAction::ReregisterWatcher) => {
-                log::debug!("File may have been renamed/removed. Falling back to polling");
+                tracing::debug!("File may have been renamed/removed. Falling back to polling");
                 poll_registering_watcher(watcher, &file_path);
-                log::debug!("Successfully re-registered file watcher");
+                tracing::debug!("Successfully re-registered file watcher");
                 reload_callback.file_reload();
             }
             WatcherMsg::Action(DebouncerAction::FileReload) => {
-                log::debug!("Reloading file");
+                tracing::debug!("Reloading file");
                 reload_callback.file_reload();
             }
             WatcherMsg::FileChange(FileChange { new_path, contents }) => {
-                log::info!("Updating file watcher path: {}", new_path.display());
+                tracing::info!("Updating file watcher path: {}", new_path.display());
                 let _ = watcher.unwatch(&file_path);
                 poll_registering_watcher(watcher, &new_path);
                 file_path = new_path;
@@ -164,5 +164,5 @@ fn endlessly_handle_messages<C: Callback>(
         }
     }
 
-    log::warn!("File watcher channel dropped unexpectedly");
+    tracing::warn!("File watcher channel dropped unexpectedly");
 }

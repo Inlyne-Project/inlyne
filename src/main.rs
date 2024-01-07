@@ -44,6 +44,8 @@ use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDI
 use renderer::Renderer;
 use table::Table;
 use text::{Text, TextBox, TextSystem};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
 #[cfg(feature = "wayland")]
@@ -304,7 +306,7 @@ impl Inlyne {
                     InlyneEvent::FileReload => match read_to_string(&self.opts.file_path) {
                         Ok(contents) => self.load_file(contents),
                         Err(err) => {
-                            log::warn!(
+                            tracing::warn!(
                                 "Failed reloading file at {}\nError: {}",
                                 self.opts.file_path.display(),
                                 err
@@ -521,7 +523,7 @@ impl Inlyne {
                                                     );
                                                 }
                                                 Err(err) => {
-                                                    log::warn!(
+                                                    tracing::warn!(
                                                         "Failed loading markdown file at {}\nError: {}",
                                                         path.display(),
                                                         err,
@@ -755,18 +757,20 @@ impl Inlyne {
 fn main() -> anyhow::Result<()> {
     human_panic::setup_panic!();
 
-    env_logger::Builder::new()
-        .format_timestamp_millis()
-        .filter_level(log::LevelFilter::Error)
-        .filter_module("inlyne", log::LevelFilter::Info)
-        .parse_env("INLYNE_LOG")
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive("inlyne=trace".parse()?)
+        .with_env_var("INLYNE_LOG")
+        .from_env()?;
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer().compact())
         .init();
 
     let args = Args::new();
     let config = match &args.config {
         Some(config_path) => Config::load_from_file(config_path)?,
         None => Config::load_from_system().unwrap_or_else(|err| {
-            log::warn!(
+            tracing::warn!(
                 "Failed reading config file. Falling back to defaults. Error: {}",
                 err
             );
