@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crate::text::{Text, TextBox, TextBoxMeasure, TextSystem};
 use crate::utils::{default, Point, Rect, Size};
 
+use taffy::node::MeasureFunc;
 use taffy::prelude::{
-    auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
+    auto, line, points, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
 };
 use taffy::style::JustifyContent;
-use taffy::tree::MeasureFunc;
 
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
@@ -93,7 +93,7 @@ impl Table {
         let root_style = Style {
             display: Display::Flex,
             size: TaffySize {
-                width: length(bounds.0),
+                width: points(bounds.0),
                 height: auto(),
             },
             justify_content: Some(JustifyContent::Start),
@@ -103,8 +103,8 @@ impl Table {
         let grid_style = Style {
             display: Display::Grid,
             gap: TaffySize {
-                width: length(TABLE_COL_GAP),
-                height: length(TABLE_ROW_GAP),
+                width: points(TABLE_COL_GAP),
+                height: points(TABLE_ROW_GAP),
             },
             grid_template_columns: vec![auto(); max_columns],
             ..default()
@@ -114,17 +114,20 @@ impl Table {
         let mut node_row = Vec::new();
         // Define the child nodes
         for (x, header) in self.headers.iter().enumerate() {
+            let textbox_measure = TextBoxMeasure {
+                font_system: text_system.font_system.clone(),
+                text_cache: text_system.text_cache.clone(),
+                textbox: Arc::new(header.clone()),
+                zoom,
+            };
             node_row.push(taffy.new_leaf_with_measure(
                 Style {
                     grid_row: line(1),
                     grid_column: line(x as i16 + 1),
                     ..default()
                 },
-                MeasureFunc::Boxed(Box::new(TextBoxMeasure {
-                    font_system: text_system.font_system.clone(),
-                    text_cache: text_system.text_cache.clone(),
-                    textbox: Arc::new(header.clone()),
-                    zoom,
+                MeasureFunc::Boxed(Box::new(move |known_dimensions, available_space| {
+                    textbox_measure.measure(known_dimensions, available_space)
                 })),
             )?);
         }
@@ -134,17 +137,20 @@ impl Table {
         for (y, row) in self.rows.iter().enumerate() {
             for (x, item) in row.iter().enumerate() {
                 let item = item.clone();
+                let textbox_measure = TextBoxMeasure {
+                    font_system: text_system.font_system.clone(),
+                    text_cache: text_system.text_cache.clone(),
+                    textbox: Arc::new(item.clone()),
+                    zoom,
+                };
                 node_row.push(taffy.new_leaf_with_measure(
                     Style {
                         grid_row: line(1 + y as i16 + 1),
                         grid_column: line(x as i16 + 1),
                         ..default()
                     },
-                    MeasureFunc::Boxed(Box::new(TextBoxMeasure {
-                        font_system: text_system.font_system.clone(),
-                        text_cache: text_system.text_cache.clone(),
-                        textbox: Arc::new(item.clone()),
-                        zoom,
+                    MeasureFunc::Boxed(Box::new(move |known_dimensions, available_space| {
+                        textbox_measure.measure(known_dimensions, available_space)
                     })),
                 )?);
             }

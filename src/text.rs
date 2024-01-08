@@ -14,7 +14,6 @@ use glyphon::{
 };
 use smart_debug::SmartDebug;
 use taffy::prelude::{AvailableSpace, Size as TaffySize};
-use taffy::tree::Measurable;
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
@@ -31,10 +30,8 @@ impl TextBoxMeasure {
         self.textbox
             .size_without_system(&self.text_cache, &self.font_system, bounds, self.zoom)
     }
-}
 
-impl Measurable for TextBoxMeasure {
-    fn measure(
+    pub fn measure(
         &self,
         known_dimensions: TaffySize<Option<f32>>,
         available_space: TaffySize<taffy::style::AvailableSpace>,
