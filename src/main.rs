@@ -521,6 +521,9 @@ impl Inlyne {
                                                         &self.opts.file_path,
                                                         contents,
                                                     );
+                                                    // TODO: Once and if history is implemented,
+                                                    // old scroll_y might be stored there
+                                                    self.renderer.set_scroll_y(0.);
                                                 }
                                                 Err(err) => {
                                                     tracing::warn!(
