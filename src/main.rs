@@ -758,7 +758,7 @@ fn main() -> anyhow::Result<()> {
     human_panic::setup_panic!();
 
     let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive("inlyne=trace".parse()?)
+        .with_default_directive("inlyne=info".parse()?)
         .with_env_var("INLYNE_LOG")
         .from_env()?;
     tracing_subscriber::registry()
