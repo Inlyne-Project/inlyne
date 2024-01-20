@@ -30,7 +30,7 @@ _If you're wondering 'Is this relevant to me?' Then the answer is probably no
 - [ ] Check for unused dependencies
   - `$ cargo +nightly udeps`
 - [ ] Bump `version` in `Cargo.toml`
-- [ ] Propogate the change to `Cargo.lock`
+- [ ] Propagate the change to `Cargo.lock`
   - `$ cargo check -p inlyne`
 - [ ] Optional: If making a breaking release update the `example.png` link in
   the README to point to the appropriate release branch
