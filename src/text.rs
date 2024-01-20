@@ -9,7 +9,7 @@ use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
-    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, Style,
+    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, Shaping, Style,
     SwashCache, TextArea, TextBounds, Weight,
 };
 use smart_debug::SmartDebug;
@@ -93,8 +93,8 @@ impl Default for TextBox {
 
 pub struct CachedTextArea {
     key: KeyHash,
-    left: i32,
-    top: i32,
+    left: f32,
+    top: f32,
     bounds: TextBounds,
     default_color: Color,
 }
@@ -107,6 +107,7 @@ impl CachedTextArea {
             top: self.top,
             bounds: self.bounds,
             default_color: self.default_color,
+            scale: 1.,
         }
     }
 }
@@ -282,8 +283,8 @@ impl TextBox {
 
         CachedTextArea {
             key,
-            left: left as i32,
-            top: (screen_position.1 - scroll_y) as i32,
+            left,
+            top: (screen_position.1 - scroll_y),
             bounds: TextBounds::default(),
             default_color: Color::rgb(255, 255, 255),
         }
@@ -651,7 +652,7 @@ impl TextCache {
                             .metadata(section.index),
                     )
                 }
-                let buffer_line = BufferLine::new(line_str, attrs_list);
+                let buffer_line = BufferLine::new(line_str, attrs_list, Shaping::Advanced);
                 buffer.lines.push(buffer_line);
             }
 
