@@ -67,11 +67,7 @@ human-panic = "1.2.2"
 notify-debouncer-full = { version = "0.3.1", default-features = false }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-
-[dependencies.glyphon]
-version = "0.2"
-git = "https://github.com/trimental/glyphon"
-rev = "5bf8b6b6aa4a181824798836e1436809e78102e7"
+glyphon = "0.3"
 
 [profile.release]
 strip = true

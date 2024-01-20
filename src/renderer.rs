@@ -11,9 +11,9 @@ use crate::text::{CachedTextArea, TextCache, TextSystem};
 use crate::utils::{Point, Rect, Selection, Size};
 use crate::Element;
 
-use anyhow::{anyhow, Context, Ok};
+use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
-use glyphon::{PrepareError, Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
+use glyphon::{Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
@@ -757,24 +757,18 @@ impl Renderer {
                 .map(|c| c.text_area(&text_cache))
                 .collect();
 
-            while let Result::Err(PrepareError::AtlasFull(content_type)) =
-                self.text_system.text_renderer.prepare(
-                    &self.device,
-                    &self.queue,
-                    &mut self.text_system.font_system.lock().unwrap(),
-                    &mut self.text_system.text_atlas,
-                    Resolution {
-                        width: self.config.width,
-                        height: self.config.height,
-                    },
-                    &text_areas,
-                    &mut self.text_system.swash_cache,
-                )
-            {
-                if !self.text_system.text_atlas.grow(&self.device, content_type) {
-                    return Err(anyhow!("Could not grow text atlas"));
-                }
-            }
+            self.text_system.text_renderer.prepare(
+                &self.device,
+                &self.queue,
+                &mut self.text_system.font_system.lock().unwrap(),
+                &mut self.text_system.text_atlas,
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+                text_areas,
+                &mut self.text_system.swash_cache,
+            )?;
             text_cache.trim();
         }
 
