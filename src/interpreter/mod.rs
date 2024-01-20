@@ -167,7 +167,7 @@ impl HtmlInterpreter {
 
         for md_string in receiver {
             tracing::debug!(
-                "Recieved markdown for interpretation: {} bytes",
+                "Received markdown for interpretation: {} bytes",
                 md_string.len()
             );
 

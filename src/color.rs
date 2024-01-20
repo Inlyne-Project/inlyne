@@ -139,7 +139,7 @@ impl<'de> Deserialize<'de> for SyntaxTheme {
 
         match untagged {
             // Unfortunately #[serde(untagged)] uses private internals to reuse a deserializer
-            // mutliple times. We can't so now we have to fall back to other means to give a good
+            // multiple times. We can't so now we have to fall back to other means to give a good
             // error message ;-;
             Untagged::Defaults(theme_name) => match ThemeDefaults::from_kebab(&theme_name) {
                 Some(theme) => Ok(Self::Defaults(theme)),
