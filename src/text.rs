@@ -177,6 +177,7 @@ impl TextBox {
         }
     }
 
+    /// Returns the [`Text`] in the given [`TextSystem`] with the cursor over it, if any.
     pub fn find_hoverable<'a>(
         &'a self,
         text_system: &mut TextSystem,
@@ -200,8 +201,7 @@ impl TextBox {
             let line = &buffer.lines[cursor.line];
             let mut index = cursor.index;
             if cursor.affinity == Affinity::Before {
-                // FIXME (Can we assume that the glyph is 1 index wide)
-                index -= 1;
+                index = index.saturating_sub(1);
             }
             let text = &self.texts[line.attrs_list().get_span(index).metadata];
             Some(text)
