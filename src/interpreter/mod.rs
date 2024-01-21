@@ -290,14 +290,12 @@ impl TokenSink for HtmlInterpreter {
                         }
                         "th" => {
                             self.state.text_options.bold += 1;
-                            if let Some(align) = html::find_align(&tag.attrs) {
-                                self.current_textbox.set_align(align);
-                            }
+                            let align = html::find_align(&tag.attrs);
+                            self.current_textbox.set_align(align.unwrap_or(Align::Left));
                         }
                         "td" => {
-                            if let Some(align) = html::find_align(&tag.attrs) {
-                                self.current_textbox.set_align(align);
-                            }
+                            let align = html::find_align(&tag.attrs);
+                            self.current_textbox.set_align(align.unwrap_or(Align::Left));
                         }
                         "table" => {
                             self.push_spacer();
