@@ -221,6 +221,12 @@ tags:
 # Markdown h1 header
 ";
 
+const ALIGNED_TABLE: &str = "\
+| left default | left forced | centered | right | left default |
+| ------------ | :---------- | :------: | ----: | ------------ |
+| text         | text        |   text   |  text | text         |
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -234,6 +240,7 @@ snapshot_interpreted_elements!(
     (para_in_ordered_list, PARA_IN_ORDERED_LIST),
     (code_in_ordered_list, CODE_IN_ORDERED_LIST),
     (yaml_frontmatter, YAML_FRONTMATTER),
+    (aligned_table, ALIGNED_TABLE),
 );
 
 /// Spin up a server, so we can test network requests without external services

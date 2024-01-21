@@ -1,0 +1,132 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n| left default | left forced | centered | right | left default |\n| ------------ | :---------- | :------: | ----: | ------------ |\n| text         | text        |   text   |  text | text         |\n\n\n --- html\n\n<table>\n<thead>\n<tr>\n<th>left default</th>\n<th align=\"left\">left forced</th>\n<th align=\"center\">centered</th>\n<th align=\"right\">right</th>\n<th>left default</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>text</td>\n<td align=\"left\">text</td>\n<td align=\"center\">text</td>\n<td align=\"right\">text</td>\n<td>text</td>\n</tr>\n</tbody>\n</table>\n"
+expression: interpret_md(text)
+---
+[
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    Table(
+        Table {
+            headers: [
+                TextBox {
+                    texts: [
+                        Text {
+                            text: "left default",
+                            default_color: Color(BLACK),
+                            style: BOLD ,
+                            ..
+                        },
+                    ],
+                    ..
+                },
+                TextBox {
+                    texts: [
+                        Text {
+                            text: "left forced",
+                            default_color: Color(BLACK),
+                            style: BOLD ,
+                            ..
+                        },
+                    ],
+                    ..
+                },
+                TextBox {
+                    align: Center,
+                    texts: [
+                        Text {
+                            text: "centered",
+                            default_color: Color(BLACK),
+                            style: BOLD ,
+                            ..
+                        },
+                    ],
+                    ..
+                },
+                TextBox {
+                    align: Right,
+                    texts: [
+                        Text {
+                            text: "right",
+                            default_color: Color(BLACK),
+                            style: BOLD ,
+                            ..
+                        },
+                    ],
+                    ..
+                },
+                TextBox {
+                    texts: [
+                        Text {
+                            text: "left default",
+                            default_color: Color(BLACK),
+                            style: BOLD ,
+                            ..
+                        },
+                    ],
+                    ..
+                },
+            ],
+            rows: [
+                [
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "text",
+                                default_color: Color(BLACK),
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "text",
+                                default_color: Color(BLACK),
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        align: Center,
+                        texts: [
+                            Text {
+                                text: "text",
+                                default_color: Color(BLACK),
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        align: Right,
+                        texts: [
+                            Text {
+                                text: "text",
+                                default_color: Color(BLACK),
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "text",
+                                default_color: Color(BLACK),
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                ],
+            ],
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]
