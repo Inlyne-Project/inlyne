@@ -4,10 +4,10 @@ on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-C debuginfo=0"
+  RUSTFLAGS: '-C debuginfo=0'
 
 jobs:
-  build:
+  test:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
@@ -16,35 +16,55 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install toolchain
         run: |
           rustup update --no-self-update ${{ matrix.toolchain }}
           rustup default ${{ matrix.toolchain }}
-          rustup component add clippy rustfmt
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-2"
+          prefix-key: 'v0-rust-2'
 
-      # TODO: In the future clippy and rustfmt dont need to be run on all the
-      # `os`', but it should be fast enough to be fine still for now
-      - name: Formatting
-        run: cargo fmt --check
-      - name: Linting
-        run: cargo clippy -- --deny warnings
       - name: Run test suite
         run: cargo test --workspace
 
-  check-macos-arm:
-    runs-on: macos-11
+  lint:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+      - name: Check spelling
+        uses: crate-ci/typos@master
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Linting
+        run: cargo clippy --workspace -- --deny warnings
+
+  build-macos-arm:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        toolchain: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install target
-        run: rustup update && rustup target add aarch64-apple-darwin
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+          rustup target add aarch64-apple-darwin
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
