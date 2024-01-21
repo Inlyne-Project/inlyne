@@ -1,6 +1,6 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n1. 1st item\n\n    ```rust\n    fn main() {}\n    ```\n\n2. 2nd item\n\n\n --- html\n\n<ol>\n<li>\n<p>1st item</p>\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-rust\"><span style=\"font-weight:bold;color:#a71d5d;\">fn </span><span style=\"font-weight:bold;color:#795da3;\">main</span><span style=\"color:#323232;\">() {}\n</span></code></pre>\n</li>\n<li>\n<p>2nd item</p>\n</li>\n</ol>\n"
+description: " --- md\n\n1. 1st item\n\n    ```rust\n    fn main() {}\n    ```\n\n2. 2nd item\n\n\n --- html\n\n<ol>\n<li>\n<p>1st item</p>\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-rust\"><span style=\"color:#a71d5d;\">fn </span><span style=\"color:#795da3;\">main</span><span style=\"color:#333333;\">() {}\n</span></code></pre>\n</li>\n<li>\n<p>2nd item</p>\n</li>\n</ol>\n"
 expression: interpret_md(text)
 ---
 [
@@ -36,14 +36,12 @@ expression: interpret_md(text)
                     text: "fn ",
                     font_family: Monospace,
                     color: Some(Color { r: 0.39, g: 0.01, b: 0.11 }),
-                    style: BOLD ,
                     ..
                 },
                 Text {
                     text: "main",
                     font_family: Monospace,
                     color: Some(Color { r: 0.19, g: 0.11, b: 0.37 }),
-                    style: BOLD ,
                     ..
                 },
                 Text {
