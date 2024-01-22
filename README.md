@@ -22,10 +22,14 @@ view markdown files in the blink of an eye 👀.
 
 ## Install
 
-To install just use `cargo install inlyne`, everything comes pre-bundled.
+To install just use `cargo install inlyne`, almost everything comes pre-bundled (see [Dependencies](#dependencies)).
 Alternatively you can install through various package managers.
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/inlyne.svg)](https://repology.org/project/inlyne/versions)
+
+### Dependencies
+
+The `fontconfig` package from your distribution needs to be installed. See https://github.com/yeslogic/fontconfig-rs#dependencies.
 
 ## Features
 
