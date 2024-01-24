@@ -19,12 +19,14 @@ expression: "interpret_md_with_opts(text, opts)"
                     text: "std",
                     font_family: Monospace,
                     color: Some(Color { r: 0.13, g: 0.69, b: 0.86 }),
+                    style: UNDERLINED ,
                     ..
                 },
                 Text {
                     text: "::",
                     font_family: Monospace,
                     color: Some(Color { r: 1.00, g: 0.19, b: 0.56 }),
+                    style: UNDERLINED ,
                     ..
                 },
                 Text {

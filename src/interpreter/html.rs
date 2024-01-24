@@ -106,6 +106,11 @@ impl<'style> Iterator for StyleIter<'style> {
                 return Some(Style::FontWeight(w));
             } else if let Some(s) = part.strip_prefix("font-style:").and_then(FontStyle::new) {
                 return Some(Style::FontStyle(s));
+            } else if let Some(d) = part
+                .strip_prefix("text-decoration:")
+                .and_then(TextDecoration::new)
+            {
+                return Some(Style::TextDecoration(d));
             }
         }
     }
@@ -116,6 +121,7 @@ pub enum Style {
     Color(u32),
     FontWeight(FontWeight),
     FontStyle(FontStyle),
+    TextDecoration(TextDecoration),
 }
 
 #[derive(Default, PartialEq, Eq)]
@@ -145,6 +151,22 @@ impl FontStyle {
     pub fn new(s: &str) -> Option<Self> {
         match s {
             "italic" => Some(Self::Italic),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Default, PartialEq, Eq)]
+pub enum TextDecoration {
+    #[default]
+    Normal,
+    Underline,
+}
+
+impl TextDecoration {
+    pub fn new(s: &str) -> Option<Self> {
+        match s {
+            "underline" => Some(Self::Underline),
             _ => None,
         }
     }
