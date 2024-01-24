@@ -8,6 +8,7 @@ use serde::Deserialize;
 use syntect::highlighting::{
     Color as SyntectColor, Theme as SyntectTheme, ThemeSet as SyntectThemeSet,
 };
+use two_face::theme::EmbeddedThemeName;
 use wgpu::TextureFormat;
 
 fn hex_to_linear_rgba(c: u32) -> [f32; 4] {
@@ -67,7 +68,7 @@ impl Theme {
         static CACHED_CODE_HIGHLIGHTER: OnceLock<SyntectTheme> = OnceLock::new();
         // Initializing this is non-trivial. Cache so it only runs once
         let code_highlighter = CACHED_CODE_HIGHLIGHTER
-            .get_or_init(|| ThemeDefaults::InspiredGithub.into())
+            .get_or_init(|| ThemeDefaults::Github.into())
             .to_owned();
         Self {
             text_color: 0x000000,
@@ -162,25 +163,57 @@ impl<'de> Deserialize<'de> for SyntaxTheme {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeDefaults {
-    Base16OceanDark,
     Base16EightiesDark,
     Base16MochaDark,
+    Base16OceanDark,
     Base16OceanLight,
-    InspiredGithub,
+    ColdarkCold,
+    ColdarkDark,
+    DarkNeon,
+    Dracula,
+    Github,
+    GruvboxDark,
+    GruvboxLight,
+    Leet,
+    MonokaiExtended,
+    MonokaiExtendedLight,
+    Nord,
+    OneHalfDark,
+    OneHalfLight,
     SolarizedDark,
     SolarizedLight,
+    SublimeSnazzy,
+    TwoDark,
+    VisualStudioDarkPlus,
+    Zenburn,
 }
 
 impl ThemeDefaults {
     fn kebab_pairs() -> &'static [(&'static str, Self)] {
         &[
-            ("base16-ocean-dark", Self::Base16OceanDark),
             ("base16-eighties-dark", Self::Base16EightiesDark),
             ("base16-mocha-dark", Self::Base16MochaDark),
+            ("base16-ocean-dark", Self::Base16OceanDark),
             ("base16-ocean-light", Self::Base16OceanLight),
-            ("inspired-github", Self::InspiredGithub),
+            ("coldark-cold", Self::ColdarkCold),
+            ("coldark-dark", Self::ColdarkDark),
+            ("dark-neon", Self::DarkNeon),
+            ("dracula", Self::Dracula),
+            ("github", Self::Github),
+            ("gruvbox-dark", Self::GruvboxDark),
+            ("gruvbox-light", Self::GruvboxLight),
+            ("leet", Self::Leet),
+            ("monokai-extended", Self::MonokaiExtended),
+            ("monokai-extended-light", Self::MonokaiExtendedLight),
+            ("nord", Self::Nord),
+            ("one-half-dark", Self::OneHalfDark),
+            ("one-half-light", Self::OneHalfLight),
             ("solarized-dark", Self::SolarizedDark),
             ("solarized-light", Self::SolarizedLight),
+            ("sublime-snazzy", Self::SublimeSnazzy),
+            ("two-dark", Self::TwoDark),
+            ("visual-studio-dark-plus", Self::VisualStudioDarkPlus),
+            ("zenburn", Self::Zenburn),
         ]
     }
 
@@ -191,30 +224,49 @@ impl ThemeDefaults {
     }
 
     pub fn as_syntect_name(self) -> &'static str {
-        match self {
-            Self::Base16OceanDark => "base16-ocean.dark",
-            Self::Base16EightiesDark => "base16-eighties.dark",
-            Self::Base16MochaDark => "base16-mocha.dark",
-            Self::Base16OceanLight => "base16-ocean.light",
-            Self::InspiredGithub => "InspiredGitHub",
-            Self::SolarizedDark => "Solarized (dark)",
-            Self::SolarizedLight => "Solarized (light)",
+        EmbeddedThemeName::from(self).as_name()
+    }
+}
+
+impl From<ThemeDefaults> for EmbeddedThemeName {
+    fn from(default: ThemeDefaults) -> Self {
+        match default {
+            ThemeDefaults::Base16EightiesDark => Self::Base16EightiesDark,
+            ThemeDefaults::Base16MochaDark => Self::Base16MochaDark,
+            ThemeDefaults::Base16OceanDark => Self::Base16OceanDark,
+            ThemeDefaults::Base16OceanLight => Self::Base16OceanLight,
+            ThemeDefaults::ColdarkCold => Self::ColdarkCold,
+            ThemeDefaults::ColdarkDark => Self::ColdarkDark,
+            ThemeDefaults::DarkNeon => Self::DarkNeon,
+            ThemeDefaults::Dracula => Self::Dracula,
+            ThemeDefaults::Github => Self::Github,
+            ThemeDefaults::GruvboxDark => Self::GruvboxDark,
+            ThemeDefaults::GruvboxLight => Self::GruvboxLight,
+            ThemeDefaults::Leet => Self::Leet,
+            ThemeDefaults::MonokaiExtended => Self::MonokaiExtended,
+            ThemeDefaults::MonokaiExtendedLight => Self::MonokaiExtendedLight,
+            ThemeDefaults::Nord => Self::Nord,
+            ThemeDefaults::OneHalfDark => Self::OneHalfDark,
+            ThemeDefaults::OneHalfLight => Self::OneHalfLight,
+            ThemeDefaults::SolarizedDark => Self::SolarizedDark,
+            ThemeDefaults::SolarizedLight => Self::SolarizedLight,
+            ThemeDefaults::SublimeSnazzy => Self::SubmlimeSnazzy,
+            ThemeDefaults::TwoDark => Self::TwoDark,
+            ThemeDefaults::VisualStudioDarkPlus => Self::VisualStudioDarkPlus,
+            ThemeDefaults::Zenburn => Self::Zenburn,
         }
     }
 }
 
 impl From<ThemeDefaults> for SyntectTheme {
     fn from(default: ThemeDefaults) -> Self {
-        let mut default_themes = SyntectThemeSet::load_defaults();
-        let mut theme = default_themes
-            .themes
-            .remove(default.as_syntect_name())
-            .expect("Included with defaults");
+        let default_themes = two_face::theme::extra();
+        let mut theme = default_themes.get(default.into()).to_owned();
 
-        // InspiredGitHub's background color is 0xfff which is the same as the default light theme
-        // background. We match GitHub's light theme code blocks instead to distinguish code blocks
-        // from the background
-        if default == ThemeDefaults::InspiredGithub {
+        // Github's background color is 0xfff which is the same as the default light theme
+        // background. We match GitHub's website light theme code blocks instead to distinguish
+        // code blocks from the background
+        if default == ThemeDefaults::Github {
             theme.settings.background = Some(SyntectColor {
                 r: 0xf6,
                 g: 0xf8,

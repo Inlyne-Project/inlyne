@@ -39,9 +39,15 @@ select-color = 0x3675cb
 checkbox-color = 0x0a5301
 # Syntax highlighting theme. All of `syntect`s default themes are supported
 # Possible values: [
-#     "base16-ocean-dark",  "base16-eighties-dark", "base16-mocha-dark",
-#     "base16-ocean-light", "inspired-github",      "solarized-dark",
-#     "solarized-light"
+#     "base16-eighties-dark", "base16-mocha-dark", "base16-ocean-dark",
+#     "base16-ocean-light",   "coldark-cold",      "coldark-dark",
+#     "dark-neon",            "dracula",           "github",
+#     "gruvbox-dark",         "gruvbox-light",     "leet",
+#     "monokai-extended",     "monokai-extended-light",
+#     "nord",                 "one-half-dark",     "one-half-light",
+#     "solarized-dark",       "solarized-light",   "sublime-snazzy",
+#     "two-dark",             "visual-studio-dark-plus",
+#     "zenburn"
 # ]
 # You can also pass a path to a `.tmTheme` file for a custom theme instead
 # Example:
@@ -57,7 +63,7 @@ quote-block-color = 0xeef9fe
 link-color = 0x5466ff
 select-color = 0xcde8f0
 checkbox-color = 0x96ecae
-code-highlighter = "inspired-github"
+code-highlighter = "github"
 
 # Specify the main and monospace font families
 [font-options]

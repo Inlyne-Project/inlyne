@@ -7,5 +7,5 @@ TOML parse error at line 1, column 32
   |
 1 | light-theme.code-highlighter = "doesnt-exist"
   |                                ^^^^^^^^^^^^^^
-"doesnt-exist" didn't match any of the expected variants: ["base16-ocean-dark", "base16-eighties-dark", "base16-mocha-dark", "base16-ocean-light", "inspired-github", "solarized-dark", "solarized-light"]
+"doesnt-exist" didn't match any of the expected variants: ["base16-eighties-dark", "base16-mocha-dark", "base16-ocean-dark", "base16-ocean-light", "coldark-cold", "coldark-dark", "dark-neon", "dracula", "github", "gruvbox-dark", "gruvbox-light", "leet", "monokai-extended", "monokai-extended-light", "nord", "one-half-dark", "one-half-light", "solarized-dark", "solarized-light", "sublime-snazzy", "two-dark", "visual-studio-dark-plus", "zenburn"]
 
