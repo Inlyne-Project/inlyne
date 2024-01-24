@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\nThis sentence[^1] has two footnotes[^2]\n\n[^1]: 1st footnote\n[^2]: 2nd footnote\n\n --- html\n\n<p>This sentence<sup class=\"footnote-ref\"><a href=\"#fn-1\" id=\"fnref-1\" data-footnote-ref>1</a></sup> has two footnotes<sup class=\"footnote-ref\"><a href=\"#fn-2\" id=\"fnref-2\" data-footnote-ref>2</a></sup></p>\n<section class=\"footnotes\" data-footnotes>\n<ol>\n<li id=\"fn-1\">\n<p>1st footnote <a href=\"#fnref-1\" class=\"footnote-backref\" data-footnote-backref aria-label=\"Back to content\">↩</a></p>\n</li>\n<li id=\"fn-2\">\n<p>2nd footnote <a href=\"#fnref-2\" class=\"footnote-backref\" data-footnote-backref aria-label=\"Back to content\">↩</a></p>\n</li>\n</ol>\n</section>\n"
-expression: interpret_md(text)
+description: " --- md\n\nThis sentence[^1] has two footnotes[^2]\n\n[^1]: 1st footnote\n[^2]: 2nd footnote\n\n --- html\n\n<p>This sentence<sup class=\"footnote-ref\"><a href=\"#fn-1\" id=\"fnref-1\" data-footnote-ref>1</a></sup> has two footnotes<sup class=\"footnote-ref\"><a href=\"#fn-2\" id=\"fnref-2\" data-footnote-ref>2</a></sup></p>\n<section class=\"footnotes\" data-footnotes>\n<ol>\n<li id=\"fn-1\">\n<p>1st footnote <a href=\"#fnref-1\" class=\"footnote-backref\" data-footnote-backref data-footnote-backref-idx=\"1\" aria-label=\"Back to reference 1\">↩</a></p>\n</li>\n<li id=\"fn-2\">\n<p>2nd footnote <a href=\"#fnref-2\" class=\"footnote-backref\" data-footnote-backref data-footnote-backref-idx=\"2\" aria-label=\"Back to reference 2\">↩</a></p>\n</li>\n</ol>\n</section>\n"
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

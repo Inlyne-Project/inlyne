@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
 description: " --- md\n\n1. 1st item\n\n    Nested paragraph\n\n2. 2nd item\n\n\n --- html\n\n<ol>\n<li>\n<p>1st item</p>\n<p>Nested paragraph</p>\n</li>\n<li>\n<p>2nd item</p>\n</li>\n</ol>\n"
-expression: interpret_md(text)
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

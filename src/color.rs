@@ -81,6 +81,11 @@ impl Theme {
             code_highlighter,
         }
     }
+
+    pub fn code_highlighter(mut self, theme: SyntectTheme) -> Self {
+        self.code_highlighter = theme;
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
