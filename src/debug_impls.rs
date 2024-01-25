@@ -127,6 +127,7 @@ pub fn text(text: &Text, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let Text {
         text,
         color,
+        bg_color,
         link,
         is_bold,
         is_italic,
@@ -136,6 +137,7 @@ pub fn text(text: &Text, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Globally consistent so avoid displaying as noise
         hidpi_scale: _,
         default_color,
+        default_bg_color,
     } = text;
 
     let mut debug = f.debug_struct("Text");
@@ -152,6 +154,12 @@ pub fn text(text: &Text, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     } else {
         let color = color.map(DebugF32Color);
         debug.field("color", &DebugInline(&color));
+    }
+    if bg_color.is_none() {
+        debug.field("default_bg_color", &DebugF32Color(*default_bg_color));
+    } else {
+        let bg = bg_color.map(DebugF32Color);
+        debug.field("bg_color", &DebugInline(&bg));
     }
     let style = StyleWrapper {
         is_bold: *is_bold,

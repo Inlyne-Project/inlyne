@@ -34,6 +34,7 @@ struct State {
     element_stack: Vec<html::Element>,
     text_options: html::TextOptions,
     span_color: [f32; 4],
+    span_bg: [f32; 4],
     span_weight: FontWeight,
     span_style: FontStyle,
     span_decor: TextDecoration,
@@ -496,10 +497,13 @@ impl TokenSink for HtmlInterpreter {
                                         self.state.span_color =
                                             native_color(color, &self.surface_format)
                                     }
+                                    Style::BackgroundColor(color) => {
+                                        self.state.span_bg =
+                                            native_color(color, &self.surface_format)
+                                    }
                                     Style::FontWeight(weight) => self.state.span_weight = weight,
                                     Style::FontStyle(style) => self.state.span_style = style,
                                     Style::TextDecoration(decor) => self.state.span_decor = decor,
-                                    _ => {}
                                 }
                             }
                         }
@@ -650,6 +654,8 @@ impl TokenSink for HtmlInterpreter {
                         "span" => {
                             self.state.span_color =
                                 native_color(self.theme.code_color, &self.surface_format);
+                            self.state.span_bg =
+                                native_color(self.theme.code_color, &self.surface_format);
                             self.state.span_weight = FontWeight::default();
                             self.state.span_style = FontStyle::default();
                             self.state.span_decor = TextDecoration::default();
@@ -750,16 +756,11 @@ impl TokenSink for HtmlInterpreter {
                     if self.state.text_options.code >= 1 {
                         text = text
                             .with_color(self.state.span_color)
-                            .with_family(FamilyOwned::Monospace);
-                        if self.state.span_weight == FontWeight::Bold {
-                            text = text.make_bold(true);
-                        }
-                        if self.state.span_style == FontStyle::Italic {
-                            text = text.make_italic(true);
-                        }
-                        if self.state.span_decor == TextDecoration::Underline {
-                            text = text.make_underlined(true);
-                        }
+                            .with_bg_color(self.state.span_bg)
+                            .with_family(FamilyOwned::Monospace)
+                            .make_bold(self.state.span_weight == FontWeight::Bold)
+                            .make_italic(self.state.span_style == FontStyle::Italic)
+                            .make_underlined(self.state.span_decor == TextDecoration::Underline);
                         //.with_size(18.)
                     }
                     for elem in self.state.element_stack.iter().rev() {

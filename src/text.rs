@@ -292,6 +292,7 @@ impl TextBox {
         }
     }
 
+    /// Render underlines and strikethrough
     pub fn render_lines(
         &self,
         text_system: &mut TextSystem,
@@ -399,6 +400,7 @@ impl TextBox {
         lines
     }
 
+    /// Render selected text
     pub fn render_selection(
         &self,
         text_system: &mut TextSystem,
@@ -484,6 +486,7 @@ impl TextBox {
     }
 }
 
+/// Represents a slice of text
 #[derive(Clone)]
 struct ThinLine {
     range: Range<usize>,
@@ -494,6 +497,8 @@ struct ThinLine {
 pub struct Text {
     pub text: String,
     pub color: Option<[f32; 4]>,
+    /// Background color of this slice of text
+    pub bg_color: Option<[f32; 4]>,
     pub link: Option<String>,
     pub is_bold: bool,
     pub is_italic: bool,
@@ -502,6 +507,7 @@ pub struct Text {
     pub font_family: FamilyOwned,
     pub hidpi_scale: f32,
     pub default_color: [f32; 4],
+    pub default_bg_color: [f32; 4],
 }
 
 impl fmt::Debug for Text {
@@ -516,7 +522,9 @@ impl Text {
             text,
             hidpi_scale,
             default_color: default_text_color,
+            default_bg_color: [0., 0., 0., 1.],
             color: None,
+            bg_color: None,
             link: None,
             is_bold: false,
             is_italic: false,
@@ -528,6 +536,11 @@ impl Text {
 
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
         self.color = Some(color);
+        self
+    }
+
+    pub fn with_bg_color(mut self, color: [f32; 4]) -> Self {
+        self.bg_color = Some(color);
         self
     }
 
@@ -565,6 +578,10 @@ impl Text {
         self.color.unwrap_or(self.default_color)
     }
 
+    fn bg_color(&self) -> [f32; 4] {
+        self.bg_color.unwrap_or(self.default_bg_color)
+    }
+
     fn style(&self) -> Style {
         if self.is_italic {
             Style::Italic
@@ -589,6 +606,13 @@ impl Text {
             (color[2] * 255.) as u8,
             (color[3] * 255.) as u8,
         );
+        let bg_color = self.bg_color();
+        let bg_color = Color::rgba(
+            (bg_color[0] * 255.) as u8,
+            (bg_color[1] * 255.) as u8,
+            (bg_color[2] * 255.) as u8,
+            (bg_color[3] * 255.) as u8,
+        );
         let font = Font {
             family: self.font_family.as_family(),
             weight: self.weight(),
@@ -600,6 +624,7 @@ impl Text {
                 content: line,
                 font,
                 color,
+                bg_color,
                 index,
             })
             .collect()
@@ -618,6 +643,7 @@ pub struct SectionKey<'a> {
     content: &'a str,
     font: Font<'a>,
     color: Color,
+    bg_color: Color,
     index: usize,
 }
 
