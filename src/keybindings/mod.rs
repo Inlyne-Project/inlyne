@@ -1,5 +1,7 @@
 pub mod action;
 mod defaults;
+#[allow(clippy::module_inception)]
+mod keybindings;
 mod mappings;
 mod serialization;
 #[cfg(test)]
@@ -11,50 +13,15 @@ use std::slice::Iter;
 use std::str::FromStr;
 use std::vec;
 
-use action::Action;
-
-use serde::Deserialize;
 use winit::event::{ModifiersState, ScanCode, VirtualKeyCode as VirtKey};
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct Keybindings(Vec<(Action, KeyCombo)>);
+use action::Action;
+pub use keybindings::Keybindings;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     Resolved(VirtKey),
     ScanCode(ScanCode),
-}
-
-impl Keybindings {
-    pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
-        Self(bindings)
-    }
-
-    #[cfg(test)]
-    pub fn empty() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl Extend<(Action, KeyCombo)> for Keybindings {
-    fn extend<I: IntoIterator<Item = (Action, KeyCombo)>>(&mut self, iter: I) {
-        self.0.extend(iter)
-    }
-}
-
-impl IntoIterator for Keybindings {
-    type Item = (Action, KeyCombo);
-    type IntoIter = <Vec<(Action, KeyCombo)> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl Default for Keybindings {
-    fn default() -> Self {
-        Self(defaults::defaults())
-    }
 }
 
 impl Key {
@@ -232,21 +199,18 @@ pub struct KeyCombos {
 
 impl KeyCombos {
     pub fn new(keybinds: Keybindings) -> anyhow::Result<Self> {
-        let keybinds = keybinds.0;
         let position = ROOT_INDEX;
 
         // A keycombo that starts with another keycombo will never be reachable since the prefixing
         // combo will always be activated first
-        for i in 0..keybinds.len() {
-            for j in (i + 1)..keybinds.len() {
-                let combo1 = &keybinds[i].1;
-                let combo2 = &keybinds[j].1;
-                if combo1.starts_with(combo2) {
+        for (i, (_, combo1)) in keybinds.clone().into_iter().enumerate() {
+            for (_, combo2) in keybinds.clone().into_iter().skip(i + 1) {
+                if combo1.starts_with(&combo2) {
                     anyhow::bail!(
                         "A keycombo starts with another keycombo making it unreachable\n\tCombo: \
                             {combo1}\n\tPrefix: {combo2}"
                     );
-                } else if combo2.starts_with(combo1) {
+                } else if combo2.starts_with(&combo1) {
                     anyhow::bail!(
                         "A keycombo starts with another keycombo making it unreachable\n\tCombo: \
                             {combo2}\n\tPrefix: {combo1}"
