@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n```toml\nkey = 123\n```\n\n\n --- html\n\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-toml\"><span style=\"color:#63a35c;\">key </span><span style=\"color:#323232;\">= </span><span style=\"color:#0086b3;\">123\n</span></code></pre>\n"
-expression: interpret_md(text)
+description: " --- md\n\n```toml\nkey = 123\n```\n\n\n --- html\n\n<pre style=\"background-color:#f6f8fa;\"><code class=\"language-toml\"><span style=\"color:#63a35c;\">key </span><span style=\"color:#333333;\">= </span><span style=\"color:#0086b3;\">123\n</span></code></pre>\n"
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
 description: " --- md\n\nIn a paragraph https://example.org\n\n- In a list https://example.org\n\n\n --- html\n\n<p>In a paragraph <a href=\"https://example.org\">https://example.org</a></p>\n<ul>\n<li>In a list <a href=\"https://example.org\">https://example.org</a></li>\n</ul>\n"
-expression: interpret_md(text)
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

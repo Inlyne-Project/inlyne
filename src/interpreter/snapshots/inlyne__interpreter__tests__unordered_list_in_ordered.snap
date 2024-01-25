@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
 description: " --- md\n\n1. 1st outer\n    - bullet\n2. 2nd outer\n\n\n --- html\n\n<ol>\n<li>1st outer\n<ul>\n<li>bullet</li>\n</ul>\n</li>\n<li>2nd outer</li>\n</ol>\n"
-expression: interpret_md(text)
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

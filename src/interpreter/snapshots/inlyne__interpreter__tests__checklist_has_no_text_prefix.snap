@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n- [x] Completed task\n- [ ] Incomplete task\n\n --- html\n\n<ul>\n<li><input type=\"checkbox\" disabled=\"\" checked=\"\" /> Completed task</li>\n<li><input type=\"checkbox\" disabled=\"\" /> Incomplete task</li>\n</ul>\n"
-expression: interpret_md(text)
+description: " --- md\n\n- [x] Completed task\n- [ ] Incomplete task\n\n --- html\n\n<ul>\n<li><input type=\"checkbox\" checked=\"\" disabled=\"\" /> Completed task</li>\n<li><input type=\"checkbox\" disabled=\"\" /> Incomplete task</li>\n</ul>\n"
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     TextBox(

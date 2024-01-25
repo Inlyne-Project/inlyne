@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
 description: " --- md\n\n| left default | left forced | centered | right | left default |\n| ------------ | :---------- | :------: | ----: | ------------ |\n| text         | text        |   text   |  text | text         |\n\n\n --- html\n\n<table>\n<thead>\n<tr>\n<th>left default</th>\n<th align=\"left\">left forced</th>\n<th align=\"center\">centered</th>\n<th align=\"right\">right</th>\n<th>left default</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>text</td>\n<td align=\"left\">text</td>\n<td align=\"center\">text</td>\n<td align=\"right\">text</td>\n<td>text</td>\n</tr>\n</tbody>\n</table>\n"
-expression: interpret_md(text)
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     Spacer(

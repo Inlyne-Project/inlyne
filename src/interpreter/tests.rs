@@ -8,11 +8,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
-use crate::color::Theme;
+use crate::color::{Theme, ThemeDefaults};
 use crate::image::ImageData;
 use crate::test_utils::init_test_log;
 use crate::{Element, ImageCache};
 
+use syntect::highlighting::Theme as SyntectTheme;
 use wgpu::TextureFormat;
 use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
 
@@ -69,32 +70,89 @@ impl ImageCallback for DummyCallback {
     }
 }
 
-fn dummy_interpreter(counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecDeque<Element>>>) {
-    let element_queue = Arc::default();
-    let theme = Theme::light_default();
-    let surface_format = TextureFormat::Bgra8UnormSrgb;
-    let hidpi_scale = 1.0;
-    let file_path = PathBuf::from("does_not_exist");
-    let image_cache = ImageCache::default();
-    let window = Box::new(DummyWindow(counter));
-    let interpreter = HtmlInterpreter::new_with_interactor(
-        Arc::clone(&element_queue),
-        theme,
-        surface_format,
-        hidpi_scale,
-        file_path,
-        image_cache,
-        window,
-    );
+struct InterpreterOpts {
+    theme: Theme,
+}
 
-    (interpreter, element_queue)
+impl Default for InterpreterOpts {
+    fn default() -> Self {
+        Self {
+            theme: Theme::light_default(),
+        }
+    }
+}
+
+impl InterpreterOpts {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn theme<T: Into<Theme>>(mut self, theme: T) -> Self {
+        self.theme = theme.into();
+        self
+    }
+
+    fn finish(self, counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecDeque<Element>>>) {
+        let Self { theme } = self;
+        let element_queue = Arc::default();
+        let surface_format = TextureFormat::Bgra8UnormSrgb;
+        let hidpi_scale = 1.0;
+        let file_path = PathBuf::from("does_not_exist");
+        let image_cache = ImageCache::default();
+        let window = Box::new(DummyWindow(counter));
+        let interpreter = HtmlInterpreter::new_with_interactor(
+            Arc::clone(&element_queue),
+            theme,
+            surface_format,
+            hidpi_scale,
+            file_path,
+            image_cache,
+            window,
+        );
+
+        (interpreter, element_queue)
+    }
+}
+
+#[derive(Default)]
+struct ThemeOpts {
+    code_highlighter: Option<SyntectTheme>,
+}
+
+impl From<ThemeDefaults> for ThemeOpts {
+    fn from(default: ThemeDefaults) -> Self {
+        Self {
+            code_highlighter: Some(default.into()),
+        }
+    }
+}
+
+impl From<ThemeOpts> for Theme {
+    fn from(opts: ThemeOpts) -> Self {
+        let ThemeOpts { code_highlighter } = opts;
+        let mut theme = Theme::light_default();
+        if let Some(code_highlighter) = code_highlighter {
+            theme.code_highlighter = code_highlighter;
+        }
+        theme
+    }
+}
+
+impl From<ThemeDefaults> for Theme {
+    fn from(default: ThemeDefaults) -> Self {
+        ThemeOpts::from(default).into()
+    }
 }
 
 fn interpret_md(text: &str) -> VecDeque<Element> {
+    interpret_md_with_opts(text, InterpreterOpts::new())
+}
+
+fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element> {
     const TIMEOUT: Duration = Duration::from_secs(10);
 
     let counter = AtomicCounter::new();
-    let (interpreter, element_queue) = dummy_interpreter(counter.clone());
+    let (interpreter, element_queue) = opts.finish(counter.clone());
     let (md_tx, md_rx) = mpsc::channel();
     md_tx.send(text.to_owned()).unwrap();
     let interpreter_handle = std::thread::spawn(|| {
@@ -115,23 +173,35 @@ fn interpret_md(text: &str) -> VecDeque<Element> {
     std::mem::take(&mut *elements_queue)
 }
 
+#[macro_export]
 macro_rules! snapshot_interpreted_elements {
     ( $( ($test_name:ident, $md_text:ident) ),* $(,)? ) => {
+        crate::snapshot_interpreted_elements!(
+            InterpreterOpts::new(),
+            $(
+                ($test_name, $md_text),
+            )*
+        );
+    };
+    ( $opts:expr, $( ($test_name:ident, $md_text:ident) ),* $(,)? ) => {
         $(
             #[test]
             fn $test_name() {
                 $crate::test_utils::init_test_log();
 
                 let text = $md_text;
+                let opts = $opts;
 
-                let syntect_theme = $crate::color::Theme::light_default().code_highlighter;
-                let htmlified = $crate::utils::markdown_to_html(text, syntect_theme);
+                let htmlified = $crate::utils::markdown_to_html(
+                    text,
+                    opts.theme.code_highlighter.clone(),
+                );
                 let description = format!(" --- md\n\n{text}\n\n --- html\n\n{htmlified}");
 
                 ::insta::with_settings!({
                     description => description,
                 }, {
-                    insta::assert_debug_snapshot!(interpret_md(text));
+                    insta::assert_debug_snapshot!(interpret_md_with_opts(text, opts));
                 });
             }
         )*
@@ -241,6 +311,16 @@ snapshot_interpreted_elements!(
     (code_in_ordered_list, CODE_IN_ORDERED_LIST),
     (yaml_frontmatter, YAML_FRONTMATTER),
     (aligned_table, ALIGNED_TABLE),
+);
+
+const UNDERLINE_IN_CODEBLOCK: &str = "\
+```rust
+use std::io;
+```";
+
+snapshot_interpreted_elements!(
+    InterpreterOpts::new().theme(ThemeDefaults::Dracula),
+    (underline_in_codeblock, UNDERLINE_IN_CODEBLOCK),
 );
 
 /// Spin up a server, so we can test network requests without external services

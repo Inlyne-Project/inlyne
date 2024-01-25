@@ -1,7 +1,7 @@
 ---
 source: src/interpreter/tests.rs
 description: " --- md\n\n---\ndate: 2018-05-01\ntags:\n  - another tag\n---\n# Markdown h1 header\n\n\n --- html\n\n<table>\n<thead>\n<tr>\n<th align=\"center\">date</th>\n<th align=\"center\">tags</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"center\">2018-05-01</td>\n<td align=\"center\">{Skipped nested table}</td>\n</tr>\n</tbody>\n</table>\n<h1>Markdown h1 header</h1>\n"
-expression: interpret_md(text)
+expression: "interpret_md_with_opts(text, opts)"
 ---
 [
     Spacer(

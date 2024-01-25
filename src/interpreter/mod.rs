@@ -15,7 +15,7 @@ use crate::table::Table;
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
-use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter};
+use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
 
 use glyphon::FamilyOwned;
 use html5ever::tendril::*;
@@ -35,6 +35,7 @@ struct State {
     span_color: [f32; 4],
     span_weight: FontWeight,
     span_style: FontStyle,
+    span_decor: TextDecoration,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
     pending_anchor: Option<String>,
@@ -493,6 +494,7 @@ impl TokenSink for HtmlInterpreter {
                                     }
                                     Style::FontWeight(weight) => self.state.span_weight = weight,
                                     Style::FontStyle(style) => self.state.span_style = style,
+                                    Style::TextDecoration(decor) => self.state.span_decor = decor,
                                     _ => {}
                                 }
                             }
@@ -648,6 +650,7 @@ impl TokenSink for HtmlInterpreter {
                                 native_color(self.theme.code_color, &self.surface_format);
                             self.state.span_weight = FontWeight::default();
                             self.state.span_style = FontStyle::default();
+                            self.state.span_decor = TextDecoration::default();
                         }
                         "details" => {
                             self.push_current_textbox();
@@ -751,6 +754,9 @@ impl TokenSink for HtmlInterpreter {
                         }
                         if self.state.span_style == FontStyle::Italic {
                             text = text.make_italic(true);
+                        }
+                        if self.state.span_decor == TextDecoration::Underline {
+                            text = text.make_underlined(true);
                         }
                         //.with_size(18.)
                     }
