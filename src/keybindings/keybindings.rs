@@ -8,17 +8,8 @@ use super::{action::Action, KeyCombo};
 pub struct Keybindings(Vec<(Action, KeyCombo)>);
 
 impl Keybindings {
-    pub fn new(bindings: Vec<(Action, KeyCombo)>) -> Self {
-        Self(bindings)
-    }
-
     pub fn iter(&self) -> std::slice::Iter<'_, (Action, KeyCombo)> {
         self.0.iter()
-    }
-
-    #[cfg(test)]
-    pub fn empty() -> Self {
-        Self(Vec::new())
     }
 }
 
