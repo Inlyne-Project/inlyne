@@ -10,6 +10,10 @@ impl Keybindings {
         Self(bindings)
     }
 
+    pub fn iter(&self) -> std::slice::Iter<'_, (Action, KeyCombo)> {
+        self.0.iter()
+    }
+
     #[cfg(test)]
     pub fn empty() -> Self {
         Self(Vec::new())

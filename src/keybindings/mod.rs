@@ -203,14 +203,14 @@ impl KeyCombos {
 
         // A keycombo that starts with another keycombo will never be reachable since the prefixing
         // combo will always be activated first
-        for (i, (_, combo1)) in keybinds.clone().into_iter().enumerate() {
-            for (_, combo2) in keybinds.clone().into_iter().skip(i + 1) {
-                if combo1.starts_with(&combo2) {
+        for (i, (_, combo1)) in keybinds.iter().enumerate() {
+            for (_, combo2) in keybinds.iter().skip(i + 1) {
+                if combo1.starts_with(combo2) {
                     anyhow::bail!(
                         "A keycombo starts with another keycombo making it unreachable\n\tCombo: \
                             {combo1}\n\tPrefix: {combo2}"
                     );
-                } else if combo2.starts_with(&combo1) {
+                } else if combo2.starts_with(combo1) {
                     anyhow::bail!(
                         "A keycombo starts with another keycombo making it unreachable\n\tCombo: \
                             {combo2}\n\tPrefix: {combo1}"
