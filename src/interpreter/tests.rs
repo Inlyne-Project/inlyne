@@ -4,8 +4,8 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
     mpsc, Arc, Mutex,
 };
-use std::thread;
 use std::time::{Duration, Instant};
+use std::{env, thread};
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
@@ -72,12 +72,14 @@ impl ImageCallback for DummyCallback {
 
 struct InterpreterOpts {
     theme: Theme,
+    fail_after: Duration,
 }
 
 impl Default for InterpreterOpts {
     fn default() -> Self {
         Self {
             theme: Theme::light_default(),
+            fail_after: Duration::from_secs(8),
         }
     }
 }
@@ -93,7 +95,10 @@ impl InterpreterOpts {
     }
 
     fn finish(self, counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecDeque<Element>>>) {
-        let Self { theme } = self;
+        let Self {
+            theme,
+            fail_after: _,
+        } = self;
         let element_queue = Arc::default();
         let surface_format = TextureFormat::Bgra8UnormSrgb;
         let hidpi_scale = 1.0;
@@ -149,7 +154,7 @@ fn interpret_md(text: &str) -> VecDeque<Element> {
 }
 
 fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element> {
-    const TIMEOUT: Duration = Duration::from_secs(10);
+    let fail_after = opts.fail_after;
 
     let counter = AtomicCounter::new();
     let (interpreter, element_queue) = opts.finish(counter.clone());
@@ -163,7 +168,7 @@ fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element
     while !counter.is_finished() {
         if interpreter_handle.is_finished() {
             panic!("The interpreter died >:V");
-        } else if start.elapsed() > TIMEOUT {
+        } else if start.elapsed() > fail_after {
             panic!("The interpreter appeared to hang. Some task probably panicked");
         }
         thread::sleep(Duration::from_millis(1));
@@ -373,11 +378,21 @@ fn image_loading_fails_gracefully() {
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
+    // Windows CI takes a very variable amount of time to handle this test specifically, and I'm
+    // not sure why. Bump up the timeout delay to reduce the amount of spurious failures in as
+    // tight of a niche as we can specify
+    let mut opts = InterpreterOpts::new();
+    if env::var("CI").map_or(false, |var| ["true", "1"].contains(&&*var.to_lowercase()))
+        && cfg!(target_os = "windows")
+    {
+        opts.fail_after *= 2;
+    }
+
     insta::with_settings!({
         // The port for the URL here is non-deterministic, but the description changing doesn't
         // invalidate the snapshot, so that's okay
         description => &text,
     }, {
-        insta::assert_debug_snapshot!(interpret_md(&text));
+        insta::assert_debug_snapshot!(interpret_md_with_opts(&text, opts));
     });
 }
