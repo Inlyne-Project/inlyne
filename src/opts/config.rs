@@ -68,7 +68,8 @@ impl Default for LinesToScroll {
 
 #[derive(Deserialize, Debug, Default, PartialEq)]
 pub struct KeybindingsSection {
-    pub base: Option<Keybindings>,
+    #[serde(default)]
+    pub base: Keybindings,
     pub extra: Option<Keybindings>,
 }
 

@@ -22,7 +22,7 @@ base = [
 
     // TODO: move this to a helper somewhere
     let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
-    let mut bindings = keybindings.base.unwrap_or_else(Keybindings::empty);
+    let mut bindings = keybindings.base;
     bindings.extend(keybindings.extra.unwrap_or_else(Keybindings::empty));
     let mut key_combos = KeyCombos::new(bindings).unwrap();
 

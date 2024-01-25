@@ -116,7 +116,7 @@ impl Opts {
         let font_opts = font_options.unwrap_or_default();
         let page_width = args_page_width.or(config_page_width);
         let lines_to_scroll = lines_to_scroll.into();
-        let mut keybindings = config_keybindings.base.unwrap_or_default();
+        let mut keybindings = config_keybindings.base;
         if let Some(extra) = config_keybindings.extra {
             keybindings.extend(extra);
         }

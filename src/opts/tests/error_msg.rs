@@ -40,7 +40,7 @@ snapshot_config_parse_error!(
 
 fn keycombo_conflict_from_config(s: &str) -> anyhow::Result<anyhow::Error> {
     let Config { keybindings, .. } = Config::load_from_str(s)?;
-    let mut combined_keybindings = keybindings.base.unwrap_or_else(Keybindings::empty);
+    let mut combined_keybindings = keybindings.base;
     combined_keybindings.extend(keybindings.extra.unwrap_or_else(Keybindings::empty));
     let err = KeyCombos::new(combined_keybindings).unwrap_err();
     Ok(err)
