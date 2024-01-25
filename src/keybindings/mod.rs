@@ -18,6 +18,8 @@ use winit::event::{ModifiersState, ScanCode, VirtualKeyCode as VirtKey};
 use action::Action;
 pub use keybindings::Keybindings;
 
+use crate::opts::KeybindingsSection;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     Resolved(VirtKey),
@@ -198,7 +200,8 @@ pub struct KeyCombos {
 }
 
 impl KeyCombos {
-    pub fn new(keybinds: Keybindings) -> anyhow::Result<Self> {
+    pub fn new(keybinds: KeybindingsSection) -> anyhow::Result<Self> {
+        let keybinds: Keybindings = keybinds.into();
         let position = ROOT_INDEX;
 
         // A keycombo that starts with another keycombo will never be reachable since the prefixing

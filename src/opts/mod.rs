@@ -6,7 +6,6 @@ mod tests;
 use std::path::{Path, PathBuf};
 
 use crate::color;
-use crate::keybindings::Keybindings;
 pub use cli::{Args, ThemeType};
 pub use config::{Config, FontOptions, KeybindingsSection};
 
@@ -48,7 +47,7 @@ pub struct Opts {
     pub page_width: Option<f32>,
     pub lines_to_scroll: f32,
     pub font_opts: FontOptions,
-    pub keybindings: Keybindings,
+    pub keybindings: KeybindingsSection,
 }
 
 impl Opts {
@@ -124,7 +123,7 @@ impl Opts {
             page_width,
             lines_to_scroll,
             font_opts,
-            keybindings: keybindings.into(),
+            keybindings,
         })
     }
 

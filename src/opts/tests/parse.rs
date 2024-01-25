@@ -2,7 +2,6 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
-use crate::keybindings::Keybindings;
 use crate::opts::config::{self, FontOptions, LinesToScroll};
 use crate::opts::{cli, Args, Opts, ResolvedTheme, ThemeType};
 use crate::test_utils::init_test_log;
@@ -25,7 +24,7 @@ impl Opts {
             page_width: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
-            keybindings: Keybindings::default(),
+            keybindings: Default::default(),
         }
     }
 }
