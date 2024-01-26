@@ -39,6 +39,14 @@ impl From<KeybindingsSection> for Keybindings {
         let mut base = value.base;
 
         if let Some(extra) = value.extra {
+            for (_, extra_combo) in extra.iter() {
+                base.0 = base
+                    .clone()
+                    .into_iter()
+                    .filter(|(_, combo)| !combo.starts_with(extra_combo))
+                    .collect();
+            }
+
             base.extend(extra)
         }
 
@@ -50,7 +58,7 @@ impl From<KeybindingsSection> for Keybindings {
 mod tests {
     use winit::event::ModifiersState;
 
-    use crate::keybindings::{Key, ModifiedKey};
+    use crate::keybindings::{action::VertDirection, Key, ModifiedKey};
 
     use super::*;
 
@@ -79,6 +87,27 @@ mod tests {
             Keybindings::from(KeybindingsSection {
                 base: Keybindings::default(),
                 extra: Some(Keybindings(vec![(Action::Quit, combo)]))
+            }),
+            expected
+        );
+    }
+
+    #[test]
+    fn from_keybinding_section_extra_override_base() {
+        let j_combo = KeyCombo(vec![ModifiedKey(
+            Key::Resolved(winit::event::VirtualKeyCode::J),
+            ModifiersState::empty(),
+        )]);
+
+        let base = Keybindings(vec![(Action::Scroll(VertDirection::Down), j_combo.clone())]);
+        let extra = Keybindings(vec![(Action::Page(VertDirection::Down), j_combo.clone())]);
+
+        let expected = Keybindings(vec![(Action::Page(VertDirection::Down), j_combo.clone())]);
+
+        assert_eq!(
+            Keybindings::from(KeybindingsSection {
+                base,
+                extra: Some(extra)
             }),
             expected
         );
