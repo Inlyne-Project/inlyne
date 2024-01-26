@@ -4,10 +4,12 @@ use crate::opts::KeybindingsSection;
 
 use super::{action::Action, KeyCombo};
 
+/// A list of [`keybindings`](KeyCombo) each associated with an [`Action`].
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Keybindings(Vec<(Action, KeyCombo)>);
 
 impl Keybindings {
+    /// Returns an iterator over the [`Action`]s and [`KeyCombo`]s
     pub fn iter(&self) -> std::slice::Iter<'_, (Action, KeyCombo)> {
         self.0.iter()
     }
@@ -35,6 +37,10 @@ impl Default for Keybindings {
 }
 
 impl From<KeybindingsSection> for Keybindings {
+    /// Converts from [`KeybindingsSection`] to [`Keybindings`].
+    ///
+    /// If an `extra` keybinding collides with a `base` one, then the `base` one is dropped in
+    /// favor of the `extra` keybinding
     fn from(value: KeybindingsSection) -> Self {
         let mut base = value.base;
 
