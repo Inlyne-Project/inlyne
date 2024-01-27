@@ -1,6 +1,5 @@
 use super::action::{Action, VertDirection};
 use super::{KeyCombos, ModifiedKey};
-use crate::keybindings::Keybindings;
 use crate::opts::Config;
 use crate::test_utils::init_test_log;
 
@@ -22,9 +21,7 @@ base = [
 
     // TODO: move this to a helper somewhere
     let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
-    let mut bindings = keybindings.base.unwrap_or_else(Keybindings::empty);
-    bindings.extend(keybindings.extra.unwrap_or_else(Keybindings::empty));
-    let mut key_combos = KeyCombos::new(bindings).unwrap();
+    let mut key_combos = KeyCombos::new(keybindings.into()).unwrap();
 
     let g: ModifiedKey = VirtKey::G.into();
     let l_shift = VirtKey::LShift.into();
