@@ -49,7 +49,14 @@ impl From<KeybindingsSection> for Keybindings {
                 base.0 = base
                     .clone()
                     .into_iter()
-                    .filter(|(_, combo)| !combo.starts_with(extra_combo))
+                    .filter(|(_, combo)| {
+                        if combo.starts_with(extra_combo) {
+                            tracing::debug!("Base keybinding {combo} ignored in favor of extra keybinding {extra_combo}");
+                            false
+                        } else {
+                            true
+                        }
+                    })
                     .collect();
             }
 
