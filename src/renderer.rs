@@ -329,12 +329,9 @@ impl Renderer {
                         bounds,
                         self.zoom,
                     ) {
-                        let min = (line.0 .0, line.0 .1);
-                        let max = (line.1 .0, line.1 .1 + 2. * self.hidpi_scale * self.zoom);
-                        self.draw_rectangle(
-                            Rect::from_min_max(min, max),
-                            native_color(self.theme.text_color, &self.surface_format),
-                        )?;
+                        let min = (line.min.0, line.min.1);
+                        let max = (line.max.0, line.max.1 + 2. * self.hidpi_scale * self.zoom);
+                        self.draw_rectangle(Rect::from_min_max(min, max), line.color)?;
                     }
                     if let Some(selection) = self.selection {
                         let (selection_rects, selection_text) = text_box.render_selection(

@@ -21,11 +21,23 @@ pub fn usize_in_mib(num: usize) -> f32 {
     num as f32 / 1_024.0 / 1_024.0
 }
 
-pub type Line = ((f32, f32), (f32, f32));
 pub type Selection = ((f32, f32), (f32, f32));
 pub type Point = (f32, f32);
 pub type Size = (f32, f32);
 pub type ImageCache = Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>;
+
+#[derive(Debug, Clone)]
+pub struct Line {
+    pub min: Point,
+    pub max: Point,
+    pub color: [f32; 4],
+}
+
+impl Line {
+    pub fn with_color(min: Point, max: Point, color: [f32; 4]) -> Self {
+        Self { min, max, color }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Rect {
