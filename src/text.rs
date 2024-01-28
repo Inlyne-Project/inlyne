@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
+use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
@@ -9,8 +10,8 @@ use crate::utils::{Align, Line, Point, Rect, Selection, Size};
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
-    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, Shaping, Style,
-    SwashCache, TextArea, TextBounds, Weight,
+    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, LayoutGlyph,
+    Shaping, Style, SwashCache, TextArea, TextBounds, Weight,
 };
 use smart_debug::SmartDebug;
 use taffy::prelude::{AvailableSpace, Size as TaffySize};
@@ -297,13 +298,31 @@ impl TextBox {
         bounds: Size,
         zoom: f32,
     ) -> Vec<Line> {
-        let mut has_lines = false;
-        for text in &self.texts {
-            if text.is_striked || text.is_underlined {
-                has_lines = true;
-                break;
-            }
+        fn push_line_segment(
+            lines: &mut Vec<ThinLine>,
+            current_line: Option<ThinLine>,
+            glyph: &LayoutGlyph,
+            color: [f32; 4],
+        ) -> ThinLine {
+            let range = if let Some(current) = current_line {
+                if current.color == color {
+                    let mut range = current.range;
+                    range.end = glyph.end;
+                    range
+                } else {
+                    lines.push(current);
+                    glyph.start..glyph.end
+                }
+            } else {
+                glyph.start..glyph.end
+            };
+            ThinLine { range, color }
         }
+
+        let has_lines = self
+            .texts
+            .iter()
+            .any(|text| text.is_striked || text.is_underlined);
         if !has_lines {
             return Vec::new();
         }
@@ -320,48 +339,56 @@ impl TextBox {
 
         let mut y = screen_position.1 + line_height;
         for line in buffer.layout_runs() {
-            let mut underline_ranges = Vec::new();
-            let mut underline_range = None;
-            let mut strike_ranges = Vec::new();
-            let mut strike_range = None;
+            let mut underlines = Vec::new();
+            let mut current_underline: Option<ThinLine> = None;
+            let mut strikes = Vec::new();
+            let mut current_strike: Option<ThinLine> = None;
+            // Goes over glyphs and finds the underlines and strikethroughs. The current
+            // underline/strikethrough is combined with matching consecutive lines
             for glyph in line.glyphs {
                 let text = &self.texts[glyph.metadata];
+                let color = text.color.unwrap_or(text.default_color);
                 if text.is_underlined {
-                    let mut range = underline_range.unwrap_or(glyph.start..glyph.end);
-                    range.end = glyph.end;
-                    underline_range = Some(range);
-                } else if let Some(range) = underline_range.clone() {
-                    underline_ranges.push(range);
+                    let underline =
+                        push_line_segment(&mut underlines, current_underline, glyph, color);
+                    current_underline = Some(underline);
+                } else if let Some(current) = current_underline.clone() {
+                    underlines.push(current);
                 }
                 if text.is_striked {
-                    let mut range = strike_range.unwrap_or(glyph.start..glyph.end);
-                    range.end = glyph.end;
-                    strike_range = Some(range);
-                } else if let Some(range) = strike_range.clone() {
-                    strike_ranges.push(range);
+                    let strike = push_line_segment(&mut strikes, current_strike, glyph, color);
+                    current_strike = Some(strike);
+                } else if let Some(current) = current_strike.clone() {
+                    strikes.push(current);
                 }
             }
-            if let Some(range) = underline_range.clone() {
-                underline_ranges.push(range);
+            if let Some(current) = current_underline.take() {
+                underlines.push(current);
             }
-            if let Some(range) = strike_range.clone() {
-                strike_ranges.push(range);
+            if let Some(current) = current_strike.take() {
+                strikes.push(current);
             }
-            for underline_range in &underline_ranges {
-                let start_cursor = Cursor::new(line.line_i, underline_range.start);
-                let end_cursor = Cursor::new(line.line_i, underline_range.end);
+            for ThinLine { range, color } in &underlines {
+                let start_cursor = Cursor::new(line.line_i, range.start);
+                let end_cursor = Cursor::new(line.line_i, range.end);
                 if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
                     let x = screen_position.0 + highlight_x;
-                    lines.push(((x.floor(), y), ((x + highlight_w).ceil(), y)));
+                    let min = (x.floor(), y);
+                    let max = ((x + highlight_w).ceil(), y);
+                    let line = Line::with_color(min, max, *color);
+                    lines.push(line);
                 }
             }
-            for strike_range in &strike_ranges {
-                let start_cursor = Cursor::new(line.line_i, strike_range.start);
-                let end_cursor = Cursor::new(line.line_i, strike_range.end);
+            for ThinLine { range, color } in &strikes {
+                let start_cursor = Cursor::new(line.line_i, range.start);
+                let end_cursor = Cursor::new(line.line_i, range.end);
                 if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
                     let x = screen_position.0 + highlight_x;
                     let y = y - (line_height / 2.);
-                    lines.push(((x.floor(), y), ((x + highlight_w).ceil(), y)));
+                    let min = (x.floor(), y);
+                    let max = ((x + highlight_w).ceil(), y);
+                    let line = Line::with_color(min, max, *color);
+                    lines.push(line);
                 }
             }
             y += line_height;
@@ -453,6 +480,12 @@ impl TextBox {
 
         (rects, selected_text)
     }
+}
+
+#[derive(Clone)]
+struct ThinLine {
+    range: Range<usize>,
+    color: [f32; 4],
 }
 
 #[derive(Clone)]
