@@ -17,6 +17,7 @@ use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
 use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
 
+use comrak::Anchorizer;
 use glyphon::FamilyOwned;
 use html5ever::tendril::*;
 use html5ever::tokenizer::{
@@ -40,6 +41,7 @@ struct State {
     inline_images: Option<(Row, usize)>,
     pending_anchor: Option<String>,
     pending_list_prefix: Option<String>,
+    anchorizer: Anchorizer,
 }
 
 // Images are loaded in a separate thread and use a callback to indicate when they're finished
@@ -382,8 +384,10 @@ impl TokenSink for HtmlInterpreter {
 
                             // Push potentially pending anchor from containing li
                             let anchor_name = self.state.pending_anchor.take();
-                            if anchor_name.is_some() {
-                                self.current_textbox.set_anchor(anchor_name);
+                            if let Some(anchor) = anchor_name {
+                                let anchorized = self.state.anchorizer.anchorize(anchor);
+                                self.current_textbox
+                                    .set_anchor(Some(format!("#{anchorized}")));
                             }
 
                             let align = html::find_align(&tag.attrs);
@@ -596,17 +600,15 @@ impl TokenSink for HtmlInterpreter {
                             if tag_name.as_str() == "h1" {
                                 self.state.text_options.underline -= 1;
                             }
-                            let mut anchor_name = "#".to_string();
-                            for text in &self.current_textbox.texts {
-                                for char in text.text.chars() {
-                                    if char.is_whitespace() || char == '-' {
-                                        anchor_name.push('-');
-                                    } else if char.is_alphanumeric() {
-                                        anchor_name.push(char.to_ascii_lowercase());
-                                    }
-                                }
-                            }
-                            self.current_textbox.set_anchor(Some(anchor_name));
+                            let anchor_name = self
+                                .current_textbox
+                                .texts
+                                .iter()
+                                .flat_map(|t| t.text.chars())
+                                .collect();
+                            let anchorized = self.state.anchorizer.anchorize(anchor_name);
+                            self.current_textbox
+                                .set_anchor(Some(format!("#{anchorized}")));
                             self.push_current_textbox();
                             self.push_spacer();
                             self.state.element_stack.pop();
