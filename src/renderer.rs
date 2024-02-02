@@ -239,13 +239,14 @@ impl Renderer {
                         f32::INFINITY,
                     );
 
-                    text_areas.push(text_box.text_areas(
+                    let areas = text_box.text_areas(
                         &mut self.text_system,
                         pos,
                         bounds,
                         self.zoom,
                         self.scroll_y,
-                    ));
+                    );
+                    text_areas.push(areas.clone());
                     if text_box.is_code_block || text_box.is_quote_block.is_some() {
                         let color = if let Some(bg_color) = text_box.background_color {
                             bg_color
@@ -328,6 +329,7 @@ impl Renderer {
                         scrolled_pos,
                         bounds,
                         self.zoom,
+                        &areas,
                     ) {
                         let min = (line.min.0, line.min.1);
                         let max = (line.max.0, line.max.1 + 2. * self.hidpi_scale * self.zoom);
