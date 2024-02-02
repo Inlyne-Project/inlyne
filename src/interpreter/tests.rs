@@ -19,13 +19,8 @@ use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
 
 // We use a dummy window with an internal counter that keeps track of when rendering a single md
 // document is finished
+#[derive(Clone)]
 struct AtomicCounter(Arc<AtomicU32>);
-
-impl Clone for AtomicCounter {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
-    }
-}
 
 impl AtomicCounter {
     fn new() -> Self {
@@ -302,6 +297,11 @@ const ALIGNED_TABLE: &str = "\
 | text         | text        |   text   |  text | text         |
 ";
 
+const UNIQUE_ANCHORS: &str = "\
+# Foo
+# Foo
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -316,6 +316,7 @@ snapshot_interpreted_elements!(
     (code_in_ordered_list, CODE_IN_ORDERED_LIST),
     (yaml_frontmatter, YAML_FRONTMATTER),
     (aligned_table, ALIGNED_TABLE),
+    (unique_anchors, UNIQUE_ANCHORS),
 );
 
 const UNDERLINE_IN_CODEBLOCK: &str = "\
