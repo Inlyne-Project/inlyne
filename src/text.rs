@@ -92,6 +92,7 @@ impl Default for TextBox {
     }
 }
 
+#[derive(Clone)]
 pub struct CachedTextArea {
     key: KeyHash,
     left: f32,
@@ -101,10 +102,6 @@ pub struct CachedTextArea {
 }
 
 impl CachedTextArea {
-    pub fn left(&self) -> f32 {
-        self.left
-    }
-
     pub fn text_area<'a>(&self, cache: &'a TextCache) -> TextArea<'a> {
         TextArea {
             buffer: cache.get(&self.key).expect("Get cached buffer"),
@@ -301,7 +298,7 @@ impl TextBox {
         screen_position: Point,
         bounds: Size,
         zoom: f32,
-        left: f32,
+        text_area: &CachedTextArea,
     ) -> Vec<Line> {
         fn push_line_segment(
             lines: &mut Vec<ThinLine>,
@@ -377,7 +374,7 @@ impl TextBox {
                 let start_cursor = Cursor::new(line.line_i, range.start);
                 let end_cursor = Cursor::new(line.line_i, range.end);
                 if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
-                    let x = left + highlight_x;
+                    let x = text_area.left + highlight_x;
                     let min = (x.floor(), y);
                     let max = ((x + highlight_w).ceil(), y);
                     let line = Line::with_color(min, max, *color);
