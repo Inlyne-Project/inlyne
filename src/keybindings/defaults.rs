@@ -18,19 +18,12 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
             Action::Copy,
             KeyCombo(vec![ModifiedKey(Key::from(VirtKey::C), ctrl_or_command)]),
         ),
-        // Zoom in: Ctrl++ / Command++
+        // Zoom in: Ctrl+= / Command+=
         (
             Action::Zoom(Zoom::In),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Equals),
-                ctrl_or_command | ModifiersState::SHIFT,
-            )]),
-        ),
-        (
-            Action::Zoom(Zoom::In),
-            KeyCombo(vec![ModifiedKey(
-                Key::from(VirtKey::Plus),
-                ctrl_or_command | ModifiersState::SHIFT,
+                ctrl_or_command,
             )]),
         ),
         // Zoom out: Ctrl+- / Command+-
@@ -38,14 +31,6 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
             Action::Zoom(Zoom::Out),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Minus),
-                ctrl_or_command,
-            )]),
-        ),
-        // Zoom reset: Ctrl+= / Command+=
-        (
-            Action::Zoom(Zoom::Reset),
-            KeyCombo(vec![ModifiedKey(
-                Key::from(VirtKey::Equals),
                 ctrl_or_command,
             )]),
         ),
