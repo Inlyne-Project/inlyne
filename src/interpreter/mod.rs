@@ -401,7 +401,7 @@ impl TokenSink for HtmlInterpreter {
                             });
                         }
                         "em" | "i" => self.state.text_options.italic += 1,
-                        "bold" | "strong" => self.state.text_options.bold += 1,
+                        "b" | "strong" => self.state.text_options.bold += 1,
                         "code" => self.state.text_options.code += 1,
                         "li" => {
                             for attr in AttrIter::new(&tag.attrs) {
