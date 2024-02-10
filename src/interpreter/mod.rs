@@ -19,13 +19,15 @@ use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecorati
 
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
+use html5ever::tendril::*;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
 };
-use html5ever::{local_name, tendril::*};
 use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
+
+use self::html::{HeaderType, TagName};
 
 #[derive(Default)]
 struct State {
@@ -267,9 +269,15 @@ impl HtmlInterpreter {
     }
 
     fn process_start_tag(&mut self, tag: Tag) {
-        let tag_name = tag.name.to_string();
-        match tag.name {
-            local_name!("blockquote") => {
+        let tag_name = match TagName::try_from(&tag.name) {
+            Ok(name) => name,
+            Err(name) => {
+                tracing::info!("Missing implementation for start tag: {name}");
+                return;
+            }
+        };
+        match tag_name {
+            TagName::BlockQuote => {
                 // FIXME blockquotes in list have no marker
                 self.push_current_textbox();
                 self.state.text_options.block_quote += 1;
@@ -277,22 +285,28 @@ impl HtmlInterpreter {
                 self.current_textbox
                     .set_quote_block(Some(self.state.text_options.block_quote));
             }
-            local_name!("th") => {
-                self.state.text_options.bold += 1;
-                let align = html::find_align(&tag.attrs);
-                self.current_textbox.set_align(align.unwrap_or(Align::Left));
-            }
-            local_name!("td") => {
-                let align = html::find_align(&tag.attrs);
-                self.current_textbox.set_align(align.unwrap_or(Align::Left));
-            }
-            local_name!("table") => {
+            TagName::TableHead | TagName::TableBody => {}
+            TagName::Table => {
                 self.push_spacer();
                 self.state
                     .element_stack
                     .push(html::Element::Table(Table::new()));
             }
-            local_name!("a") => {
+            TagName::TableHeader => {
+                self.state.text_options.bold += 1;
+                let align = html::find_align(&tag.attrs);
+                self.current_textbox.set_align(align.unwrap_or(Align::Left));
+            }
+            TagName::TableRow => {
+                self.state
+                    .element_stack
+                    .push(html::Element::TableRow(Vec::new()));
+            }
+            TagName::TableDataCell => {
+                let align = html::find_align(&tag.attrs);
+                self.current_textbox.set_align(align.unwrap_or(Align::Left));
+            }
+            TagName::Anchor => {
                 for attr in AttrIter::new(&tag.attrs) {
                     match attr {
                         Attr::Href(link) => self.state.text_options.link.push(link),
@@ -301,11 +315,11 @@ impl HtmlInterpreter {
                     }
                 }
             }
-            local_name!("small") => self.state.text_options.small += 1,
-            local_name!("br") => self.push_current_textbox(),
-            local_name!("ins") | local_name!("u") => self.state.text_options.underline += 1,
-            local_name!("del") | local_name!("s") => self.state.text_options.strike_through += 1,
-            local_name!("img") => {
+            TagName::Small => self.state.text_options.small += 1,
+            TagName::Break => self.push_current_textbox(),
+            TagName::Underline => self.state.text_options.underline += 1,
+            TagName::Strikethrough => self.state.text_options.strike_through += 1,
+            TagName::Image => {
                 let mut align = None;
                 let mut size = None;
                 let mut src = None;
@@ -359,7 +373,7 @@ impl HtmlInterpreter {
                     }
                 }
             }
-            local_name!("div") | local_name!("p") => {
+            TagName::Div | TagName::Paragraph => {
                 self.push_current_textbox();
 
                 // Push potentially pending anchor from containing li
@@ -374,16 +388,16 @@ impl HtmlInterpreter {
                 if let Some(align) = align.or_else(|| self.find_current_align()) {
                     self.current_textbox.set_align(align);
                 }
-                self.state.element_stack.push(match tag_name.as_str() {
-                    "div" => html::Element::Div(align),
-                    "p" => html::Element::Paragraph(align),
-                    _ => unreachable!("Arm matches on div and p"),
+                self.state.element_stack.push(match tag_name {
+                    TagName::Div => html::Element::Div(align),
+                    TagName::Paragraph => html::Element::Paragraph(align),
+                    _ => unreachable!("Arm matches on Div and Paragraph"),
                 });
             }
-            local_name!("em") | local_name!("i") => self.state.text_options.italic += 1,
-            local_name!("b") | local_name!("strong") => self.state.text_options.bold += 1,
-            local_name!("code") => self.state.text_options.code += 1,
-            local_name!("li") => {
+            TagName::EmphasisOrItalic => self.state.text_options.italic += 1,
+            TagName::BoldOrStrong => self.state.text_options.bold += 1,
+            TagName::Code => self.state.text_options.code += 1,
+            TagName::ListItem => {
                 for attr in AttrIter::new(&tag.attrs) {
                     if let Attr::Anchor(anchor) = attr {
                         self.state.pending_anchor = Some(anchor);
@@ -411,7 +425,7 @@ impl HtmlInterpreter {
                     self.state.pending_list_prefix = Some(prefix);
                 }
             }
-            local_name!("ul") => {
+            TagName::UnorderedList => {
                 self.push_current_textbox();
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.state
@@ -420,7 +434,7 @@ impl HtmlInterpreter {
                         list_type: html::ListType::Unordered,
                     }));
             }
-            local_name!("ol") => {
+            TagName::OrderedList => {
                 let mut start_index = 1;
                 for attr in AttrIter::new(&tag.attrs) {
                     if let Attr::Start(start) = attr {
@@ -435,14 +449,8 @@ impl HtmlInterpreter {
                         list_type: html::ListType::Ordered(start_index),
                     }));
             }
-            local_name!("h1")
-            | local_name!("h2")
-            | local_name!("h3")
-            | local_name!("h4")
-            | local_name!("h5")
-            | local_name!("h6") => {
+            TagName::Header(header_type) => {
                 let align = html::find_align(&tag.attrs);
-                let header_type = html::HeaderType::new(&tag_name).unwrap();
                 self.push_current_textbox();
                 self.push_spacer();
                 if let html::HeaderType::H1 = header_type {
@@ -453,7 +461,7 @@ impl HtmlInterpreter {
                     .push(html::Element::Header(html::Header { header_type, align }));
                 self.current_textbox.set_align(align.unwrap_or(Align::Left));
             }
-            local_name!("pre") => {
+            TagName::PreformattedText => {
                 self.push_current_textbox();
                 let style_str = html::find_style(&tag.attrs).unwrap_or_default();
                 for style in StyleIter::new(&style_str) {
@@ -466,14 +474,9 @@ impl HtmlInterpreter {
                 self.state.text_options.pre_formatted += 1;
                 self.current_textbox.set_code_block(true);
             }
-            local_name!("tr") => {
-                self.state
-                    .element_stack
-                    .push(html::Element::TableRow(Vec::new()));
-            }
             // HACK: spans are only supported enough to get syntax highlighting in code
             // blocks working
-            local_name!("span") => {
+            TagName::Span => {
                 let style_str = html::find_style(&tag.attrs).unwrap_or_default();
                 for style in StyleIter::new(&style_str) {
                     match style {
@@ -487,7 +490,7 @@ impl HtmlInterpreter {
                     }
                 }
             }
-            local_name!("input") => {
+            TagName::Input => {
                 let mut is_checkbox = false;
                 let mut is_checked = false;
                 for attr in AttrIter::new(&tag.attrs) {
@@ -504,7 +507,7 @@ impl HtmlInterpreter {
                     self.state.element_stack.push(html::Element::Input);
                 }
             }
-            local_name!("details") => {
+            TagName::Details => {
                 self.push_current_textbox();
                 self.push_spacer();
                 let section = Section::new(None, vec![], self.hidpi_scale);
@@ -513,24 +516,31 @@ impl HtmlInterpreter {
                     .element_stack
                     .push(html::Element::Details(section));
             }
-            local_name!("summary") => {
+            TagName::Summary => {
                 self.push_current_textbox();
                 self.state.element_stack.push(html::Element::Summary);
             }
-            local_name!("hr") => {
+            TagName::HorizontalRuler => {
                 self.push_element(Spacer::new(5., true));
             }
-            _ => {}
+            TagName::Section => {}
         }
     }
 
     fn process_end_tag(&mut self, tag: Tag) {
-        let tag_name = tag.name.to_string();
-        match tag.name {
-            local_name!("ins") | local_name!("u") => self.state.text_options.underline -= 1,
-            local_name!("del") | local_name!("s") => self.state.text_options.strike_through -= 1,
-            local_name!("small") => self.state.text_options.small -= 1,
-            local_name!("th") => {
+        let tag_name = match TagName::try_from(&tag.name) {
+            Ok(name) => name,
+            Err(name) => {
+                tracing::info!("Missing implementation for end tag: {name}");
+                return;
+            }
+        };
+        match tag_name {
+            TagName::Underline => self.state.text_options.underline -= 1,
+            TagName::Strikethrough => self.state.text_options.strike_through -= 1,
+            TagName::Small => self.state.text_options.small -= 1,
+            TagName::TableHead | TagName::TableBody => {}
+            TagName::TableHeader => {
                 let mut table = None;
                 for element in self.state.element_stack.iter_mut().rev() {
                     if let html::Element::Table(ref mut html_table) = element {
@@ -542,14 +552,14 @@ impl HtmlInterpreter {
                 self.current_textbox.texts.clear();
                 self.state.text_options.bold -= 1;
             }
-            local_name!("td") => {
+            TagName::TableDataCell => {
                 let table_row = self.state.element_stack.last_mut();
                 if let Some(html::Element::TableRow(ref mut row)) = table_row {
                     row.push(self.current_textbox.clone());
                 }
                 self.current_textbox.texts.clear();
             }
-            local_name!("tr") => {
+            TagName::TableRow => {
                 let table_row = self.state.element_stack.pop();
                 for element in self.state.element_stack.iter_mut().rev() {
                     if let html::Element::Table(ref mut table) = element {
@@ -563,32 +573,27 @@ impl HtmlInterpreter {
                 }
                 self.current_textbox.texts.clear();
             }
-            local_name!("table") => {
+            TagName::Table => {
                 if let Some(html::Element::Table(table)) = self.state.element_stack.pop() {
                     self.push_element(table);
                     self.push_spacer();
                 }
             }
-            local_name!("a") => {
+            TagName::Anchor => {
                 self.state.text_options.link.pop();
             }
-            local_name!("code") => self.state.text_options.code -= 1,
-            local_name!("div") | local_name!("p") => {
+            TagName::Code => self.state.text_options.code -= 1,
+            TagName::Div | TagName::Paragraph => {
                 self.push_current_textbox();
-                if tag_name == "p" {
+                if tag_name == TagName::Paragraph {
                     self.push_spacer();
                 }
                 self.state.element_stack.pop();
             }
-            local_name!("em") | local_name!("i") => self.state.text_options.italic -= 1,
-            local_name!("b") | local_name!("strong") => self.state.text_options.bold -= 1,
-            local_name!("h1")
-            | local_name!("h2")
-            | local_name!("h3")
-            | local_name!("h4")
-            | local_name!("h5")
-            | local_name!("h6") => {
-                if tag_name.as_str() == "h1" {
+            TagName::EmphasisOrItalic => self.state.text_options.italic -= 1,
+            TagName::BoldOrStrong => self.state.text_options.bold -= 1,
+            TagName::Header(header_type) => {
+                if header_type == HeaderType::H1 {
                     self.state.text_options.underline -= 1;
                 }
                 let anchor_name = self
@@ -604,18 +609,18 @@ impl HtmlInterpreter {
                 self.push_spacer();
                 self.state.element_stack.pop();
             }
-            local_name!("li") => {
+            TagName::ListItem => {
                 // Pop pending anchor if nothing consumed it
                 let _ = self.state.pending_anchor.take();
 
                 self.push_current_textbox();
             }
             // FIXME: `input` is self closing. This never gets called
-            local_name!("input") => {
+            TagName::Input => {
                 self.push_current_textbox();
                 self.state.element_stack.pop();
             }
-            local_name!("ul") | local_name!("ol") => {
+            TagName::UnorderedList | TagName::OrderedList => {
                 self.push_current_textbox();
                 self.state.global_indent -= DEFAULT_MARGIN / 2.;
                 self.state.element_stack.pop();
@@ -623,13 +628,13 @@ impl HtmlInterpreter {
                     self.push_spacer();
                 }
             }
-            local_name!("pre") => {
+            TagName::PreformattedText => {
                 self.push_current_textbox();
                 self.push_spacer();
                 self.state.text_options.pre_formatted -= 1;
                 self.current_textbox.set_code_block(false);
             }
-            local_name!("blockquote") => {
+            TagName::BlockQuote => {
                 self.push_current_textbox();
                 self.state.text_options.block_quote -= 1;
                 self.state.global_indent -= DEFAULT_MARGIN / 2.;
@@ -638,20 +643,20 @@ impl HtmlInterpreter {
                     self.push_spacer();
                 }
             }
-            local_name!("span") => {
+            TagName::Span => {
                 self.state.span_color = native_color(self.theme.code_color, &self.surface_format);
                 self.state.span_weight = FontWeight::default();
                 self.state.span_style = FontStyle::default();
                 self.state.span_decor = TextDecoration::default();
             }
-            local_name!("details") => {
+            TagName::Details => {
                 self.push_current_textbox();
                 if let Some(html::Element::Details(section)) = self.state.element_stack.pop() {
                     self.push_element(section);
                 }
                 self.push_spacer();
             }
-            local_name!("summary") => {
+            TagName::Summary => {
                 for element in self.state.element_stack.iter_mut().rev() {
                     if let html::Element::Details(ref mut section) = element {
                         *section.summary = Some(Positioned::new(self.current_textbox.clone()));
@@ -661,7 +666,7 @@ impl HtmlInterpreter {
                 }
                 self.state.element_stack.pop();
             }
-            _ => {}
+            TagName::HorizontalRuler | TagName::Break | TagName::Image | TagName::Section => {}
         }
     }
 
