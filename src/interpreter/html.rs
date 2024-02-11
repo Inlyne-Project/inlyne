@@ -78,6 +78,16 @@ pub enum Attr {
     IsChecked,
 }
 
+impl Attr {
+    pub fn to_anchor(&self) -> Option<String> {
+        if let Self::Anchor(name) = self {
+            Some(name.to_owned())
+        } else {
+            None
+        }
+    }
+}
+
 pub struct StyleIter<'style>(std::str::Split<'style, char>);
 
 impl<'style> StyleIter<'style> {
@@ -197,7 +207,7 @@ impl HeaderType {
 }
 
 pub struct Header {
-    pub header_type: HeaderType,
+    pub ty: HeaderType,
     pub align: Option<Align>,
 }
 
@@ -208,7 +218,7 @@ pub enum ListType {
 }
 
 pub struct List {
-    pub list_type: ListType,
+    pub ty: ListType,
 }
 
 // Represents the number of parent text option tags the current element is a child of
@@ -235,6 +245,24 @@ pub enum Element {
     Div(Option<Align>),
     Details(Section),
     Summary,
+}
+
+impl Element {
+    pub fn as_mut_list(&mut self) -> Option<&mut List> {
+        if let Self::List(list) = self {
+            Some(list)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_mut_table(&mut self) -> Option<&mut Table> {
+        if let Self::Table(table) = self {
+            Some(table)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -235,15 +235,15 @@ pub struct Spacer {
     pub visible: bool,
 }
 
-impl fmt::Debug for Spacer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        debug_impls::spacer(self, f)
+impl Spacer {
+    pub fn new(space: f32, visible: bool) -> Self {
+        Self { space, visible }
     }
 }
 
-impl Spacer {
-    pub fn new(space: f32, visible: bool) -> Spacer {
-        Spacer { space, visible }
+impl fmt::Debug for Spacer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_impls::spacer(self, f)
     }
 }
 

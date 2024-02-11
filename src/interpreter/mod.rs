@@ -4,17 +4,17 @@ mod tests;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::slice;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::color::{native_color, Theme};
 use crate::image::{Image, ImageData, ImageSize};
 use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
-use crate::table::Table;
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
-use crate::{Element, ImageCache, InlyneEvent};
+use crate::{Element, ImageCache, InlyneEvent, Table};
 use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
 
 use comrak::Anchorizer;
@@ -34,15 +34,37 @@ struct State {
     global_indent: f32,
     element_stack: Vec<html::Element>,
     text_options: html::TextOptions,
-    span_color: [f32; 4],
-    span_weight: FontWeight,
-    span_style: FontStyle,
-    span_decor: TextDecoration,
+    span: Span,
     // Stores the row and a counter of newlines after each image
     inline_images: Option<(Row, usize)>,
     pending_anchor: Option<String>,
     pending_list_prefix: Option<String>,
     anchorizer: Anchorizer,
+}
+
+impl State {
+    fn element_iter_mut(&mut self) -> slice::IterMut<'_, html::Element> {
+        self.element_stack.iter_mut()
+    }
+}
+
+#[derive(Default)]
+struct Span {
+    color: [f32; 4],
+    weight: FontWeight,
+    style: FontStyle,
+    decor: TextDecoration,
+}
+
+impl Span {
+    fn with_color(color: [f32; 4]) -> Self {
+        Self {
+            color,
+            weight: Default::default(),
+            style: Default::default(),
+            decor: Default::default(),
+        }
+    }
 }
 
 // Images are loaded in a separate thread and use a callback to indicate when they're finished
@@ -150,7 +172,7 @@ impl HtmlInterpreter {
             hidpi_scale,
             surface_format,
             state: State {
-                span_color: native_color(theme.code_color, &surface_format),
+                span: Span::with_color(native_color(theme.code_color, &surface_format)),
                 ..Default::default()
             },
             theme,
@@ -165,7 +187,7 @@ impl HtmlInterpreter {
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
         let mut input = BufferQueue::new();
 
-        let span_color = native_color(self.theme.code_color, &self.surface_format);
+        let span_color = self.native_color(self.theme.text_color);
         let code_highlighter = self.theme.code_highlighter.clone();
         let mut tok = Tokenizer::new(self, TokenizerOpts::default());
 
@@ -175,13 +197,9 @@ impl HtmlInterpreter {
                 md_string.len()
             );
 
-            if tok
-                .sink
-                .should_queue
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if tok.sink.should_queue.load(AtomicOrdering::Relaxed) {
                 tok.sink.state = State {
-                    span_color,
+                    span: Span::with_color(span_color),
                     ..Default::default()
                 };
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
@@ -202,6 +220,10 @@ impl HtmlInterpreter {
         }
     }
 
+    fn align_or_inherit(&self, maybe_align: Option<Align>) -> Option<Align> {
+        maybe_align.or_else(|| self.find_current_align())
+    }
+
     // Searches the currently nested elements for align attribute
     fn find_current_align(&self) -> Option<Align> {
         for element in self.state.element_stack.iter().rev() {
@@ -216,6 +238,11 @@ impl HtmlInterpreter {
             }
         }
         None
+    }
+
+    #[must_use]
+    fn native_color(&self, color: u32) -> [f32; 4] {
+        native_color(color, &self.surface_format)
     }
 
     fn push_current_textbox(&mut self) {
@@ -239,7 +266,7 @@ impl HtmlInterpreter {
             }
             if !empty {
                 self.current_textbox.indent = self.state.global_indent;
-                let section = self.state.element_stack.iter_mut().rev().find_map(|e| {
+                let section = self.state.element_iter_mut().rev().find_map(|e| {
                     if let html::Element::Details(section) = e {
                         Some(section)
                     } else {
@@ -283,7 +310,7 @@ impl HtmlInterpreter {
                 self.state.text_options.block_quote += 1;
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.current_textbox
-                    .set_quote_block(Some(self.state.text_options.block_quote));
+                    .set_quote_block(self.state.text_options.block_quote);
             }
             TagName::TableHead | TagName::TableBody => {}
             TagName::Table => {
@@ -295,7 +322,7 @@ impl HtmlInterpreter {
             TagName::TableHeader => {
                 self.state.text_options.bold += 1;
                 let align = html::find_align(&tag.attrs);
-                self.current_textbox.set_align(align.unwrap_or(Align::Left));
+                self.current_textbox.set_align_or_default(align);
             }
             TagName::TableRow => {
                 self.state
@@ -304,13 +331,13 @@ impl HtmlInterpreter {
             }
             TagName::TableDataCell => {
                 let align = html::find_align(&tag.attrs);
-                self.current_textbox.set_align(align.unwrap_or(Align::Left));
+                self.current_textbox.set_align_or_default(align);
             }
             TagName::Anchor => {
                 for attr in AttrIter::new(&tag.attrs) {
                     match attr {
                         Attr::Href(link) => self.state.text_options.link.push(link),
-                        Attr::Anchor(a) => self.current_textbox.set_anchor(Some(a)),
+                        Attr::Anchor(a) => self.current_textbox.set_anchor(a),
                         _ => {}
                     }
                 }
@@ -332,7 +359,7 @@ impl HtmlInterpreter {
                         _ => {}
                     }
                 }
-                align = align.or_else(|| self.find_current_align());
+                align = self.align_or_inherit(align);
                 if let Some(src) = src {
                     let align = align.as_ref().unwrap_or(&Align::Left);
                     let is_url = src.starts_with("http://") || src.starts_with("https://");
@@ -380,12 +407,11 @@ impl HtmlInterpreter {
                 let anchor_name = self.state.pending_anchor.take();
                 if let Some(anchor) = anchor_name {
                     let anchorized = self.state.anchorizer.anchorize(anchor);
-                    self.current_textbox
-                        .set_anchor(Some(format!("#{anchorized}")));
+                    self.current_textbox.set_anchor(format!("#{anchorized}"));
                 }
 
                 let align = html::find_align(&tag.attrs);
-                if let Some(align) = align.or_else(|| self.find_current_align()) {
+                if let Some(align) = self.align_or_inherit(align) {
                     self.current_textbox.set_align(align);
                 }
                 self.state.element_stack.push(match tag_name {
@@ -399,22 +425,14 @@ impl HtmlInterpreter {
             TagName::Code => self.state.text_options.code += 1,
             TagName::ListItem => {
                 for attr in AttrIter::new(&tag.attrs) {
-                    if let Attr::Anchor(anchor) = attr {
-                        self.state.pending_anchor = Some(anchor);
-                    }
+                    self.state.pending_anchor = attr.to_anchor();
                 }
 
                 // Push a pending list prefix based on the list type
-                let mut list = None;
-                for element in self.state.element_stack.iter_mut().rev() {
-                    if let html::Element::List(html_list) = element {
-                        list = Some(html_list);
-                        break;
-                    }
-                }
-                let list = list.expect("List ended unexpectedly");
+                let iter = self.state.element_iter_mut();
+                let list = iter.rev().find_map(|elem| elem.as_mut_list()).unwrap();
                 if self.current_textbox.texts.is_empty() {
-                    let prefix = match &mut list.list_type {
+                    let prefix = match &mut list.ty {
                         html::ListType::Ordered(index) => {
                             *index += 1;
                             format!("{}. ", *index - 1)
@@ -431,7 +449,7 @@ impl HtmlInterpreter {
                 self.state
                     .element_stack
                     .push(html::Element::List(html::List {
-                        list_type: html::ListType::Unordered,
+                        ty: html::ListType::Unordered,
                     }));
             }
             TagName::OrderedList => {
@@ -446,7 +464,7 @@ impl HtmlInterpreter {
                 self.state
                     .element_stack
                     .push(html::Element::List(html::List {
-                        list_type: html::ListType::Ordered(start_index),
+                        ty: html::ListType::Ordered(start_index),
                     }));
             }
             TagName::Header(header_type) => {
@@ -458,17 +476,19 @@ impl HtmlInterpreter {
                 }
                 self.state
                     .element_stack
-                    .push(html::Element::Header(html::Header { header_type, align }));
-                self.current_textbox.set_align(align.unwrap_or(Align::Left));
+                    .push(html::Element::Header(html::Header {
+                        ty: header_type,
+                        align,
+                    }));
+                self.current_textbox.set_align_or_default(align);
             }
             TagName::PreformattedText => {
                 self.push_current_textbox();
                 let style_str = html::find_style(&tag.attrs).unwrap_or_default();
                 for style in StyleIter::new(&style_str) {
                     if let Style::BackgroundColor(color) = style {
-                        let native_color = native_color(color, &self.surface_format);
-                        self.current_textbox
-                            .set_background_color(Some(native_color));
+                        let native_color = self.native_color(color);
+                        self.current_textbox.set_background_color(native_color);
                     }
                 }
                 self.state.text_options.pre_formatted += 1;
@@ -481,11 +501,11 @@ impl HtmlInterpreter {
                 for style in StyleIter::new(&style_str) {
                     match style {
                         Style::Color(color) => {
-                            self.state.span_color = native_color(color, &self.surface_format)
+                            self.state.span.color = native_color(color, &self.surface_format)
                         }
-                        Style::FontWeight(weight) => self.state.span_weight = weight,
-                        Style::FontStyle(style) => self.state.span_style = style,
-                        Style::TextDecoration(decor) => self.state.span_decor = decor,
+                        Style::FontWeight(weight) => self.state.span.weight = weight,
+                        Style::FontStyle(style) => self.state.span.style = style,
+                        Style::TextDecoration(decor) => self.state.span.decor = decor,
                         _ => {}
                     }
                 }
@@ -503,7 +523,7 @@ impl HtmlInterpreter {
                 if is_checkbox {
                     // Checkbox uses a custom prefix, so remove pending text prefix
                     let _ = self.state.pending_list_prefix.take();
-                    self.current_textbox.set_checkbox(Some(is_checked));
+                    self.current_textbox.set_checkbox(is_checked);
                     self.state.element_stack.push(html::Element::Input);
                 }
             }
@@ -541,14 +561,9 @@ impl HtmlInterpreter {
             TagName::Small => self.state.text_options.small -= 1,
             TagName::TableHead | TagName::TableBody => {}
             TagName::TableHeader => {
-                let mut table = None;
-                for element in self.state.element_stack.iter_mut().rev() {
-                    if let html::Element::Table(ref mut html_table) = element {
-                        table = Some(html_table);
-                        break;
-                    }
-                }
-                table.unwrap().push_header(self.current_textbox.clone());
+                let iter = self.state.element_iter_mut();
+                let table = iter.rev().find_map(|elem| elem.as_mut_table()).unwrap();
+                table.push_header(self.current_textbox.clone());
                 self.current_textbox.texts.clear();
                 self.state.text_options.bold -= 1;
             }
@@ -561,8 +576,8 @@ impl HtmlInterpreter {
             }
             TagName::TableRow => {
                 let table_row = self.state.element_stack.pop();
-                for element in self.state.element_stack.iter_mut().rev() {
-                    if let html::Element::Table(ref mut table) = element {
+                for mut element in self.state.element_iter_mut().rev() {
+                    if let html::Element::Table(table) = &mut element {
                         if let Some(html::Element::TableRow(row)) = table_row {
                             if !row.is_empty() {
                                 table.push_row(row);
@@ -603,8 +618,7 @@ impl HtmlInterpreter {
                     .flat_map(|t| t.text.chars())
                     .collect();
                 let anchorized = self.state.anchorizer.anchorize(anchor_name);
-                self.current_textbox
-                    .set_anchor(Some(format!("#{anchorized}")));
+                self.current_textbox.set_anchor(format!("#{anchorized}"));
                 self.push_current_textbox();
                 self.push_spacer();
                 self.state.element_stack.pop();
@@ -638,16 +652,14 @@ impl HtmlInterpreter {
                 self.push_current_textbox();
                 self.state.text_options.block_quote -= 1;
                 self.state.global_indent -= DEFAULT_MARGIN / 2.;
-                self.current_textbox.set_quote_block(None);
+                self.current_textbox.clear_quote_block();
                 if self.state.global_indent == 0. {
                     self.push_spacer();
                 }
             }
             TagName::Span => {
-                self.state.span_color = native_color(self.theme.code_color, &self.surface_format);
-                self.state.span_weight = FontWeight::default();
-                self.state.span_style = FontStyle::default();
-                self.state.span_decor = TextDecoration::default();
+                let color = self.native_color(self.theme.code_color);
+                self.state.span = Span::with_color(color);
             }
             TagName::Details => {
                 self.push_current_textbox();
@@ -657,8 +669,8 @@ impl HtmlInterpreter {
                 self.push_spacer();
             }
             TagName::Summary => {
-                for element in self.state.element_stack.iter_mut().rev() {
-                    if let html::Element::Details(ref mut section) = element {
+                for mut element in self.state.element_iter_mut().rev() {
+                    if let html::Element::Details(section) = &mut element {
                         *section.summary = Some(Positioned::new(self.current_textbox.clone()));
                         self.current_textbox.texts.clear();
                         break;
@@ -671,12 +683,13 @@ impl HtmlInterpreter {
     }
 
     fn process_character_tokens(&mut self, mut str: String) {
+        let text_native_color = self.native_color(self.theme.text_color);
         if str == "\n" {
             if self.state.text_options.pre_formatted >= 1 {
                 self.current_textbox.texts.push(Text::new(
                     "\n".to_string(),
                     self.hidpi_scale,
-                    native_color(self.theme.text_color, &self.surface_format),
+                    text_native_color,
                 ));
             }
             if let Some(last_text) = self.current_textbox.texts.last() {
@@ -685,7 +698,7 @@ impl HtmlInterpreter {
                         self.current_textbox.texts.push(Text::new(
                             " ".to_string(),
                             self.hidpi_scale,
-                            native_color(self.theme.text_color, &self.surface_format),
+                            text_native_color,
                         ));
                     }
                 }
@@ -705,7 +718,7 @@ impl HtmlInterpreter {
                         self.current_textbox.texts.push(Text::new(
                             " ".to_string(),
                             self.hidpi_scale,
-                            native_color(self.theme.text_color, &self.surface_format),
+                            text_native_color,
                         ));
                     }
                 }
@@ -715,52 +728,42 @@ impl HtmlInterpreter {
                 str = str.trim_start().to_owned();
             }
 
-            let mut text = Text::new(
-                str,
-                self.hidpi_scale,
-                native_color(self.theme.text_color, &self.surface_format),
-            );
+            let mut text = Text::new(str, self.hidpi_scale, text_native_color);
             if let Some(prefix) = self.state.pending_list_prefix.take() {
                 if self.current_textbox.texts.is_empty() {
                     self.current_textbox.texts.push(
-                        Text::new(
-                            prefix,
-                            self.hidpi_scale,
-                            native_color(self.theme.text_color, &self.surface_format),
-                        )
-                        .make_bold(true),
+                        Text::new(prefix, self.hidpi_scale, text_native_color).make_bold(true),
                     );
                 }
             }
             if self.state.text_options.block_quote >= 1 {
                 self.current_textbox
-                    .set_quote_block(Some(self.state.text_options.block_quote));
+                    .set_quote_block(self.state.text_options.block_quote);
             }
             if self.state.text_options.code >= 1 {
                 text = text
-                    .with_color(self.state.span_color)
+                    .with_color(self.state.span.color)
                     .with_family(FamilyOwned::Monospace);
-                if self.state.span_weight == FontWeight::Bold {
+                if self.state.span.weight == FontWeight::Bold {
                     text = text.make_bold(true);
                 }
-                if self.state.span_style == FontStyle::Italic {
+                if self.state.span.style == FontStyle::Italic {
                     text = text.make_italic(true);
                 }
-                if self.state.span_decor == TextDecoration::Underline {
+                if self.state.span.decor == TextDecoration::Underline {
                     text = text.make_underlined(true);
                 }
-                //.with_size(18.)
             }
             for elem in self.state.element_stack.iter().rev() {
                 if let html::Element::Header(header) = elem {
-                    self.current_textbox.font_size = header.header_type.text_size();
+                    self.current_textbox.font_size = header.ty.text_size();
                     text = text.make_bold(true);
                     break;
                 }
             }
             if let Some(link) = self.state.text_options.link.last() {
                 text = text.with_link((*link).clone());
-                text = text.with_color(native_color(self.theme.link_color, &self.surface_format));
+                text = text.with_color(self.native_color(self.theme.link_color));
             }
             if self.state.text_options.bold >= 1 {
                 text = text.make_bold(true);
@@ -776,8 +779,6 @@ impl HtmlInterpreter {
             }
             if self.state.text_options.small >= 1 {
                 self.current_textbox.font_size = 12.;
-                //text = text.with_size(12.);
-                //FIXME
             }
             self.current_textbox.texts.push(text);
         }
@@ -788,7 +789,7 @@ impl TokenSink for HtmlInterpreter {
     type Handle = ();
 
     fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
-        if !self.should_queue.load(std::sync::atomic::Ordering::Relaxed) {
+        if !self.should_queue.load(AtomicOrdering::Relaxed) {
             self.stopped = true;
         }
         if self.stopped {
@@ -802,8 +803,7 @@ impl TokenSink for HtmlInterpreter {
             Token::CharacterTokens(str) => self.process_character_tokens(str.to_string()),
             Token::EOFToken => {
                 self.push_current_textbox();
-                self.should_queue
-                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.should_queue.store(false, AtomicOrdering::Relaxed);
                 self.first_pass = false;
                 self.window.finished_single_doc();
             }
