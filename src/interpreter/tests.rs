@@ -302,6 +302,11 @@ const UNIQUE_ANCHORS: &str = "\
 # Foo
 ";
 
+// TODO: this snapshot splits `Text` up a lot more than needed
+const KBD_TAG: &str = "\
+Keyboard text: <kbd>Alt-\\<num\\></kbd>
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -317,6 +322,7 @@ snapshot_interpreted_elements!(
     (yaml_frontmatter, YAML_FRONTMATTER),
     (aligned_table, ALIGNED_TABLE),
     (unique_anchors, UNIQUE_ANCHORS),
+    (kbd_tag, KBD_TAG),
 );
 
 const UNDERLINE_IN_CODEBLOCK: &str = "\

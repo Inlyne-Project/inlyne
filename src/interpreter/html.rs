@@ -333,7 +333,7 @@ impl TryFrom<&Atom<LocalNameStaticSet>> for TagName {
             &local_name!("blockquote") => Self::BlockQuote,
             &local_name!("b") | &local_name!("strong") => Self::BoldOrStrong,
             &local_name!("br") => Self::Break,
-            &local_name!("code") => Self::Code,
+            &local_name!("code") | &local_name!("kbd") => Self::Code,
             &local_name!("details") => Self::Details,
             &local_name!("div") => Self::Div,
             &local_name!("em") | &local_name!("i") => Self::EmphasisOrItalic,
