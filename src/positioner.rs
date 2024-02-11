@@ -5,7 +5,8 @@ use std::fmt;
 use anyhow::Context;
 use taffy::Taffy;
 
-use crate::text::{TextBox, TextSystem};
+use crate::image::Image;
+use crate::text::TextSystem;
 use crate::utils::{Align, Point, Rect, Size};
 use crate::{debug_impls, Element};
 
@@ -236,6 +237,14 @@ pub struct Spacer {
 }
 
 impl Spacer {
+    pub fn invisible() -> Self {
+        Self::new(5.0, false)
+    }
+
+    pub fn visible() -> Self {
+        Self::new(5.0, true)
+    }
+
     pub fn new(space: f32, visible: bool) -> Self {
         Self { space, visible }
     }
@@ -254,9 +263,9 @@ pub struct Row {
 }
 
 impl Row {
-    pub fn new(elements: Vec<Positioned<Element>>, hidpi_scale: f32) -> Self {
+    pub fn with_image(image: Image, hidpi_scale: f32) -> Self {
         Self {
-            elements,
+            elements: vec![Positioned::new(image)],
             hidpi_scale,
         }
     }
@@ -271,16 +280,12 @@ pub struct Section {
 }
 
 impl Section {
-    pub fn new(
-        summary: Option<TextBox>,
-        elements: Vec<Positioned<Element>>,
-        hidpi_scale: f32,
-    ) -> Self {
+    pub fn bare(hidpi_scale: f32) -> Self {
         Self {
-            elements,
+            elements: Default::default(),
             hidpi_scale,
-            hidden: RefCell::new(false),
-            summary: Box::new(summary.map(Positioned::new)),
+            hidden: Default::default(),
+            summary: Default::default(),
         }
     }
 }

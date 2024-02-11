@@ -211,6 +211,12 @@ pub struct Header {
     pub align: Option<Align>,
 }
 
+impl Header {
+    pub fn new(ty: HeaderType, align: Option<Align>) -> Self {
+        Self { ty, align }
+    }
+}
+
 #[derive(Debug)]
 pub enum ListType {
     Ordered(usize),
@@ -248,6 +254,26 @@ pub enum Element {
 }
 
 impl Element {
+    pub fn table() -> Self {
+        Self::Table(Table::new())
+    }
+
+    pub fn table_row() -> Self {
+        Self::TableRow(Vec::new())
+    }
+
+    pub fn unordered_list() -> Self {
+        Self::List(List {
+            ty: ListType::Unordered,
+        })
+    }
+
+    pub fn ordered_list(start_index: usize) -> Self {
+        Self::List(List {
+            ty: ListType::Ordered(start_index),
+        })
+    }
+
     pub fn as_mut_list(&mut self) -> Option<&mut List> {
         if let Self::List(list) = self {
             Some(list)

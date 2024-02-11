@@ -14,7 +14,7 @@ use crate::image::{Image, ImageData, ImageSize};
 use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
-use crate::{Element, ImageCache, InlyneEvent, Table};
+use crate::{Element, ImageCache, InlyneEvent};
 use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
 
 use comrak::Anchorizer;
@@ -29,7 +29,6 @@ use winit::window::Window;
 
 use self::html::{HeaderType, TagName};
 
-#[derive(Default)]
 struct State {
     global_indent: f32,
     element_stack: Vec<html::Element>,
@@ -43,12 +42,24 @@ struct State {
 }
 
 impl State {
+    fn with_span_color(span_color: [f32; 4]) -> Self {
+        Self {
+            global_indent: 0.0,
+            element_stack: Vec::new(),
+            text_options: Default::default(),
+            span: Span::with_color(span_color),
+            inline_images: None,
+            pending_anchor: None,
+            pending_list_prefix: None,
+            anchorizer: Default::default(),
+        }
+    }
+
     fn element_iter_mut(&mut self) -> slice::IterMut<'_, html::Element> {
         self.element_stack.iter_mut()
     }
 }
 
-#[derive(Default)]
 struct Span {
     color: [f32; 4],
     weight: FontWeight,
@@ -171,10 +182,7 @@ impl HtmlInterpreter {
             current_textbox: TextBox::new(Vec::new(), hidpi_scale),
             hidpi_scale,
             surface_format,
-            state: State {
-                span: Span::with_color(native_color(theme.code_color, &surface_format)),
-                ..Default::default()
-            },
+            state: State::with_span_color(native_color(theme.code_color, &surface_format)),
             theme,
             file_path,
             should_queue: Arc::new(AtomicBool::new(true)),
@@ -198,10 +206,7 @@ impl HtmlInterpreter {
             );
 
             if tok.sink.should_queue.load(AtomicOrdering::Relaxed) {
-                tok.sink.state = State {
-                    span: Span::with_color(span_color),
-                    ..Default::default()
-                };
+                tok.sink.state = State::with_span_color(span_color);
                 tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
                 tok.sink.stopped = false;
                 let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
@@ -286,7 +291,7 @@ impl HtmlInterpreter {
         self.current_textbox.indent = self.state.global_indent;
     }
     fn push_spacer(&mut self) {
-        self.push_element(Spacer::new(5., false));
+        self.push_element(Spacer::invisible());
     }
     fn push_element<I: Into<Element>>(&mut self, element: I) {
         self.element_queue.lock().unwrap().push_back(element.into());
@@ -315,20 +320,14 @@ impl HtmlInterpreter {
             TagName::TableHead | TagName::TableBody => {}
             TagName::Table => {
                 self.push_spacer();
-                self.state
-                    .element_stack
-                    .push(html::Element::Table(Table::new()));
+                self.state.element_stack.push(html::Element::table());
             }
             TagName::TableHeader => {
                 self.state.text_options.bold += 1;
                 let align = html::find_align(&tag.attrs);
                 self.current_textbox.set_align_or_default(align);
             }
-            TagName::TableRow => {
-                self.state
-                    .element_stack
-                    .push(html::Element::TableRow(Vec::new()));
-            }
+            TagName::TableRow => self.state.element_stack.push(html::Element::table_row()),
             TagName::TableDataCell => {
                 let align = html::find_align(&tag.attrs);
                 self.current_textbox.set_align_or_default(align);
@@ -392,7 +391,7 @@ impl HtmlInterpreter {
                             *count = 1;
                         } else {
                             self.state.inline_images =
-                                Some((Row::new(vec![Positioned::new(image)], self.hidpi_scale), 1));
+                                Some((Row::with_image(image, self.hidpi_scale), 1));
                         }
                     } else {
                         self.push_element(image);
@@ -448,9 +447,7 @@ impl HtmlInterpreter {
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.state
                     .element_stack
-                    .push(html::Element::List(html::List {
-                        ty: html::ListType::Unordered,
-                    }));
+                    .push(html::Element::unordered_list());
             }
             TagName::OrderedList => {
                 let mut start_index = 1;
@@ -463,9 +460,7 @@ impl HtmlInterpreter {
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.state
                     .element_stack
-                    .push(html::Element::List(html::List {
-                        ty: html::ListType::Ordered(start_index),
-                    }));
+                    .push(html::Element::ordered_list(start_index));
             }
             TagName::Header(header_type) => {
                 let align = html::find_align(&tag.attrs);
@@ -476,10 +471,7 @@ impl HtmlInterpreter {
                 }
                 self.state
                     .element_stack
-                    .push(html::Element::Header(html::Header {
-                        ty: header_type,
-                        align,
-                    }));
+                    .push(html::Element::Header(html::Header::new(header_type, align)));
                 self.current_textbox.set_align_or_default(align);
             }
             TagName::PreformattedText => {
@@ -530,7 +522,7 @@ impl HtmlInterpreter {
             TagName::Details => {
                 self.push_current_textbox();
                 self.push_spacer();
-                let section = Section::new(None, vec![], self.hidpi_scale);
+                let section = Section::bare(self.hidpi_scale);
                 *section.hidden.borrow_mut() = true;
                 self.state
                     .element_stack
@@ -541,7 +533,7 @@ impl HtmlInterpreter {
                 self.state.element_stack.push(html::Element::Summary);
             }
             TagName::HorizontalRuler => {
-                self.push_element(Spacer::new(5., true));
+                self.push_element(Spacer::visible());
             }
             TagName::Section => {}
         }
