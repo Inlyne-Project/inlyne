@@ -1,8 +1,5 @@
 use std::slice;
 
-use crate::positioner::Section;
-use crate::table::Table;
-use crate::text::TextBox;
 use crate::utils::Align;
 
 use html5ever::{local_name, Attribute};
@@ -75,6 +72,16 @@ pub enum Attr {
     Style(String),
     IsCheckbox,
     IsChecked,
+}
+
+impl Attr {
+    pub fn to_anchor(&self) -> Option<String> {
+        if let Self::Anchor(name) = self {
+            Some(name.to_owned())
+        } else {
+            None
+        }
+    }
 }
 
 pub struct StyleIter<'style>(std::str::Split<'style, char>);
@@ -172,6 +179,7 @@ impl TextDecoration {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HeaderType {
     H1,
     H2,
@@ -182,20 +190,6 @@ pub enum HeaderType {
 }
 
 impl HeaderType {
-    pub fn new(s: &str) -> Option<Self> {
-        let header_type = match s {
-            "h1" => Self::H1,
-            "h2" => Self::H2,
-            "h3" => Self::H3,
-            "h4" => Self::H4,
-            "h5" => Self::H5,
-            "h6" => Self::H6,
-            _ => return None,
-        };
-
-        Some(header_type)
-    }
-
     pub fn text_size(&self) -> f32 {
         match &self {
             Self::H1 => 32.,
@@ -209,8 +203,14 @@ impl HeaderType {
 }
 
 pub struct Header {
-    pub header_type: HeaderType,
+    pub ty: HeaderType,
     pub align: Option<Align>,
+}
+
+impl Header {
+    pub fn new(ty: HeaderType, align: Option<Align>) -> Self {
+        Self { ty, align }
+    }
 }
 
 #[derive(Debug)]
@@ -220,7 +220,7 @@ pub enum ListType {
 }
 
 pub struct List {
-    pub list_type: ListType,
+    pub ty: ListType,
 }
 
 // Represents the number of parent text option tags the current element is a child of
@@ -235,16 +235,4 @@ pub struct TextOptions {
     pub pre_formatted: usize,
     pub block_quote: usize,
     pub link: Vec<String>,
-}
-
-pub enum Element {
-    List(List),
-    Input,
-    Table(Table),
-    TableRow(Vec<TextBox>),
-    Header(Header),
-    Paragraph(Option<Align>),
-    Div(Option<Align>),
-    Details(Section),
-    Summary,
 }

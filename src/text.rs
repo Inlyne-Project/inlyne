@@ -127,20 +127,24 @@ impl TextBox {
         self.is_code_block = is_code_block;
     }
 
-    pub fn set_quote_block(&mut self, nest: Option<usize>) {
-        self.is_quote_block = nest;
+    pub fn set_quote_block(&mut self, nest: usize) {
+        self.is_quote_block = Some(nest);
     }
 
-    pub fn set_checkbox(&mut self, is_checked: Option<bool>) {
-        self.is_checkbox = is_checked;
+    pub fn clear_quote_block(&mut self) {
+        self.is_quote_block = None;
     }
 
-    pub fn set_anchor(&mut self, anchor: Option<String>) {
-        self.is_anchor = anchor;
+    pub fn set_checkbox(&mut self, is_checked: bool) {
+        self.is_checkbox = Some(is_checked);
     }
 
-    pub fn set_background_color(&mut self, color: Option<[f32; 4]>) {
-        self.background_color = color;
+    pub fn set_anchor(&mut self, anchor: String) {
+        self.is_anchor = Some(anchor);
+    }
+
+    pub fn set_background_color(&mut self, color: [f32; 4]) {
+        self.background_color = Some(color);
     }
 
     pub fn with_padding(mut self, padding_height: f32) -> Self {
@@ -150,6 +154,10 @@ impl TextBox {
 
     pub fn set_align(&mut self, align: Align) {
         self.align = align;
+    }
+
+    pub fn set_align_or_default(&mut self, maybe_align: Option<Align>) {
+        self.set_align(maybe_align.unwrap_or_default());
     }
 
     pub fn line_height(&self, zoom: f32) -> f32 {

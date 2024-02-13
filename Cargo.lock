@@ -1885,6 +1885,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "smart-debug",
+ "string_cache",
  "syntect",
  "taffy",
  "tempfile",

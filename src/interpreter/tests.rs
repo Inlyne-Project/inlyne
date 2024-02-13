@@ -302,6 +302,35 @@ const UNIQUE_ANCHORS: &str = "\
 # Foo
 ";
 
+// TODO: this snapshot splits `Text` up a lot more than needed
+const KBD_TAG: &str = "\
+Keyboard text: <kbd>Alt-\\<num\\></kbd>
+";
+
+const BLOCKQUOTE: &str = "\
+> blockquote
+";
+
+const HORIZONTAL_RULER: &str = "\
+horizontal ruler vv
+
+---
+";
+
+const SMALL_TEXT: &str = "\
+<small>small</small>
+";
+
+const TEXT_STYLES: &str = "\
+**bold**
+
+_italic_
+
+~~strikethrough~~
+
+<u>underline</u>
+";
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -317,6 +346,11 @@ snapshot_interpreted_elements!(
     (yaml_frontmatter, YAML_FRONTMATTER),
     (aligned_table, ALIGNED_TABLE),
     (unique_anchors, UNIQUE_ANCHORS),
+    (kbd_tag, KBD_TAG),
+    (blockquote, BLOCKQUOTE),
+    (horizontal_ruler, HORIZONTAL_RULER),
+    (small_text, SMALL_TEXT),
+    (text_styles, TEXT_STYLES),
 );
 
 const UNDERLINE_IN_CODEBLOCK: &str = "\
