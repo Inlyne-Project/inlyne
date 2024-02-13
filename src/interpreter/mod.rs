@@ -1,4 +1,6 @@
+mod element;
 mod html;
+mod tag_name;
 #[cfg(test)]
 mod tests;
 
@@ -15,7 +17,9 @@ use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
+use element::Element as InterpreterElement;
 use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
+use tag_name::TagName;
 
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
@@ -27,11 +31,11 @@ use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
-use self::html::{HeaderType, TagName};
+use self::html::HeaderType;
 
 struct State {
     global_indent: f32,
-    element_stack: Vec<html::Element>,
+    element_stack: Vec<InterpreterElement>,
     text_options: html::TextOptions,
     span: Span,
     // Stores the row and a counter of newlines after each image
@@ -55,7 +59,7 @@ impl State {
         }
     }
 
-    fn element_iter_mut(&mut self) -> slice::IterMut<'_, html::Element> {
+    fn element_iter_mut(&mut self) -> slice::IterMut<'_, InterpreterElement> {
         self.element_stack.iter_mut()
     }
 }
@@ -232,9 +236,9 @@ impl HtmlInterpreter {
     // Searches the currently nested elements for align attribute
     fn find_current_align(&self) -> Option<Align> {
         for element in self.state.element_stack.iter().rev() {
-            if let html::Element::Div(Some(elem_align))
-            | html::Element::Paragraph(Some(elem_align))
-            | html::Element::Header(html::Header {
+            if let InterpreterElement::Div(Some(elem_align))
+            | InterpreterElement::Paragraph(Some(elem_align))
+            | InterpreterElement::Header(html::Header {
                 align: Some(elem_align),
                 ..
             }) = element
@@ -272,7 +276,7 @@ impl HtmlInterpreter {
             if !empty {
                 self.current_textbox.indent = self.state.global_indent;
                 let section = self.state.element_iter_mut().rev().find_map(|e| {
-                    if let html::Element::Details(section) = e {
+                    if let InterpreterElement::Details(section) = e {
                         Some(section)
                     } else {
                         None
@@ -320,14 +324,17 @@ impl HtmlInterpreter {
             TagName::TableHead | TagName::TableBody => {}
             TagName::Table => {
                 self.push_spacer();
-                self.state.element_stack.push(html::Element::table());
+                self.state.element_stack.push(InterpreterElement::table());
             }
             TagName::TableHeader => {
                 self.state.text_options.bold += 1;
                 let align = html::find_align(&tag.attrs);
                 self.current_textbox.set_align_or_default(align);
             }
-            TagName::TableRow => self.state.element_stack.push(html::Element::table_row()),
+            TagName::TableRow => self
+                .state
+                .element_stack
+                .push(InterpreterElement::table_row()),
             TagName::TableDataCell => {
                 let align = html::find_align(&tag.attrs);
                 self.current_textbox.set_align_or_default(align);
@@ -414,8 +421,8 @@ impl HtmlInterpreter {
                     self.current_textbox.set_align(align);
                 }
                 self.state.element_stack.push(match tag_name {
-                    TagName::Div => html::Element::Div(align),
-                    TagName::Paragraph => html::Element::Paragraph(align),
+                    TagName::Div => InterpreterElement::Div(align),
+                    TagName::Paragraph => InterpreterElement::Paragraph(align),
                     _ => unreachable!("Arm matches on Div and Paragraph"),
                 });
             }
@@ -447,7 +454,7 @@ impl HtmlInterpreter {
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.state
                     .element_stack
-                    .push(html::Element::unordered_list());
+                    .push(InterpreterElement::unordered_list());
             }
             TagName::OrderedList => {
                 let mut start_index = 1;
@@ -460,7 +467,7 @@ impl HtmlInterpreter {
                 self.state.global_indent += DEFAULT_MARGIN / 2.;
                 self.state
                     .element_stack
-                    .push(html::Element::ordered_list(start_index));
+                    .push(InterpreterElement::ordered_list(start_index));
             }
             TagName::Header(header_type) => {
                 let align = html::find_align(&tag.attrs);
@@ -471,7 +478,10 @@ impl HtmlInterpreter {
                 }
                 self.state
                     .element_stack
-                    .push(html::Element::Header(html::Header::new(header_type, align)));
+                    .push(InterpreterElement::Header(html::Header::new(
+                        header_type,
+                        align,
+                    )));
                 self.current_textbox.set_align_or_default(align);
             }
             TagName::PreformattedText => {
@@ -516,7 +526,7 @@ impl HtmlInterpreter {
                     // Checkbox uses a custom prefix, so remove pending text prefix
                     let _ = self.state.pending_list_prefix.take();
                     self.current_textbox.set_checkbox(is_checked);
-                    self.state.element_stack.push(html::Element::Input);
+                    self.state.element_stack.push(InterpreterElement::Input);
                 }
             }
             TagName::Details => {
@@ -526,11 +536,11 @@ impl HtmlInterpreter {
                 *section.hidden.borrow_mut() = true;
                 self.state
                     .element_stack
-                    .push(html::Element::Details(section));
+                    .push(InterpreterElement::Details(section));
             }
             TagName::Summary => {
                 self.push_current_textbox();
-                self.state.element_stack.push(html::Element::Summary);
+                self.state.element_stack.push(InterpreterElement::Summary);
             }
             TagName::HorizontalRuler => {
                 self.push_element(Spacer::visible());
@@ -561,7 +571,7 @@ impl HtmlInterpreter {
             }
             TagName::TableDataCell => {
                 let table_row = self.state.element_stack.last_mut();
-                if let Some(html::Element::TableRow(ref mut row)) = table_row {
+                if let Some(InterpreterElement::TableRow(ref mut row)) = table_row {
                     row.push(self.current_textbox.clone());
                 }
                 self.current_textbox.texts.clear();
@@ -569,8 +579,8 @@ impl HtmlInterpreter {
             TagName::TableRow => {
                 let table_row = self.state.element_stack.pop();
                 for mut element in self.state.element_iter_mut().rev() {
-                    if let html::Element::Table(table) = &mut element {
-                        if let Some(html::Element::TableRow(row)) = table_row {
+                    if let InterpreterElement::Table(table) = &mut element {
+                        if let Some(InterpreterElement::TableRow(row)) = table_row {
                             if !row.is_empty() {
                                 table.push_row(row);
                             }
@@ -581,7 +591,7 @@ impl HtmlInterpreter {
                 self.current_textbox.texts.clear();
             }
             TagName::Table => {
-                if let Some(html::Element::Table(table)) = self.state.element_stack.pop() {
+                if let Some(InterpreterElement::Table(table)) = self.state.element_stack.pop() {
                     self.push_element(table);
                     self.push_spacer();
                 }
@@ -655,14 +665,14 @@ impl HtmlInterpreter {
             }
             TagName::Details => {
                 self.push_current_textbox();
-                if let Some(html::Element::Details(section)) = self.state.element_stack.pop() {
+                if let Some(InterpreterElement::Details(section)) = self.state.element_stack.pop() {
                     self.push_element(section);
                 }
                 self.push_spacer();
             }
             TagName::Summary => {
                 for mut element in self.state.element_iter_mut().rev() {
-                    if let html::Element::Details(section) = &mut element {
+                    if let InterpreterElement::Details(section) = &mut element {
                         *section.summary = Some(Positioned::new(self.current_textbox.clone()));
                         self.current_textbox.texts.clear();
                         break;
@@ -747,7 +757,7 @@ impl HtmlInterpreter {
                 }
             }
             for elem in self.state.element_stack.iter().rev() {
-                if let html::Element::Header(header) = elem {
+                if let InterpreterElement::Header(header) = elem {
                     self.current_textbox.font_size = header.ty.text_size();
                     text = text.make_bold(true);
                     break;
