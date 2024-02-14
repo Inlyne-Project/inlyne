@@ -4,6 +4,7 @@ mod tests;
 
 use std::borrow::Cow;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{fs, io};
@@ -21,10 +22,38 @@ use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
+pub struct Px(u32);
+
+impl FromStr for Px {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let px: u32 = s.parse()?;
+        Ok(Self(px))
+    }
+}
+
+impl From<u32> for Px {
+    fn from(px: u32) -> Self {
+        Self(px)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ImageSize {
-    PxWidth(u32),
-    PxHeight(u32),
+    PxWidth(Px),
+    PxHeight(Px),
+}
+
+impl ImageSize {
+    pub fn width<P: Into<Px>>(px: P) -> Self {
+        Self::PxWidth(px.into())
+    }
+
+    pub fn height<P: Into<Px>>(px: P) -> Self {
+        Self::PxHeight(px.into())
+    }
 }
 
 #[derive(SmartDebug, Default, Clone)]
@@ -285,13 +314,14 @@ impl Image {
         let image_dimensions = self.buffer_dimensions()?;
         match size {
             ImageSize::PxWidth(px_width) => Some((
-                *px_width,
-                ((*px_width as f32 / image_dimensions.0 as f32) * image_dimensions.1 as f32) as u32,
+                px_width.0,
+                ((px_width.0 as f32 / image_dimensions.0 as f32) * image_dimensions.1 as f32)
+                    as u32,
             )),
             ImageSize::PxHeight(px_height) => Some((
-                ((*px_height as f32 / image_dimensions.1 as f32) * image_dimensions.0 as f32)
+                ((px_height.0 as f32 / image_dimensions.1 as f32) * image_dimensions.0 as f32)
                     as u32,
-                *px_height,
+                px_height.0,
             )),
         }
     }
