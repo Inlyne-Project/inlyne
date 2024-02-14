@@ -22,14 +22,14 @@ use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Px(u32);
 
 impl FromStr for Px {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let px: u32 = s.parse()?;
+        let px: u32 = s.strip_suffix("px").unwrap_or(s).parse()?;
         Ok(Self(px))
     }
 }
