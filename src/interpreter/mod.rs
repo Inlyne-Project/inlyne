@@ -359,8 +359,8 @@ impl HtmlInterpreter {
                 for attr in AttrIter::new(&tag.attrs) {
                     match attr {
                         Attr::Align(a) => align = Some(a),
-                        Attr::Width(w) => size = Some(ImageSize::PxWidth(w)),
-                        Attr::Height(h) => size = Some(ImageSize::PxHeight(h)),
+                        Attr::Width(w) => size = Some(ImageSize::width(w)),
+                        Attr::Height(h) => size = Some(ImageSize::height(h)),
                         Attr::Src(s) => src = Some(s),
                         _ => {}
                     }

@@ -176,7 +176,7 @@ fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element
 #[macro_export]
 macro_rules! snapshot_interpreted_elements {
     ( $( ($test_name:ident, $md_text:ident) ),* $(,)? ) => {
-        crate::snapshot_interpreted_elements!(
+        $crate::snapshot_interpreted_elements!(
             InterpreterOpts::new(),
             $(
                 ($test_name, $md_text),

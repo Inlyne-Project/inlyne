@@ -1,6 +1,6 @@
 use std::slice;
 
-use crate::utils::Align;
+use crate::{image::Px, utils::Align};
 
 use html5ever::{local_name, Attribute};
 
@@ -65,8 +65,8 @@ pub enum Attr {
     Align(Align),
     Href(String),
     Anchor(String),
-    Width(u32),
-    Height(u32),
+    Width(Px),
+    Height(Px),
     Src(String),
     Start(usize),
     Style(String),

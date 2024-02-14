@@ -1,8 +1,14 @@
 use std::path::Path;
 use std::{fmt, fs};
 
-use super::ImageData;
+use super::{ImageData, Px};
 use crate::test_utils::init_test_log;
+
+#[test]
+fn px_parsing() {
+    assert_eq!("500".parse::<Px>().unwrap(), Px(500));
+    assert_eq!("500px".parse::<Px>().unwrap(), Px(500));
+}
 
 // Checks that the image crate converting to RGBA8 is the same as our technique
 fn check(input_path: &Path) {
