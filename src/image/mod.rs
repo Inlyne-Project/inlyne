@@ -340,7 +340,7 @@ impl Image {
             }
         }
         let max_width = screen_size.0 - 2. * DEFAULT_MARGIN;
-        let dimensions = if let Some(size) = self.size.clone() {
+        let dimensions = if let Some(size) = self.size {
             let dimensions = self.dimensions_from_image_size(&size)?;
             let target_dimensions = (
                 (dimensions.0 as f32 * self.hidpi_scale * zoom) as u32,

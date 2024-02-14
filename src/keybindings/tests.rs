@@ -21,7 +21,7 @@ base = [
 
     // TODO: move this to a helper somewhere
     let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
-    let mut key_combos = KeyCombos::new(keybindings.into()).unwrap();
+    let mut key_combos = KeyCombos::new(keybindings).unwrap();
 
     let g: ModifiedKey = VirtKey::G.into();
     let l_shift = VirtKey::LShift.into();
