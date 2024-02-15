@@ -363,21 +363,46 @@ snapshot_interpreted_elements!(
     (underline_in_codeblock, UNDERLINE_IN_CODEBLOCK),
 );
 
+struct File {
+    url_path: String,
+    mime: String,
+    bytes: Vec<u8>,
+}
+
+impl File {
+    fn new(url_path: &str, mime: &str, bytes: &[u8]) -> Self {
+        Self {
+            url_path: url_path.to_owned(),
+            mime: mime.to_owned(),
+            bytes: bytes.to_owned(),
+        }
+    }
+}
+
 /// Spin up a server, so we can test network requests without external services
-fn mock_file_server(url_path: &str, mime: &str, bytes: &[u8]) -> (MockServer, String) {
+fn mock_file_server(files: &[File]) -> (MockServer, String) {
     let setup_server = async {
         let mock_server = MockServer::start().await;
-        Mock::given(matchers::method("GET"))
-            .and(matchers::path(url_path))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(bytes, mime))
-            .mount(&mock_server)
-            .await;
+
+        for file in files {
+            let File {
+                url_path,
+                mime,
+                bytes,
+            } = file;
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path(url_path))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(bytes.to_owned(), mime))
+                .mount(&mock_server)
+                .await;
+        }
+
         mock_server
     };
     let server = pollster::block_on(setup_server);
 
-    let full_url = format!("{}{}", server.uri(), url_path);
-    (server, full_url)
+    let server_url = server.uri();
+    (server, server_url)
 }
 
 #[test]
@@ -385,7 +410,9 @@ fn centered_image_with_size_align_and_link() {
     init_test_log();
 
     let logo = include_bytes!("../../assets/test_data/bun_logo.png");
-    let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", logo);
+    let logo_path = "/bun_logo.png";
+    let (_server, server_url) = mock_file_server(&[File::new(logo_path, "image/png", logo)]);
+    let logo_url = server_url + logo_path;
 
     let text = format!(
         r#"
@@ -408,8 +435,10 @@ fn image_loading_fails_gracefully() {
     init_test_log();
 
     let json = r#"{"im": "not an image"}"#;
-    let (_server, json_url) =
-        mock_file_server("/snapshot.png", "application/json", json.as_bytes());
+    let json_path = "/snapshot.png";
+    let (_server, server_url) =
+        mock_file_server(&[File::new(json_path, "application/json", json.as_bytes())]);
+    let json_url = server_url + json_path;
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
