@@ -1,0 +1,65 @@
+use std::slice;
+
+use crate::{image::Px, utils::Align};
+
+use html5ever::{local_name, Attribute};
+
+pub struct Iter<'attrs>(slice::Iter<'attrs, Attribute>);
+
+impl<'attrs> Iter<'attrs> {
+    pub fn new(attrs: &'attrs [Attribute]) -> Self {
+        Self(attrs.iter())
+    }
+}
+
+impl<'attrs> Iterator for Iter<'attrs> {
+    type Item = Attr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let Attribute { name, value } = self.0.next()?;
+            let attr = match name.local {
+                local_name!("align") => Align::new(value).map(Attr::Align),
+                local_name!("href") => Some(Attr::Href(value.to_string())),
+                local_name!("id") => Some(Attr::Anchor(format!("#{value}"))),
+                local_name!("width") => value.parse().ok().map(Attr::Width),
+                local_name!("height") => value.parse().ok().map(Attr::Height),
+                local_name!("src") => Some(Attr::Src(value.to_string())),
+                local_name!("start") => value.parse().ok().map(Attr::Start),
+                local_name!("style") => Some(Attr::Style(value.to_string())),
+                local_name!("type") => {
+                    (value.to_string() == "checkbox").then_some(Attr::IsCheckbox)
+                }
+                local_name!("checked") => Some(Attr::IsChecked),
+                _ => continue,
+            };
+
+            if attr.is_some() {
+                break attr;
+            }
+        }
+    }
+}
+
+pub enum Attr {
+    Align(Align),
+    Href(String),
+    Anchor(String),
+    Width(Px),
+    Height(Px),
+    Src(String),
+    Start(usize),
+    Style(String),
+    IsCheckbox,
+    IsChecked,
+}
+
+impl Attr {
+    pub fn to_anchor(&self) -> Option<String> {
+        if let Self::Anchor(name) = self {
+            Some(name.to_owned())
+        } else {
+            None
+        }
+    }
+}
