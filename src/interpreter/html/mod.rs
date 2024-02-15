@@ -1,3 +1,9 @@
+mod element;
+mod tag_name;
+
+pub use element::Element;
+pub use tag_name::TagName;
+
 use std::slice;
 
 use crate::{image::Px, utils::Align};

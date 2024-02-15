@@ -1,6 +1,4 @@
-mod element;
 mod html;
-mod tag_name;
 #[cfg(test)]
 mod tests;
 
@@ -17,9 +15,10 @@ use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
-use element::Element as InterpreterElement;
-use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
-use tag_name::TagName;
+use html::{
+    Attr, AttrIter, Element as InterpreterElement, FontStyle, FontWeight, Style, StyleIter,
+    TagName, TextDecoration,
+};
 
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
