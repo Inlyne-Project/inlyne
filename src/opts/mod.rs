@@ -11,6 +11,7 @@ pub use config::{Config, FontOptions, KeybindingsSection};
 
 use anyhow::Result;
 use serde::Deserialize;
+use smart_debug::SmartDebug;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {
@@ -20,34 +21,34 @@ pub enum ResolvedTheme {
 }
 
 impl ResolvedTheme {
-    fn detect() -> Self {
-        match dark_light::detect() {
-            dark_light::Mode::Default => Self::default(),
-            dark_light::Mode::Dark => Self::Dark,
-            dark_light::Mode::Light => Self::Light,
-        }
-    }
-}
-
-impl From<ThemeType> for ResolvedTheme {
-    fn from(theme_ty: ThemeType) -> Self {
+    fn new(theme_ty: ThemeType) -> Option<Self> {
         match theme_ty {
-            ThemeType::Auto => Self::detect(),
-            ThemeType::Dark => Self::Dark,
-            ThemeType::Light => Self::Light,
+            ThemeType::Auto => Self::try_detect(),
+            ThemeType::Dark => Some(Self::Dark),
+            ThemeType::Light => Some(Self::Light),
+        }
+    }
+
+    fn try_detect() -> Option<Self> {
+        match dark_light::detect() {
+            dark_light::Mode::Default => None,
+            dark_light::Mode::Dark => Some(Self::Dark),
+            dark_light::Mode::Light => Some(Self::Light),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(SmartDebug, PartialEq)]
 pub struct Opts {
     pub file_path: PathBuf,
+    #[debug(skip)]
     pub theme: color::Theme,
     pub scale: Option<f32>,
     pub page_width: Option<f32>,
     pub lines_to_scroll: f32,
     pub font_opts: FontOptions,
     pub keybindings: KeybindingsSection,
+    pub color_scheme: Option<ResolvedTheme>,
 }
 
 impl Opts {
@@ -59,14 +60,17 @@ impl Opts {
             panic!("Use `Opts::parse_and_load_with_system_theme()`");
         }
         #[cfg(not(test))]
-        Self::parse_and_load_inner(args, config, ResolvedTheme::from(ThemeType::default()))
+        {
+            let system_color_scheme = ResolvedTheme::try_detect();
+            Self::parse_and_load_inner(args, config, system_color_scheme)
+        }
     }
 
     #[cfg(test)]
     pub fn parse_and_load_with_system_theme(
         args: Args,
         config: Config,
-        theme: ResolvedTheme,
+        theme: Option<ResolvedTheme>,
     ) -> Result<Self> {
         Self::parse_and_load_inner(args, config, theme)
     }
@@ -74,7 +78,7 @@ impl Opts {
     fn parse_and_load_inner(
         args: Args,
         config: Config,
-        fallback_theme: ResolvedTheme,
+        fallback_theme: Option<ResolvedTheme>,
     ) -> Result<Self> {
         let Config {
             theme: config_theme,
@@ -95,14 +99,14 @@ impl Opts {
             page_width: args_page_width,
         } = args;
 
+        let resolved_theme = args_theme
+            .or(config_theme)
+            .and_then(ResolvedTheme::new)
+            .or(fallback_theme);
         let theme = {
-            let resolved_theme = args_theme
-                .or(config_theme)
-                .map_or(fallback_theme, ResolvedTheme::from);
-
             let (maybe_theme, fallback_values) = match resolved_theme {
-                ResolvedTheme::Dark => (dark_theme, color::Theme::dark_default()),
-                ResolvedTheme::Light => (light_theme, color::Theme::light_default()),
+                Some(ResolvedTheme::Dark) => (dark_theme, color::Theme::dark_default()),
+                None | Some(ResolvedTheme::Light) => (light_theme, color::Theme::light_default()),
             };
 
             match maybe_theme {
@@ -124,6 +128,7 @@ impl Opts {
             lines_to_scroll,
             font_opts,
             keybindings,
+            color_scheme: resolved_theme,
         })
     }
 

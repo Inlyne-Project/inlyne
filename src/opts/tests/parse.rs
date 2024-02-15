@@ -25,6 +25,7 @@ impl Opts {
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
             keybindings: Default::default(),
+            color_scheme: None,
         }
     }
 }
@@ -53,7 +54,7 @@ fn defaults() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config::Config::default(),
-            ResolvedTheme::Light,
+            None,
         )
         .unwrap(),
         Opts::mostly_default("file.md")
@@ -73,11 +74,12 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
-            ResolvedTheme::Light,
+            Some(ResolvedTheme::Light),
         )
         .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
+            color_scheme: Some(ResolvedTheme::Dark),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -91,11 +93,12 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
-            ResolvedTheme::Dark,
+            Some(ResolvedTheme::Dark),
         )
         .unwrap(),
         Opts {
             theme: ResolvedTheme::Light.as_theme(),
+            color_scheme: Some(ResolvedTheme::Light),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -108,7 +111,7 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
             config,
-            ResolvedTheme::Light,
+            None,
         )
         .unwrap(),
         Opts {
@@ -126,11 +129,12 @@ fn from_cli() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"])).unwrap(),
             config::Config::default(),
-            ResolvedTheme::Light,
+            Some(ResolvedTheme::Light),
         )
         .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
+            color_scheme: Some(ResolvedTheme::Dark),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -145,12 +149,13 @@ fn from_cli() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"])).unwrap(),
             config,
-            ResolvedTheme::Light,
+            Some(ResolvedTheme::Light),
         )
         .unwrap(),
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             scale: Some(1.5),
+            color_scheme: Some(ResolvedTheme::Dark),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -172,13 +177,14 @@ fn cli_kitchen_sink() {
         Opts::parse_and_load_with_system_theme(
             Args::try_parse_from(args).unwrap(),
             config::Config::default(),
-            ResolvedTheme::Light,
+            Some(ResolvedTheme::Light),
         )
         .unwrap(),
         Opts {
             page_width: Some(500.0),
             scale: Some(1.5),
             theme: ResolvedTheme::Dark.as_theme(),
+            color_scheme: Some(ResolvedTheme::Dark),
             ..Opts::mostly_default("file.md")
         }
     );
@@ -197,7 +203,7 @@ fn builtin_syntax_theme() {
     let opts = Opts::parse_and_load_with_system_theme(
         Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
         config,
-        ResolvedTheme::Light,
+        Some(ResolvedTheme::Light),
     )
     .unwrap();
 
@@ -225,7 +231,7 @@ fn custom_syntax_theme() {
     let res = Opts::parse_and_load_with_system_theme(
         args.clone(),
         config_with_theme_at(PathBuf::from("this_path_doesnt_exist")),
-        ResolvedTheme::Light,
+        Some(ResolvedTheme::Light),
     );
     assert!(res.is_err());
 
@@ -237,7 +243,7 @@ fn custom_syntax_theme() {
                 .join("test_data")
                 .join("sample.tmTheme"),
         ),
-        ResolvedTheme::Light,
+        Some(ResolvedTheme::Light),
     )
     .unwrap();
     assert_eq!(
