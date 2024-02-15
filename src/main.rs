@@ -212,6 +212,7 @@ impl Inlyne {
             opts.file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
+            opts.color_scheme,
         );
 
         let (interpreter_sender, interpreter_receiver) = channel();

@@ -1,6 +1,6 @@
 use std::slice;
 
-use crate::{image::Px, utils::Align};
+use crate::{image::Px, opts::ResolvedTheme, utils::Align};
 
 use html5ever::{local_name, Attribute};
 
@@ -31,6 +31,8 @@ impl<'attrs> Iterator for Iter<'attrs> {
                     (value.to_string() == "checkbox").then_some(Attr::IsCheckbox)
                 }
                 local_name!("checked") => Some(Attr::IsChecked),
+                local_name!("media") => PrefersColorScheme::new(value).map(Attr::Media),
+                local_name!("srcset") => Some(Attr::SrcSet(value.to_string())),
                 _ => continue,
             };
 
@@ -52,6 +54,8 @@ pub enum Attr {
     Style(String),
     IsCheckbox,
     IsChecked,
+    Media(PrefersColorScheme),
+    SrcSet(String),
 }
 
 impl Attr {
@@ -60,6 +64,18 @@ impl Attr {
             Some(name.to_owned())
         } else {
             None
+        }
+    }
+}
+
+pub struct PrefersColorScheme(pub ResolvedTheme);
+
+impl PrefersColorScheme {
+    pub fn new(s: &str) -> Option<Self> {
+        match s {
+            "(prefers-color-scheme: dark)" => Some(Self(ResolvedTheme::Dark)),
+            "(prefers-color-scheme: light)" => Some(Self(ResolvedTheme::Light)),
+            _ => None,
         }
     }
 }

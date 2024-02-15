@@ -11,12 +11,13 @@ use std::sync::{mpsc, Arc, Mutex};
 
 use crate::color::{native_color, Theme};
 use crate::image::{Image, ImageData, ImageSize};
+use crate::opts::ResolvedTheme;
 use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
 use html::{
-    attr,
+    attr::{self, PrefersColorScheme},
     style::{self, FontStyle, FontWeight, Style, TextDecoration},
     Attr, Element as InterpreterElement, TagName,
 };
@@ -31,7 +32,7 @@ use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
-use self::html::HeaderType;
+use self::html::{picture, HeaderType, Picture};
 
 struct State {
     global_indent: f32,
@@ -140,6 +141,7 @@ pub struct HtmlInterpreter {
     first_pass: bool,
     image_cache: ImageCache,
     window: Box<dyn WindowInteractor + Send>,
+    color_scheme: Option<ResolvedTheme>,
 }
 
 impl HtmlInterpreter {
@@ -155,6 +157,7 @@ impl HtmlInterpreter {
         file_path: PathBuf,
         image_cache: ImageCache,
         event_proxy: EventLoopProxy<InlyneEvent>,
+        color_scheme: Option<ResolvedTheme>,
     ) -> Self {
         let live_window = LiveWindow {
             window,
@@ -168,9 +171,12 @@ impl HtmlInterpreter {
             file_path,
             image_cache,
             Box::new(live_window),
+            color_scheme,
         )
     }
 
+    // TODO: fix in a later refactor (consolidate a lot of junk)
+    #[allow(clippy::too_many_arguments)]
     fn new_with_interactor(
         element_queue: Arc<Mutex<VecDeque<Element>>>,
         theme: Theme,
@@ -179,6 +185,7 @@ impl HtmlInterpreter {
         file_path: PathBuf,
         image_cache: ImageCache,
         window: Box<dyn WindowInteractor + Send>,
+        color_scheme: Option<ResolvedTheme>,
     ) -> Self {
         Self {
             window,
@@ -193,6 +200,7 @@ impl HtmlInterpreter {
             stopped: false,
             first_pass: true,
             image_cache,
+            color_scheme,
         }
     }
 
@@ -304,6 +312,46 @@ impl HtmlInterpreter {
         }
     }
 
+    fn push_image_from_picture(&mut self, pic: Picture) {
+        let align = pic.inner.align;
+        let src = pic.resolve_src(self.color_scheme).to_owned();
+        let align = align.unwrap_or_default();
+        let is_url = src.starts_with("http://") || src.starts_with("https://");
+        let mut image = match self.image_cache.lock().unwrap().get(&src) {
+            Some(image_data) if is_url => {
+                Image::from_image_data(image_data.clone(), self.hidpi_scale)
+            }
+            _ => Image::from_src(
+                src.clone(),
+                self.file_path.clone(),
+                self.hidpi_scale,
+                self.window.image_callback(),
+            )
+            .unwrap(),
+        }
+        .with_align(align);
+
+        if let Some(link) = self.state.text_options.link.last() {
+            image.set_link(link.clone())
+        }
+        if let Some(size) = pic.inner.size {
+            image = image.with_size(size);
+        }
+
+        if align == Align::Left {
+            if let Some((row, count)) = &mut self.state.inline_images {
+                row.elements.push(Positioned::new(image));
+                // Restart newline count
+                *count = 1;
+            } else {
+                self.state.inline_images = Some((Row::with_image(image, self.hidpi_scale), 1));
+            }
+        } else {
+            self.push_element(image);
+            self.push_spacer();
+        }
+    }
+
     fn process_start_tag(&mut self, tag: Tag) {
         let tag_name = match TagName::try_from(&tag.name) {
             Ok(name) => name,
@@ -352,57 +400,67 @@ impl HtmlInterpreter {
             TagName::Break => self.push_current_textbox(),
             TagName::Underline => self.state.text_options.underline += 1,
             TagName::Strikethrough => self.state.text_options.strike_through += 1,
-            TagName::Image => {
-                let mut align = None;
-                let mut size = None;
-                let mut src = None;
+            TagName::Picture => {
+                let mut builder = Picture::builder();
+                if let Some(align) = self.align_or_inherit(None) {
+                    builder.set_align(align);
+                }
+                self.state.element_stack.push(builder.into());
+            }
+            TagName::Source => {
+                let Some(InterpreterElement::Picture(builder)) =
+                    self.state.element_stack.last_mut()
+                else {
+                    return;
+                };
+
+                let mut media = None;
+                let mut src_set = None;
                 for attr in attr::Iter::new(&tag.attrs) {
                     match attr {
-                        Attr::Align(a) => align = Some(a),
-                        Attr::Width(w) => size = Some(ImageSize::width(w)),
-                        Attr::Height(h) => size = Some(ImageSize::height(h)),
-                        Attr::Src(s) => src = Some(s),
+                        Attr::Media(m) => media = Some(m),
+                        Attr::SrcSet(s) => src_set = Some(s),
                         _ => {}
                     }
                 }
-                align = self.align_or_inherit(align);
-                if let Some(src) = src {
-                    let align = align.as_ref().unwrap_or(&Align::Left);
-                    let is_url = src.starts_with("http://") || src.starts_with("https://");
-                    let mut image = match self.image_cache.lock().unwrap().get(&src) {
-                        Some(image_data) if is_url => {
-                            Image::from_image_data(image_data.clone(), self.hidpi_scale)
-                                .with_align(*align)
-                        }
-                        _ => Image::from_src(
-                            src.clone(),
-                            self.file_path.clone(),
-                            self.hidpi_scale,
-                            self.window.image_callback(),
-                        )
-                        .unwrap()
-                        .with_align(*align),
-                    };
 
-                    if let Some(link) = self.state.text_options.link.last() {
-                        image.set_link((*link).clone())
-                    }
-                    if let Some(size) = size {
-                        image = image.with_size(size);
-                    }
+                let Some((media, src_set)) = media.zip(src_set) else {
+                    tracing::info!("Skipping <source> tag. Missing either srcset or known media");
+                    return;
+                };
 
-                    if align == &Align::Left {
-                        if let Some((row, count)) = &mut self.state.inline_images {
-                            row.elements.push(Positioned::new(image));
-                            // Restart newline count
-                            *count = 1;
-                        } else {
-                            self.state.inline_images =
-                                Some((Row::with_image(image, self.hidpi_scale), 1));
+                match media {
+                    PrefersColorScheme(ResolvedTheme::Dark) => builder.set_dark_variant(src_set),
+                    PrefersColorScheme(ResolvedTheme::Light) => builder.set_light_variant(src_set),
+                }
+            }
+            TagName::Image => {
+                let apply_attrs = |builder: &mut picture::Builder, attr_iter: attr::Iter<'_>| {
+                    for attr in attr_iter {
+                        match attr {
+                            Attr::Align(a) => builder.set_align(a),
+                            Attr::Width(w) => builder.set_size(ImageSize::width(w)),
+                            Attr::Height(h) => builder.set_size(ImageSize::height(h)),
+                            Attr::Src(s) => builder.set_src(s),
+                            _ => {}
                         }
-                    } else {
-                        self.push_element(image);
-                        self.push_spacer();
+                    }
+                };
+
+                if let Some(InterpreterElement::Picture(builder)) =
+                    self.state.element_stack.last_mut()
+                {
+                    // Builder already inherited align
+                    apply_attrs(builder, attr::Iter::new(&tag.attrs));
+                } else {
+                    let mut builder = Picture::builder();
+                    if let Some(align) = self.align_or_inherit(None) {
+                        builder.set_align(align);
+                    }
+                    apply_attrs(&mut builder, attr::Iter::new(&tag.attrs));
+                    match builder.try_finish() {
+                        Ok(pic) => self.push_image_from_picture(pic),
+                        Err(err) => tracing::warn!("Invalid <img>: {err}"),
                     }
                 }
             }
@@ -680,7 +738,32 @@ impl HtmlInterpreter {
                 }
                 self.state.element_stack.pop();
             }
-            TagName::HorizontalRuler | TagName::Break | TagName::Image | TagName::Section => {}
+            TagName::Picture => {
+                let picture_on_top = self
+                    .state
+                    .element_stack
+                    .last()
+                    .map_or(false, |e| e.is_picture());
+                if !picture_on_top {
+                    tracing::warn!("Element stack is muddled");
+                    return;
+                }
+
+                let Some(InterpreterElement::Picture(builder)) = self.state.element_stack.pop()
+                else {
+                    unreachable!("Just checked");
+                };
+
+                match builder.try_finish() {
+                    Ok(pic) => self.push_image_from_picture(pic),
+                    Err(err) => tracing::warn!("Invalid <picture>: {err}"),
+                }
+            }
+            TagName::HorizontalRuler
+            | TagName::Break
+            | TagName::Image
+            | TagName::Section
+            | TagName::Source => {}
         }
     }
 

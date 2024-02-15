@@ -75,7 +75,7 @@ impl ImageData {
         })
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         decode::lz4_decompress(&self.lz4_blob, self.rgba_image_byte_size())
             .expect("Size matches and I/O is in memory")
     }

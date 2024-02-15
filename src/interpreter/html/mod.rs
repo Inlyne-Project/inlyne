@@ -1,10 +1,12 @@
 pub mod attr;
 mod element;
+pub mod picture;
 pub mod style;
 mod tag_name;
 
 pub use attr::Attr;
 pub use element::Element;
+pub use picture::Picture;
 pub use tag_name::TagName;
 
 use crate::utils::Align;
