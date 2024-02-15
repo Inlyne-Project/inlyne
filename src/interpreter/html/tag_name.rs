@@ -1,4 +1,4 @@
-use super::html::HeaderType;
+use super::HeaderType;
 
 use html5ever::{local_name, LocalNameStaticSet};
 use string_cache::Atom;

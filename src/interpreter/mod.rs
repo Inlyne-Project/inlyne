@@ -1,6 +1,4 @@
-mod element;
 mod html;
-mod tag_name;
 #[cfg(test)]
 mod tests;
 
@@ -17,9 +15,11 @@ use crate::positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox};
 use crate::utils::{markdown_to_html, Align};
 use crate::{Element, ImageCache, InlyneEvent};
-use element::Element as InterpreterElement;
-use html::{Attr, AttrIter, FontStyle, FontWeight, Style, StyleIter, TextDecoration};
-use tag_name::TagName;
+use html::{
+    attr,
+    style::{self, FontStyle, FontWeight, Style, TextDecoration},
+    Attr, Element as InterpreterElement, TagName,
+};
 
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
@@ -340,7 +340,7 @@ impl HtmlInterpreter {
                 self.current_textbox.set_align_or_default(align);
             }
             TagName::Anchor => {
-                for attr in AttrIter::new(&tag.attrs) {
+                for attr in attr::Iter::new(&tag.attrs) {
                     match attr {
                         Attr::Href(link) => self.state.text_options.link.push(link),
                         Attr::Anchor(a) => self.current_textbox.set_anchor(a),
@@ -356,7 +356,7 @@ impl HtmlInterpreter {
                 let mut align = None;
                 let mut size = None;
                 let mut src = None;
-                for attr in AttrIter::new(&tag.attrs) {
+                for attr in attr::Iter::new(&tag.attrs) {
                     match attr {
                         Attr::Align(a) => align = Some(a),
                         Attr::Width(w) => size = Some(ImageSize::width(w)),
@@ -430,7 +430,7 @@ impl HtmlInterpreter {
             TagName::BoldOrStrong => self.state.text_options.bold += 1,
             TagName::Code => self.state.text_options.code += 1,
             TagName::ListItem => {
-                for attr in AttrIter::new(&tag.attrs) {
+                for attr in attr::Iter::new(&tag.attrs) {
                     self.state.pending_anchor = attr.to_anchor();
                 }
 
@@ -458,7 +458,7 @@ impl HtmlInterpreter {
             }
             TagName::OrderedList => {
                 let mut start_index = 1;
-                for attr in AttrIter::new(&tag.attrs) {
+                for attr in attr::Iter::new(&tag.attrs) {
                     if let Attr::Start(start) = attr {
                         start_index = start;
                     }
@@ -487,7 +487,7 @@ impl HtmlInterpreter {
             TagName::PreformattedText => {
                 self.push_current_textbox();
                 let style_str = html::find_style(&tag.attrs).unwrap_or_default();
-                for style in StyleIter::new(&style_str) {
+                for style in style::Iter::new(&style_str) {
                     if let Style::BackgroundColor(color) = style {
                         let native_color = self.native_color(color);
                         self.current_textbox.set_background_color(native_color);
@@ -500,7 +500,7 @@ impl HtmlInterpreter {
             // blocks working
             TagName::Span => {
                 let style_str = html::find_style(&tag.attrs).unwrap_or_default();
-                for style in StyleIter::new(&style_str) {
+                for style in style::Iter::new(&style_str) {
                     match style {
                         Style::Color(color) => {
                             self.state.span.color = native_color(color, &self.surface_format)
@@ -515,7 +515,7 @@ impl HtmlInterpreter {
             TagName::Input => {
                 let mut is_checkbox = false;
                 let mut is_checked = false;
-                for attr in AttrIter::new(&tag.attrs) {
+                for attr in attr::Iter::new(&tag.attrs) {
                     match attr {
                         Attr::IsCheckbox => is_checkbox = true,
                         Attr::IsChecked => is_checked = true,

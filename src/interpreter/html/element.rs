@@ -1,4 +1,4 @@
-use super::html::{Header, List, ListType};
+use super::{Header, List, ListType};
 use crate::utils::Align;
 use crate::{Section, Table, TextBox};
 
