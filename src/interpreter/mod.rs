@@ -528,7 +528,8 @@ impl HtmlInterpreter {
                     .push(InterpreterElement::ordered_list(start_index));
             }
             TagName::Header(header_type) => {
-                let align = html::find_align(&tag.attrs);
+                let mut align = html::find_align(&tag.attrs);
+                align = self.align_or_inherit(align);
                 self.push_current_textbox();
                 self.push_spacer();
                 if let html::HeaderType::H1 = header_type {

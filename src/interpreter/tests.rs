@@ -342,6 +342,20 @@ _italic_
 <u>underline</u>
 ";
 
+// TODO: this still has all sorts of issues (the anchor and extra whitespace)
+const HEADER_INHERIT_ALIGN: &str = r##"
+<div align="center">
+  <h4>
+    <a href="#install">
+      Install
+    </a>
+    <span> | </span>
+    <a href="#usage">
+      Usage
+    </a>
+  </h4>
+</div>"##;
+
 snapshot_interpreted_elements!(
     (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -362,6 +376,7 @@ snapshot_interpreted_elements!(
     (horizontal_ruler, HORIZONTAL_RULER),
     (small_text, SMALL_TEXT),
     (text_styles, TEXT_STYLES),
+    (header_inherit_align, HEADER_INHERIT_ALIGN),
 );
 
 const UNDERLINE_IN_CODEBLOCK: &str = "\
