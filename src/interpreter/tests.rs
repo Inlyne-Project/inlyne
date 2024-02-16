@@ -9,10 +9,13 @@ use std::{env, thread};
 
 use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
-use crate::image::ImageData;
+use crate::image::{Image, ImageData};
+use crate::opts::ResolvedTheme;
 use crate::test_utils::init_test_log;
+use crate::utils::Align;
 use crate::{Element, ImageCache};
 
+use base64::prelude::*;
 use syntect::highlighting::Theme as SyntectTheme;
 use wgpu::TextureFormat;
 use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
@@ -68,6 +71,7 @@ impl ImageCallback for DummyCallback {
 struct InterpreterOpts {
     theme: Theme,
     fail_after: Duration,
+    color_scheme: Option<ResolvedTheme>,
 }
 
 impl Default for InterpreterOpts {
@@ -75,6 +79,7 @@ impl Default for InterpreterOpts {
         Self {
             theme: Theme::light_default(),
             fail_after: Duration::from_secs(8),
+            color_scheme: None,
         }
     }
 }
@@ -89,10 +94,15 @@ impl InterpreterOpts {
         self
     }
 
+    fn set_color_scheme(&mut self, color_scheme: ResolvedTheme) {
+        self.color_scheme = Some(color_scheme);
+    }
+
     fn finish(self, counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecDeque<Element>>>) {
         let Self {
             theme,
             fail_after: _,
+            color_scheme,
         } = self;
         let element_queue = Arc::default();
         let surface_format = TextureFormat::Bgra8UnormSrgb;
@@ -108,6 +118,7 @@ impl InterpreterOpts {
             file_path,
             image_cache,
             window,
+            color_scheme,
         );
 
         (interpreter, element_queue)
@@ -363,21 +374,46 @@ snapshot_interpreted_elements!(
     (underline_in_codeblock, UNDERLINE_IN_CODEBLOCK),
 );
 
+struct File {
+    url_path: String,
+    mime: String,
+    bytes: Vec<u8>,
+}
+
+impl File {
+    fn new(url_path: &str, mime: &str, bytes: &[u8]) -> Self {
+        Self {
+            url_path: url_path.to_owned(),
+            mime: mime.to_owned(),
+            bytes: bytes.to_owned(),
+        }
+    }
+}
+
 /// Spin up a server, so we can test network requests without external services
-fn mock_file_server(url_path: &str, mime: &str, bytes: &[u8]) -> (MockServer, String) {
+fn mock_file_server(files: &[File]) -> (MockServer, String) {
     let setup_server = async {
         let mock_server = MockServer::start().await;
-        Mock::given(matchers::method("GET"))
-            .and(matchers::path(url_path))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(bytes, mime))
-            .mount(&mock_server)
-            .await;
+
+        for file in files {
+            let File {
+                url_path,
+                mime,
+                bytes,
+            } = file;
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path(url_path))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(bytes.to_owned(), mime))
+                .mount(&mock_server)
+                .await;
+        }
+
         mock_server
     };
     let server = pollster::block_on(setup_server);
 
-    let full_url = format!("{}{}", server.uri(), url_path);
-    (server, full_url)
+    let server_url = server.uri();
+    (server, server_url)
 }
 
 #[test]
@@ -385,7 +421,9 @@ fn centered_image_with_size_align_and_link() {
     init_test_log();
 
     let logo = include_bytes!("../../assets/test_data/bun_logo.png");
-    let (_server, logo_url) = mock_file_server("/bun_logo.png", "image/png", logo);
+    let logo_path = "/bun_logo.png";
+    let (_server, server_url) = mock_file_server(&[File::new(logo_path, "image/png", logo)]);
+    let logo_url = server_url + logo_path;
 
     let text = format!(
         r#"
@@ -408,8 +446,10 @@ fn image_loading_fails_gracefully() {
     init_test_log();
 
     let json = r#"{"im": "not an image"}"#;
-    let (_server, json_url) =
-        mock_file_server("/snapshot.png", "application/json", json.as_bytes());
+    let json_path = "/snapshot.png";
+    let (_server, server_url) =
+        mock_file_server(&[File::new(json_path, "application/json", json.as_bytes())]);
+    let json_url = server_url + json_path;
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
@@ -430,4 +470,82 @@ fn image_loading_fails_gracefully() {
     }, {
         insta::assert_debug_snapshot!(interpret_md_with_opts(&text, opts));
     });
+}
+
+// Check to see that each paths are used for their respective color-schemes
+#[test]
+fn picture_dark_light() {
+    fn find_image(elements: &VecDeque<Element>) -> Option<&Image> {
+        elements.iter().find_map(|element| match element {
+            crate::Element::Image(image) => Some(image),
+            _ => None,
+        })
+    }
+
+    const B64_SINGLE_PIXEL_WEBP_000: &[u8] = b"UklGRhoAAABXRUJQVlA4TA4AAAAvAAAAAM1VICICEREJAA==";
+    const B64_SINGLE_PIXEL_WEBP_999: &[u8] = b"UklGRhoAAABXRUJQVlA4TA4AAAAvAAAAAM1VICICzYyIBA==";
+    const B64_SINGLE_PIXEL_WEBP_FFF: &[u8] = b"UklGRhoAAABXRUJQVlA4TA4AAAAvAAAAAM1VICIC/Y+IBA==";
+
+    init_test_log();
+
+    let light_path = "/light.webp";
+    let dark_path = "/dark.webp";
+    let default_path = "/default.webp";
+    let webp_mime = "image/webp";
+    let files = [
+        (dark_path, B64_SINGLE_PIXEL_WEBP_FFF),
+        (light_path, B64_SINGLE_PIXEL_WEBP_000),
+        (default_path, B64_SINGLE_PIXEL_WEBP_999),
+    ]
+    .map(|(path, b64_bytes)| {
+        let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
+        File::new(path, webp_mime, &bytes)
+    });
+    let (_server, server_url) = mock_file_server(&files);
+    let dark_url = format!("{server_url}{dark_path}");
+    let light_url = format!("{server_url}{light_path}");
+    let default_url = format!("{server_url}{default_path}");
+
+    let text = format!(
+        r#"
+<p align="center">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="{dark_url}"/>
+      <source media="(prefers-color-scheme: light)" srcset="{light_url}"/>
+      <img src="{default_url}"/>
+    </picture>
+</p>
+"#,
+    );
+
+    for color_scheme in [None, Some(ResolvedTheme::Dark), Some(ResolvedTheme::Light)] {
+        let mut opts = InterpreterOpts::new();
+        if let Some(color_scheme) = color_scheme {
+            opts.set_color_scheme(color_scheme);
+        }
+        let elements = interpret_md_with_opts(&text, opts);
+        let image = find_image(&elements).unwrap();
+
+        // Should pick up align from the enclosing `<p>`
+        assert_eq!(image.is_aligned, Some(Align::Center));
+
+        let rgba_data = image
+            .image_data
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .to_bytes();
+        let byte = match color_scheme {
+            Some(ResolvedTheme::Dark) => 0xff,
+            Some(ResolvedTheme::Light) => 0x00,
+            None => 0x99,
+        };
+        // Image data stores pixel data in RGBA format
+        let expected = [byte, byte, byte, 0xff];
+        assert_eq!(
+            rgba_data, expected,
+            "Failed for color scheme: {color_scheme:?}"
+        );
+    }
 }

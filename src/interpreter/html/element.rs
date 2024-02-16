@@ -1,4 +1,4 @@
-use super::{Header, List, ListType};
+use super::{picture, Header, List, ListType};
 use crate::utils::Align;
 use crate::{Section, Table, TextBox};
 
@@ -12,6 +12,13 @@ pub enum Element {
     Div(Option<Align>),
     Details(Section),
     Summary,
+    Picture(picture::Builder),
+}
+
+impl From<picture::Builder> for Element {
+    fn from(pic: picture::Builder) -> Self {
+        Self::Picture(pic)
+    }
 }
 
 impl Element {
@@ -33,6 +40,10 @@ impl Element {
         Self::List(List {
             ty: ListType::Ordered(start_index),
         })
+    }
+
+    pub fn is_picture(&self) -> bool {
+        matches!(self, Self::Picture(_))
     }
 
     pub fn as_mut_list(&mut self) -> Option<&mut List> {
