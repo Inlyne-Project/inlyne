@@ -1,0 +1,52 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n\n<div align=\"center\">\n  <h4>\n    <a href=\"#install\">\n      Install\n    </a>\n    <span> | </span>\n    <a href=\"#usage\">\n      Usage\n    </a>\n  </h4>\n</div>\n\n --- html\n\n<div align=\"center\">\n  <h4>\n    <a href=\"#install\">\n      Install\n    </a>\n    <span> | </span>\n    <a href=\"#usage\">\n      Usage\n    </a>\n  </h4>\n</div>\n"
+expression: "interpret_md_with_opts(text, opts)"
+---
+[
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    TextBox(
+        TextBox {
+            align: Center,
+            is_anchor: Some("#install---------usage-"),
+            texts: [
+                Text {
+                    text: "Install",
+                    color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
+                    style: BOLD ,
+                    link: Some("#install"),
+                    ..
+                },
+                Text {
+                    text: " ",
+                    default_color: Color(BLACK),
+                    ..
+                },
+                Text {
+                    text: " | ",
+                    default_color: Color(BLACK),
+                    style: BOLD ,
+                    ..
+                },
+                Text {
+                    text: "      Usage",
+                    color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
+                    style: BOLD ,
+                    link: Some("#usage"),
+                    ..
+                },
+                Text {
+                    text: " ",
+                    default_color: Color(BLACK),
+                    ..
+                },
+            ],
+            ..
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]
