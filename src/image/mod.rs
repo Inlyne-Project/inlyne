@@ -12,7 +12,7 @@ use std::{fs, io};
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
 use crate::positioner::DEFAULT_MARGIN;
-use crate::utils::{usize_in_mib, Align, Point, Size};
+use crate::utils::{self, usize_in_mib, Align, Point, Size};
 
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
@@ -226,7 +226,11 @@ impl Image {
 
             let image_data = if let Ok(img_file) = fs::read(&src_path) {
                 img_file
-            } else if let Ok(bytes) = reqwest::blocking::get(&src).and_then(|resp| resp.bytes()) {
+            } else if let Ok(bytes) = utils::client()
+                .get(&src)
+                .send()
+                .and_then(|resp| resp.bytes())
+            {
                 bytes.to_vec()
             } else {
                 tracing::warn!("Request for image from {} failed", src_path.display());

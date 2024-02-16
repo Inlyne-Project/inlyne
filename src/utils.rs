@@ -8,10 +8,20 @@ use comrak::adapters::SyntaxHighlighterAdapter;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
+use reqwest::blocking::Client;
 use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use syntect::parsing::SyntaxSet;
 use winit::window::CursorIcon;
+
+pub fn client() -> Client {
+    const USER_AGENT: &str = concat!(
+        "inlyne ",
+        env!("CARGO_PKG_VERSION"),
+        " https://github.com/trimental/inlyne"
+    );
+    Client::builder().user_agent(USER_AGENT).build().unwrap()
+}
 
 pub(crate) fn default<T: Default>() -> T {
     Default::default()
