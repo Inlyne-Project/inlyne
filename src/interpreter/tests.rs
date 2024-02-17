@@ -369,9 +369,25 @@ const UNDERLINE_IN_CODEBLOCK: &str = "\
 use std::io;
 ```";
 
+const LET_IS_ITALICIZED: &str = "\
+```rust
+let foo;
+```";
+
 snapshot_interpreted_elements!(
     InterpreterOpts::new().theme(ThemeDefaults::Dracula),
     (underline_in_codeblock, UNDERLINE_IN_CODEBLOCK),
+    (let_is_italicized, LET_IS_ITALICIZED),
+);
+
+const NUM_IS_BOLD: &str = "\
+```ts
+3000;
+```";
+
+snapshot_interpreted_elements!(
+    InterpreterOpts::new().theme(ThemeDefaults::Zenburn),
+    (num_is_bold, NUM_IS_BOLD),
 );
 
 struct File {
