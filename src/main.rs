@@ -9,6 +9,7 @@
     clippy::print_stdout, clippy::print_stderr,
 )]
 
+mod clipboard;
 pub mod color;
 mod debug_impls;
 mod file_watcher;
@@ -47,11 +48,6 @@ use text::{Text, TextBox, TextSystem};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
-
-#[cfg(feature = "wayland")]
-use copypasta::{nop_clipboard::NopClipboardContext as ClipboardContext, ClipboardProvider};
-#[cfg(feature = "x11")]
-use copypasta::{ClipboardContext, ClipboardProvider};
 
 use anyhow::Context;
 use taffy::Taffy;
@@ -135,7 +131,7 @@ pub struct Inlyne {
     event_loop: Option<EventLoop<InlyneEvent>>,
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
-    clipboard: ClipboardContext,
+    clipboard: clipboard::Clipboard,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     image_cache: ImageCache,
@@ -196,7 +192,7 @@ impl Inlyne {
             opts.page_width.unwrap_or(std::f32::MAX),
             opts.font_opts.clone(),
         ))?;
-        let clipboard = ClipboardContext::new().unwrap();
+        let clipboard = clipboard::Clipboard::new();
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
@@ -628,8 +624,7 @@ impl Inlyne {
                                 }
                                 Action::Copy => self
                                     .clipboard
-                                    .set_contents(selection_cache.trim().to_owned())
-                                    .unwrap(),
+                                    .set_contents(selection_cache.trim().to_owned()),
                                 Action::Quit => *control_flow = ControlFlow::Exit,
                             }
                         }
