@@ -9,7 +9,7 @@ inlyne README.md --theme dark/light
 ```
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/trimental/inlyne/main/example.png" width="800"/>
+<img src="https://raw.githubusercontent.com/trimental/inlyne/v0.4/assets/img/example.png" width="800"/>
 </p>
 
 ## About
