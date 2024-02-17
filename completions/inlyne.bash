@@ -19,7 +19,7 @@ _inlyne() {
 
     case "${cmd}" in
         inlyne)
-            opts="-t -s -c -w -h -V --theme --scale --config --page-width --help --version [FILE]"
+            opts="-t -s -c -w -h -V --theme --scale --config --page-width --help --version <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -67,4 +67,4 @@ _inlyne() {
     esac
 }
 
-complete -F _inlyne -o bashdefault -o default inlyne
+complete -F _inlyne -o nosort -o bashdefault -o default inlyne

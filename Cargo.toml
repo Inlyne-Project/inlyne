@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "inlyne"
-version = "0.4.0-main"
+version = "0.4.0"
 description = "Introducing Inlyne, a GPU powered yet browserless tool to help you quickly view markdown files in the blink of an eye."
 edition = "2021"
 authors = ["trimental"]
@@ -14,7 +14,7 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/trimental/inlyne"
 homepage = "https://github.com/trimental/inlyne"
-rust-version = "1.65"
+rust-version = "1.72.1"
 exclude = [
     "/ci/*",
     "/.github/*",

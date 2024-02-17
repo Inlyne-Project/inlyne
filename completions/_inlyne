@@ -27,7 +27,7 @@ _inlyne() {
 '--help[Print help]' \
 '-V[Print version]' \
 '--version[Print version]' \
-'::file -- Path to the markdown file:_files' \
+':file -- Path to the markdown file:_files' \
 && ret=0
 }
 
