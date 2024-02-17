@@ -151,7 +151,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     options.extension.table = true;
     options.extension.strikethrough = true;
     options.extension.tasklist = true;
-    options.extension.footnotes = true;
+    // options.extension.footnotes = true;
     options.extension.front_matter_delimiter = Some("---".to_owned());
     options.extension.shortcodes = true;
     options.parse.smart = true;
