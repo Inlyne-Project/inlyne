@@ -1881,6 +1881,7 @@ dependencies = [
  "open",
  "pollster",
  "pretty_assertions",
+ "raw-window-handle",
  "reqwest",
  "resvg",
  "serde",

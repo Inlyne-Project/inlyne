@@ -23,9 +23,9 @@ exclude = [
 keywords = ["markdown", "viewer", "gpu"]
 
 [features]
-default = ["x11"]
-x11 = ["winit/x11", "copypasta/x11"]
-wayland = ["winit/wayland", "copypasta/wayland"]
+default = ["wayland", "x11"]
+x11 = ["copypasta/x11", "winit/x11"]
+wayland = ["copypasta/wayland", "winit/wayland"]
 
 [dependencies]
 winit = { version = "0.28.7", default-features = false }
@@ -69,6 +69,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 glyphon = "0.3"
 string_cache = { version = "0.8.7", default-features = false }
+raw-window-handle = "0.5.2"
 
 [profile.release]
 strip = true

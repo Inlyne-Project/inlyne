@@ -29,7 +29,7 @@ jobs:
           prefix-key: 'v0-rust-2'
 
       - name: Run test suite
-        run: cargo test --workspace
+        run: cargo test --workspace --no-default-features --features x11
 
   lint:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Linting
-        run: cargo clippy --workspace -- --deny warnings
+        run: cargo clippy --workspace --no-default-features --features x11 -- --deny warnings
 
   build-macos-arm:
     runs-on: macos-latest
@@ -70,4 +70,4 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: cargo build --target=aarch64-apple-darwin
+        run: cargo build --target=aarch64-apple-darwin --no-default-features --features x11
