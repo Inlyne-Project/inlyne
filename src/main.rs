@@ -42,6 +42,7 @@ use keybindings::action::{Action, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
 use opts::{Args, Config, Opts};
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
+use raw_window_handle::HasRawDisplayHandle;
 use renderer::Renderer;
 use table::Table;
 use text::{Text, TextBox, TextSystem};
@@ -131,7 +132,6 @@ pub struct Inlyne {
     event_loop: Option<EventLoop<InlyneEvent>>,
     renderer: Renderer,
     element_queue: Arc<Mutex<VecDeque<Element>>>,
-    clipboard: clipboard::Clipboard,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     image_cache: ImageCache,
@@ -192,7 +192,6 @@ impl Inlyne {
             opts.page_width.unwrap_or(std::f32::MAX),
             opts.font_opts.clone(),
         ))?;
-        let clipboard = clipboard::Clipboard::new();
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
@@ -227,7 +226,6 @@ impl Inlyne {
             event_loop: Some(event_loop),
             renderer,
             element_queue,
-            clipboard,
             elements: Vec::new(),
             lines_to_scroll,
             interpreter_sender,
@@ -291,6 +289,9 @@ impl Inlyne {
 
         let event_loop = self.event_loop.take().unwrap();
         let event_loop_proxy = event_loop.create_proxy();
+        // SAFETY: Since this takes a pointer to the winit event loop, it MUST be dropped first,
+        // which is done by `move` into event loop.
+        let mut clipboard = unsafe { clipboard::Clipboard::new(event_loop.raw_display_handle()) };
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
@@ -622,8 +623,7 @@ impl Inlyne {
                                     );
                                     self.window.request_redraw();
                                 }
-                                Action::Copy => self
-                                    .clipboard
+                                Action::Copy => clipboard
                                     .set_contents(selection_cache.trim().to_owned()),
                                 Action::Quit => *control_flow = ControlFlow::Exit,
                             }
