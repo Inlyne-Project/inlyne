@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 
 use crate::color::{native_color, Theme};
+use crate::debug_impls::DebugF32Color;
 use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
 use crate::opts::FontOptions;
@@ -270,7 +271,33 @@ impl Renderer {
                             min.0 -= (nest - 1) as f32 * DEFAULT_MARGIN / 2.;
                         }
                         if min.0 < screen_size.0 - DEFAULT_MARGIN - centering {
-                            self.draw_rectangle(Rect::from_min_max(min, max), color)?;
+                            let rect = Rect::from_min_max(min, max);
+                            let line_height = text_box.line_height(self.zoom);
+                            self.draw_rectangle(rect.clone(), color)?;
+
+                            tracing::debug!("Inner texts: {:#?}", &text_box.texts);
+                            let mut line = 0;
+                            for text in &text_box.texts {
+                                if text.text == "\n" {
+                                    line += 1;
+                                }
+                                if let Some(bg_color) = text.bg_color {
+                                    tracing::debug!(
+                                        "Rendering BG {:#?} for line {line}",
+                                        DebugF32Color(bg_color)
+                                    );
+                                    self.draw_rectangle(
+                                        Rect {
+                                            pos: (
+                                                rect.pos.0,
+                                                rect.pos.1 + (line_height * line as f32),
+                                            ),
+                                            size: (rect.size.0, line_height),
+                                        },
+                                        bg_color,
+                                    )?;
+                                }
+                            }
                         }
                     }
                     if let Some(nest) = text_box.is_quote_block {
