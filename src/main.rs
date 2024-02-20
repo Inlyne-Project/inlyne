@@ -533,7 +533,7 @@ impl Inlyne {
                                             }
                                         }
                                     } else if let Some(anchor_pos) =
-                                        self.renderer.positioner.anchors.get(link)
+                                        self.renderer.positioner.anchors.get(&link.to_lowercase())
                                     {
                                         self.renderer.set_scroll_y(*anchor_pos);
                                         self.window.request_redraw();
