@@ -12,8 +12,8 @@ edition = "2021"
 authors = ["trimental"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/trimental/inlyne"
-homepage = "https://github.com/trimental/inlyne"
+repository = "https://github.com/Inlyne-Project/inlyne"
+homepage = "https://github.com/Inlyne-Project/inlyne"
 rust-version = "1.72.1"
 exclude = [
     "/ci/*",
