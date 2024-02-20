@@ -61,8 +61,11 @@ taffy = "0.3.18"
 syntect = "5.1.0"
 smart-debug = "0.0.3"
 two-face = "0.3.0"
-# Required for WGPU to work properly with Vulkan
-fontdb = { version = "0.13.1", features = ["fontconfig"] }
+# NOTE: We need `fontconfig` enabled to pick up fonts on some systems, but
+# `glyphon` doesn't provide any way set that feature for `fontdb`, so we have to
+# set the feature for the transitive dep while manually making sure that we keep
+# the versions in sync ;-;
+fontdb = { version = "0.14.1", features = ["fontconfig"] }
 human-panic = "1.2.2"
 notify-debouncer-full = { version = "0.3.1", default-features = false }
 tracing = "0.1.40"
