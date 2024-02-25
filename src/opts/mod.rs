@@ -3,12 +3,13 @@ mod config;
 #[cfg(test)]
 mod tests;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::color;
 pub use cli::{Args, ThemeType};
 pub use config::{Config, FontOptions, KeybindingsSection};
 
+use crate::history::History;
 use anyhow::Result;
 use serde::Deserialize;
 use smart_debug::SmartDebug;
@@ -40,7 +41,7 @@ impl ResolvedTheme {
 
 #[derive(SmartDebug, PartialEq)]
 pub struct Opts {
-    pub file_path: PathBuf,
+    pub history: History,
     #[debug(skip)]
     pub theme: color::Theme,
     pub scale: Option<f32>,
@@ -121,7 +122,7 @@ impl Opts {
         let lines_to_scroll = lines_to_scroll.into();
 
         Ok(Self {
-            file_path,
+            history: History::new(file_path),
             theme,
             scale,
             page_width,

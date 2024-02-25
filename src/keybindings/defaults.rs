@@ -1,4 +1,4 @@
-use super::action::{Action, VertDirection, Zoom};
+use super::action::{Action, Navigation, VertDirection, Zoom};
 use super::{Key, KeyCombo, ModifiedKey};
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
@@ -32,6 +32,22 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Minus),
                 ctrl_or_command,
+            )]),
+        ),
+        // Navigate to next file: Ctrl+Right
+        (
+            Action::Navigate(Navigation::Next),
+            KeyCombo(vec![ModifiedKey(
+                Key::from(VirtKey::Right),
+                ModifiersState::ALT,
+            )]),
+        ),
+        // Navigate to previous file: Ctrl+Left
+        (
+            Action::Navigate(Navigation::Previous),
+            KeyCombo(vec![ModifiedKey(
+                Key::from(VirtKey::Left),
+                ModifiersState::ALT,
             )]),
         ),
         // Scroll up: Up-arrow

@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
+    Navigate(Navigation),
     ToEdge(VertDirection),
     Scroll(VertDirection),
     Page(VertDirection),
@@ -19,4 +20,10 @@ pub enum Zoom {
     In,
     Out,
     Reset,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Navigation {
+    Previous,
+    Next,
 }
