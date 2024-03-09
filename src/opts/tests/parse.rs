@@ -6,6 +6,7 @@ use crate::opts::config::{self, FontOptions, LinesToScroll};
 use crate::opts::{cli, Args, Opts, ResolvedTheme, ThemeType};
 use crate::test_utils::init_test_log;
 
+use crate::history::History;
 use pretty_assertions::assert_eq;
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
@@ -18,7 +19,7 @@ fn gen_args(args: Vec<&str>) -> Vec<OsString> {
 impl Opts {
     fn mostly_default(file_path: impl Into<PathBuf>) -> Self {
         Self {
-            file_path: file_path.into(),
+            history: History::new(file_path.into()),
             theme: ResolvedTheme::Light.as_theme(),
             scale: None,
             page_width: None,

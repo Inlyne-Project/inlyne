@@ -14,6 +14,7 @@ pub mod color;
 mod debug_impls;
 mod file_watcher;
 pub mod fonts;
+pub mod history;
 pub mod image;
 pub mod interpreter;
 mod keybindings;
@@ -38,7 +39,7 @@ use std::sync::{Arc, Mutex};
 use file_watcher::Watcher;
 use image::{Image, ImageData};
 use interpreter::HtmlInterpreter;
-use keybindings::action::{Action, VertDirection, Zoom};
+use keybindings::action::{Action, Navigation, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
 use opts::{Args, Config, Opts};
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
@@ -179,9 +180,11 @@ impl Inlyne {
     pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
+        let file_path = opts.history.get_path();
+
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(&opts.file_path) {
+        match root_filepath_to_vcs_dir(file_path) {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
@@ -195,8 +198,8 @@ impl Inlyne {
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
-        let md_string = read_to_string(&opts.file_path)
-            .with_context(|| format!("Could not read file at '{}'", opts.file_path.display()))?;
+        let md_string = read_to_string(file_path)
+            .with_context(|| format!("Could not read file at '{}'", file_path.display()))?;
 
         let interpreter = HtmlInterpreter::new(
             window.clone(),
@@ -204,7 +207,7 @@ impl Inlyne {
             renderer.theme.clone(),
             renderer.surface_format,
             renderer.hidpi_scale,
-            opts.file_path.clone(),
+            file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
             opts.color_scheme,
@@ -218,7 +221,7 @@ impl Inlyne {
 
         let lines_to_scroll = opts.lines_to_scroll;
 
-        let watcher = Watcher::spawn(event_loop.create_proxy(), opts.file_path.clone());
+        let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
         Ok(Self {
             opts,
@@ -301,12 +304,12 @@ impl Inlyne {
                         self.image_cache.lock().unwrap().insert(src, image_data);
                         self.need_repositioning = true;
                     }
-                    InlyneEvent::FileReload => match read_to_string(&self.opts.file_path) {
+                    InlyneEvent::FileReload => match read_to_string(self.opts.history.get_path()) {
                         Ok(contents) => self.load_file(contents),
                         Err(err) => {
                             tracing::warn!(
                                 "Failed reloading file at {}\nError: {}",
-                                self.opts.file_path.display(),
+                                self.opts.history.get_path().display(),
                                 err
                             );
                         }
@@ -487,7 +490,8 @@ impl Inlyne {
                                             // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
                                             let current_parent = self
                                                 .opts
-                                                .file_path
+                                                .history
+                                                .get_path()
                                                 .parent()
                                                 .expect("no current parent");
                                             let mut normalized_link = path.as_path();
@@ -514,13 +518,12 @@ impl Inlyne {
                                         } else {
                                             match read_to_string(&path) {
                                                 Ok(contents) => {
-                                                    self.opts.file_path = path;
                                                     self.watcher.update_file(
-                                                        &self.opts.file_path,
+                                                        &path,
                                                         contents,
                                                     );
-                                                    // TODO: Once and if history is implemented,
-                                                    // old scroll_y might be stored there
+                                                    self.opts.history.truncate();
+                                                    self.opts.history.append(path);
                                                     self.renderer.set_scroll_y(0.);
                                                 }
                                                 Err(err) => {
@@ -626,6 +629,31 @@ impl Inlyne {
                                 Action::Copy => clipboard
                                     .set_contents(selection_cache.trim().to_owned()),
                                 Action::Quit => *control_flow = ControlFlow::Exit,
+                                Action::Navigate(navigation_action) => {
+                                    let changed_path = match navigation_action {
+                                        Navigation::Next => self.opts.history.next(),
+                                        Navigation::Previous => self.opts.history.previous(),
+                                    };
+                                    let Some(file_path) = changed_path else {
+                                        return;
+                                    };
+                                    match read_to_string(file_path) {
+                                        Ok(contents) => {
+                                            self.watcher.update_file(
+                                                file_path,
+                                                contents,
+                                            );
+                                            self.renderer.set_scroll_y(0.0);
+                                        }
+                                        Err(err) => {
+                                            tracing::warn!(
+                                                "Failed loading markdown file at {}\nError: {}",
+                                                file_path.display(),
+                                                err,
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
