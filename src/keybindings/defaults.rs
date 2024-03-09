@@ -127,5 +127,21 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
                 ModifiedKey(Key::from(VirtKey::Q), ModifiersState::SHIFT),
             ]),
         ),
+        // Navigate to next file: Ctrl+Right
+        (
+            Action::Navigate(Navigation::Next),
+            KeyCombo(vec![
+                ModifiedKey::from(VirtKey::B),
+                ModifiedKey::from(VirtKey::N),
+            ]),
+        ),
+        // Navigate to previous file: Ctrl+Left
+        (
+            Action::Navigate(Navigation::Previous),
+            KeyCombo(vec![
+                ModifiedKey::from(VirtKey::B),
+                ModifiedKey::from(VirtKey::P),
+            ]),
+        ),
     ]
 }
