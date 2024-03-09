@@ -29,6 +29,7 @@ impl History {
             .expect("History should be bound checked for all possible indexes.")
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&PathBuf> {
         if self.index + 1 == self.history.len() {
             return None;
