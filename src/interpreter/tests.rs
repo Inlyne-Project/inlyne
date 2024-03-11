@@ -358,7 +358,7 @@ const HEADER_INHERIT_ALIGN: &str = r##"
 </div>"##;
 
 snapshot_interpreted_elements!(
-    // (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
+    (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
     (code_block_bg_color, CODE_BLOCK_BG_COLOR),
     (bare_link_gets_autolinked, BARE_LINK_GETS_AUTOLINKED),
