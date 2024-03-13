@@ -46,3 +46,31 @@ impl History {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanity() {
+        let root = PathBuf::from("a");
+        let fork1 = PathBuf::from("b");
+        let fork2 = PathBuf::from("c");
+
+        let mut hist = History::new(root.clone());
+        assert_eq!(hist.get_path(), root);
+        assert_eq!(hist.previous(), None);
+
+        hist.make_next(fork1.clone());
+        assert_eq!(hist.get_path(), fork1);
+
+        assert_eq!(hist.previous().unwrap(), root);
+        hist.make_next(fork2.clone());
+        assert_eq!(hist.get_path(), fork2);
+
+        assert_eq!(hist.previous().unwrap(), root);
+        assert_eq!(hist.previous(), None);
+        assert_eq!(hist.next().unwrap(), fork2);
+        assert_eq!(hist.next(), None);
+    }
+}
