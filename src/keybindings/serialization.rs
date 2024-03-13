@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use crate::keybindings::action::HistDirection;
+
 use super::action::{Action, VertDirection, Zoom};
 use super::{Key, KeyCombo, ModifiedKey};
 
@@ -13,6 +15,8 @@ impl<'de> Deserialize<'de> for Action {
     {
         #[derive(Deserialize)]
         enum FlatAction {
+            HistoryNext,
+            HistoryPrevious,
             ToTop,
             ToBottom,
             ScrollUp,
@@ -27,6 +31,8 @@ impl<'de> Deserialize<'de> for Action {
         }
 
         let action = match FlatAction::deserialize(deserializer)? {
+            FlatAction::HistoryNext => Action::History(HistDirection::Next),
+            FlatAction::HistoryPrevious => Action::History(HistDirection::Prev),
             FlatAction::ToTop => Action::ToEdge(VertDirection::Up),
             FlatAction::ToBottom => Action::ToEdge(VertDirection::Down),
             FlatAction::ScrollUp => Action::Scroll(VertDirection::Up),

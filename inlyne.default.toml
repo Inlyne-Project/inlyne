@@ -91,6 +91,7 @@ code-highlighter = "github"
 #
 # Possible Modifiers: ["Alt", "Ctrl", "Os", "Shift"]
 # Possible Actions: [
+#     "HistoryNext", "HistoryPrevious",
 #     "ToTop", "ToBottom",
 #     "ScrollUp", "ScrollDown",
 #     "PageUp", "PageDown",

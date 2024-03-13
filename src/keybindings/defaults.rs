@@ -1,4 +1,6 @@
-use super::action::{Action, Navigation, VertDirection, Zoom};
+use crate::keybindings::action::HistDirection;
+
+use super::action::{Action, VertDirection, Zoom};
 use super::{Key, KeyCombo, ModifiedKey};
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
@@ -34,17 +36,17 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
                 ctrl_or_command,
             )]),
         ),
-        // Navigate to next file: Ctrl+Right
+        // Navigate to next file: Alt+Right
         (
-            Action::Navigate(Navigation::Next),
+            Action::History(HistDirection::Next),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Right),
                 ModifiersState::ALT,
             )]),
         ),
-        // Navigate to previous file: Ctrl+Left
+        // Navigate to previous file: Alt+Left
         (
-            Action::Navigate(Navigation::Previous),
+            Action::History(HistDirection::Prev),
             KeyCombo(vec![ModifiedKey(
                 Key::from(VirtKey::Left),
                 ModifiersState::ALT,
@@ -127,17 +129,17 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
                 ModifiedKey(Key::from(VirtKey::Q), ModifiersState::SHIFT),
             ]),
         ),
-        // Navigate to next file: Ctrl+Right
+        // Navigate to next file: bn
         (
-            Action::Navigate(Navigation::Next),
+            Action::History(HistDirection::Next),
             KeyCombo(vec![
                 ModifiedKey::from(VirtKey::B),
                 ModifiedKey::from(VirtKey::N),
             ]),
         ),
-        // Navigate to previous file: Ctrl+Left
+        // Navigate to previous file: bp
         (
-            Action::Navigate(Navigation::Previous),
+            Action::History(HistDirection::Prev),
             KeyCombo(vec![
                 ModifiedKey::from(VirtKey::B),
                 ModifiedKey::from(VirtKey::P),

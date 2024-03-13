@@ -39,7 +39,7 @@ use std::sync::{Arc, Mutex};
 use file_watcher::Watcher;
 use image::{Image, ImageData};
 use interpreter::HtmlInterpreter;
-use keybindings::action::{Action, Navigation, VertDirection, Zoom};
+use keybindings::action::{Action, HistDirection, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
 use opts::{Args, Config, Opts};
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
@@ -180,11 +180,11 @@ impl Inlyne {
     pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
-        let file_path = opts.history.get_path();
+        let file_path = opts.history.get_path().to_owned();
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(file_path) {
+        match root_filepath_to_vcs_dir(&file_path) {
             Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
             None => window.set_title("Inlyne"),
         }
@@ -198,7 +198,7 @@ impl Inlyne {
 
         let element_queue = Arc::new(Mutex::new(VecDeque::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
-        let md_string = read_to_string(file_path)
+        let md_string = read_to_string(&file_path)
             .with_context(|| format!("Could not read file at '{}'", file_path.display()))?;
 
         let interpreter = HtmlInterpreter::new(
@@ -522,8 +522,7 @@ impl Inlyne {
                                                         &path,
                                                         contents,
                                                     );
-                                                    self.opts.history.truncate();
-                                                    self.opts.history.append(path);
+                                                    self.opts.history.make_next(path);
                                                     self.renderer.set_scroll_y(0.);
                                                 }
                                                 Err(err) => {
@@ -629,10 +628,10 @@ impl Inlyne {
                                 Action::Copy => clipboard
                                     .set_contents(selection_cache.trim().to_owned()),
                                 Action::Quit => *control_flow = ControlFlow::Exit,
-                                Action::Navigate(navigation_action) => {
-                                    let changed_path = match navigation_action {
-                                        Navigation::Next => self.opts.history.next(),
-                                        Navigation::Previous => self.opts.history.previous(),
+                                Action::History(hist_dir) => {
+                                    let changed_path = match hist_dir {
+                                        HistDirection::Next => self.opts.history.next(),
+                                        HistDirection::Prev => self.opts.history.previous(),
                                     };
                                     let Some(file_path) = changed_path else {
                                         return;
