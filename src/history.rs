@@ -1,7 +1,6 @@
-use smart_debug::SmartDebug;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-#[derive(SmartDebug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct History {
     history: Vec<PathBuf>,
     index: usize,
@@ -9,39 +8,41 @@ pub struct History {
 
 impl History {
     pub fn new(path_buf: PathBuf) -> Self {
-        History {
+        Self {
             history: vec![path_buf],
             index: 0,
         }
     }
-    pub fn truncate(&mut self) {
-        if self.index + 1 < self.history.len() {
-            self.history.truncate(self.index + 1);
-        }
+
+    pub fn get_path(&self) -> &Path {
+        self.history
+            .get(self.index)
+            .expect("History should always be in bounds")
+            .as_path()
     }
-    pub fn append(&mut self, file_path: PathBuf) {
+
+    pub fn make_next(&mut self, file_path: PathBuf) {
+        self.history.truncate(self.index + 1);
         self.history.push(file_path);
         self.index += 1;
     }
-    pub fn get_path(&self) -> &PathBuf {
-        self.history
-            .get(self.index)
-            .expect("History should be bound checked for all possible indexes.")
-    }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<&PathBuf> {
+    pub fn next(&mut self) -> Option<&Path> {
         if self.index + 1 == self.history.len() {
-            return None;
+            None
+        } else {
+            self.index += 1;
+            Some(self.get_path())
         }
-        self.index += 1;
-        Some(self.get_path())
     }
-    pub fn previous(&mut self) -> Option<&PathBuf> {
+
+    pub fn previous(&mut self) -> Option<&Path> {
         if self.index == 0 {
-            return None;
+            None
+        } else {
+            self.index -= 1;
+            Some(self.get_path())
         }
-        self.index -= 1;
-        Some(self.get_path())
     }
 }
