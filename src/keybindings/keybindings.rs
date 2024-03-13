@@ -6,7 +6,7 @@ use super::{action::Action, KeyCombo};
 
 /// A list of [`keybindings`](KeyCombo) each associated with an [`Action`].
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct Keybindings(Vec<(Action, KeyCombo)>);
+pub struct Keybindings(pub(crate) Vec<(Action, KeyCombo)>);
 
 impl Keybindings {
     /// Returns an iterator over the [`Action`]s and [`KeyCombo`]s
