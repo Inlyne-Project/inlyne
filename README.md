@@ -25,7 +25,7 @@ view markdown files in the blink of an eye 👀.
 To install just use `cargo install inlyne`, almost everything comes pre-bundled (see [Dependencies](#dependencies)).
 Alternatively you can install through various package managers.
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/inlyne.svg)](https://repology.org/project/inlyne/versions)
+[![Packaging status](https://repology.org/badge/vertical-allrepos/inlyne.svg?exclude_unsupported=1)](https://repology.org/project/inlyne/versions)
 
 ### Dependencies
 
