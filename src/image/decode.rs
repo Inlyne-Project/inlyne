@@ -95,8 +95,14 @@ enum Rgba8Adapter<'img> {
 impl<'img> Rgba8Adapter<'img> {
     fn new<Dec: ImageDecoder<'img>>(dec: Dec) -> Option<Self> {
         let adapter = match dec.color_type() {
-            ColorType::Rgba8 => Self::Rgba8(Box::new(dec.into_reader().ok()?)),
+            ColorType::Rgba8 => {
+                // TODO: Need to figure out a workaround for streaming or eat the memory usage
+                #[allow(deprecated)]
+                Self::Rgba8(Box::new(dec.into_reader().ok()?))
+            }
             ColorType::Rgb8 => Self::Rgb8 {
+                // TODO: Need to figure out a workaround for streaming or eat the memory usage
+                #[allow(deprecated)]
                 source: Box::new(dec.into_reader().ok()?),
                 scratch: Vec::new(),
             },
