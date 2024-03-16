@@ -1,0 +1,58 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n<details>\n\n<summary>summary</summary>\n\ncollapsed text\n\n</details>\n\n\n --- html\n\n<details>\n<summary>summary</summary>\n<p>collapsed text</p>\n</details>\n"
+expression: "interpret_md_with_opts(text, opts)"
+---
+[
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    Section(
+        Section {
+            elements: [
+                Positioned {
+                    inner: TextBox(
+                        TextBox {
+                            texts: [
+                                Text {
+                                    text: "collapsed text",
+                                    default_color: Color(BLACK),
+                                    ..
+                                },
+                            ],
+                            ..
+                        },
+                    ),
+                    bounds: None,
+                },
+            ],
+            hidpi_scale: 1.0,
+            hidden: RefCell {
+                value: true,
+            },
+            summary: Some(
+                Positioned {
+                    inner: TextBox(
+                        TextBox {
+                            texts: [
+                                Text {
+                                    text: "summary",
+                                    default_color: Color(BLACK),
+                                    ..
+                                },
+                            ],
+                            ..
+                        },
+                    ),
+                    bounds: None,
+                },
+            ),
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+]
