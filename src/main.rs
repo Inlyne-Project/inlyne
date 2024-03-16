@@ -143,39 +143,6 @@ pub struct Inlyne {
     watcher: Watcher,
 }
 
-/// Gets a relative path extending from the repo root falling back to the full path
-fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
-    let mut full_path = path.canonicalize().ok()?;
-    let mut parts = vec![full_path.file_name()?.to_owned()];
-
-    full_path.pop();
-    loop {
-        full_path.push(".git");
-        let is_git = full_path.exists();
-        full_path.pop();
-        full_path.push(".hg");
-        let is_mercurial = full_path.exists();
-        full_path.pop();
-
-        let is_vcs_dir = is_git || is_mercurial;
-
-        match full_path.file_name() {
-            Some(name) => parts.push(name.to_owned()),
-            // We've searched the full path and didn't find a vcs dir
-            None => return Some(path.to_owned()),
-        }
-        if is_vcs_dir {
-            let mut rooted = PathBuf::new();
-            for part in parts.into_iter().rev() {
-                rooted.push(part);
-            }
-            return Some(rooted);
-        }
-
-        full_path.pop();
-    }
-}
-
 impl Inlyne {
     pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
@@ -184,10 +151,7 @@ impl Inlyne {
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(&file_path) {
-            Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
-            None => window.set_title("Inlyne"),
-        }
+        window.set_title(&utils::format_title(&file_path));
         let renderer = pollster::block_on(Renderer::new(
             &window,
             opts.theme.clone(),
@@ -279,6 +243,12 @@ impl Inlyne {
         self.renderer.positioner.anchors.clear();
         self.interpreter_should_queue.store(true, Ordering::Relaxed);
         self.interpreter_sender.send(contents).unwrap();
+    }
+
+    fn update_file(&mut self, path: &Path, contents: String) {
+        self.window.set_title(&utils::format_title(path));
+        self.watcher.update_file(path, contents);
+        self.renderer.set_scroll_y(0.0);
     }
 
     pub fn run(mut self) {
@@ -518,12 +488,8 @@ impl Inlyne {
                                         } else {
                                             match read_to_string(&path) {
                                                 Ok(contents) => {
-                                                    self.watcher.update_file(
-                                                        &path,
-                                                        contents,
-                                                    );
+                                                    self.update_file(&path, contents);
                                                     self.opts.history.make_next(path);
-                                                    self.renderer.set_scroll_y(0.);
                                                 }
                                                 Err(err) => {
                                                     tracing::warn!(
@@ -632,17 +598,13 @@ impl Inlyne {
                                     let changed_path = match hist_dir {
                                         HistDirection::Next => self.opts.history.next(),
                                         HistDirection::Prev => self.opts.history.previous(),
-                                    };
+                                    }.map(ToOwned::to_owned);
                                     let Some(file_path) = changed_path else {
                                         return;
                                     };
-                                    match read_to_string(file_path) {
+                                    match read_to_string(&file_path) {
                                         Ok(contents) => {
-                                            self.watcher.update_file(
-                                                file_path,
-                                                contents,
-                                            );
-                                            self.renderer.set_scroll_y(0.0);
+                                            self.update_file(&file_path, contents);
                                         }
                                         Err(err) => {
                                             tracing::warn!(
