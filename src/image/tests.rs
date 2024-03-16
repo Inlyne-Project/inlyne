@@ -38,9 +38,13 @@ fn source_image_variety() {
         "rgb8.gif",
         "rgb8.jpg",
         "rgb8.png",
+        // QOI tests our non-streamed fallback code because who uses this?
+        "rgb8.qoi",
         "rgba8.gif",
         "rgba8.jpg",
         "rgba8.png",
+        // QOI tests our non-streamed fallback code because who uses this?
+        "rgba8.qoi",
     ] {
         check(&Path::new("assets").join("test_data").join(file));
     }
