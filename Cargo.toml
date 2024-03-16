@@ -30,35 +30,33 @@ wayland = ["copypasta/wayland", "winit/wayland"]
 [dependencies]
 winit = { version = "0.28.7", default-features = false }
 wgpu = "0.16"
-bytemuck = { version = "1.14.0", features = [ "derive" ] }
+bytemuck = { version = "1.15.0", features = [ "derive" ] }
 lyon = "1.0.1"
-comrak = { version = "0.19.0", default-features = false, features = ["shortcodes", "syntect"] }
-open = "5.0.0"
+comrak = { version = "0.21.0", default-features = false, features = ["shortcodes", "syntect"] }
+open = "5.1.2"
 html5ever = "0.26.0"
-image = "0.24.7"
-clap = { version = "4.3.24", features = ["cargo"] }
-copypasta = { version = "0.10.0", default-features = false }
-resvg = "0.36.0"
-usvg = "0.36.0"
-tiny-skia = "0.11.2"
-anyhow = "1.0.75"
+image = "0.24.9"
+clap = { version = "4.4.18", features = ["cargo"] }
+copypasta = { version = "0.10.1", default-features = false }
+resvg = "0.37.0"
+anyhow = "1.0.81"
 dirs = "5.0.1"
-serde = { version = "1.0.190", features = ["derive"] }
-toml = "0.7.6"
-reqwest = { version = "0.11.22", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
+serde = { version = "1.0.197", features = ["derive"] }
+toml = "0.8.11"
+reqwest = { version = "0.11.26", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 notify = "6.1.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
 # `checked-decode`
-lz4_flex = { version = "0.11.1", default-features = false, features = ["frame", "safe-encode", "std"] }
+lz4_flex = { version = "0.11.2", default-features = false, features = ["frame", "safe-encode", "std"] }
 pollster = "0.3.0"
-serde_yaml = "0.9.27"
-indexmap = { version = "2.1.0", features = ["serde"] }
+serde_yaml = "0.9.32"
+indexmap = { version = "2.2.5", features = ["serde"] }
 html-escape = "0.2.13"
 fxhash = "0.2.1"
 twox-hash = "1.6.3"
 taffy = "0.3.18"
-syntect = "5.1.0"
+syntect = "5.2.0"
 smart-debug = "0.0.3"
 two-face = "0.3.0"
 # NOTE: We need `fontconfig` enabled to pick up fonts on some systems, but
@@ -66,7 +64,7 @@ two-face = "0.3.0"
 # set the feature for the transitive dep while manually making sure that we keep
 # the versions in sync ;-;
 fontdb = { version = "0.14.1", features = ["fontconfig"] }
-human-panic = "1.2.2"
+human-panic = "1.2.3"
 notify-debouncer-full = { version = "0.3.1", default-features = false }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
@@ -88,12 +86,12 @@ inherits = "release"
 lto = true
 
 [dev-dependencies]
-base64 = "0.21.4"
-filetime = "0.2.22"
-insta = "1.34.0"
+base64 = "0.22.0"
+filetime = "0.2.23"
+insta = "1.36.1"
 pretty_assertions = "1.4.0"
-tempfile = "3.8.1"
-wiremock = "0.5.21"
+tempfile = "3.10.1"
+wiremock = "0.6.0"
 
 # Selectively bump up opt level for some dependencies to improve dev build perf
 [profile.dev.package]

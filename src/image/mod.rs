@@ -17,8 +17,11 @@ use crate::utils::{self, usize_in_mib, Align, Point, Size};
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use resvg::{
+    tiny_skia,
+    usvg::{self, TreeParsing, TreeTextToPath},
+};
 use smart_debug::SmartDebug;
-use usvg::{TreeParsing, TreeTextToPath};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 

@@ -13,7 +13,7 @@ macro_rules! snapshot_config_parse_error {
                 ::insta::with_settings!({
                     description => $config_text,
                 }, {
-                    ::insta::assert_display_snapshot!(err);
+                    ::insta::assert_snapshot!(err);
                 });
             }
         )*
@@ -56,7 +56,7 @@ macro_rules! snapshot_keycombo_conflict_err {
                 ::insta::with_settings!({
                     description => $config_text,
                 }, {
-                    ::insta::assert_display_snapshot!(err);
+                    ::insta::assert_snapshot!(err);
                 });
             }
         )*
