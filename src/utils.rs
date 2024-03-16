@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::image::ImageData;
@@ -13,6 +14,46 @@ use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use syntect::parsing::SyntaxSet;
 use winit::window::CursorIcon;
+
+pub fn format_title(file_path: &Path) -> String {
+    match root_filepath_to_vcs_dir(file_path) {
+        Some(path) => format!("Inlyne - {}", path.to_string_lossy()),
+        None => "Inlyne".to_owned(),
+    }
+}
+
+/// Gets a relative path extending from the repo root falling back to the full path
+fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
+    let mut full_path = path.canonicalize().ok()?;
+    let mut parts = vec![full_path.file_name()?.to_owned()];
+
+    full_path.pop();
+    loop {
+        full_path.push(".git");
+        let is_git = full_path.exists();
+        full_path.pop();
+        full_path.push(".hg");
+        let is_mercurial = full_path.exists();
+        full_path.pop();
+
+        let is_vcs_dir = is_git || is_mercurial;
+
+        match full_path.file_name() {
+            Some(name) => parts.push(name.to_owned()),
+            // We've searched the full path and didn't find a vcs dir
+            None => return Some(path.to_owned()),
+        }
+        if is_vcs_dir {
+            let mut rooted = PathBuf::new();
+            for part in parts.into_iter().rev() {
+                rooted.push(part);
+            }
+            return Some(rooted);
+        }
+
+        full_path.pop();
+    }
+}
 
 pub fn client() -> Client {
     const USER_AGENT: &str = concat!(
