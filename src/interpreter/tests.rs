@@ -357,6 +357,14 @@ const HEADER_INHERIT_ALIGN: &str = r##"
   </h4>
 </div>"##;
 
+const COLLAPSED_SECTION: &str = "\
+<details>
+<summary>summary</summary>
+
+collapsed text
+</details>
+";
+
 snapshot_interpreted_elements!(
     // (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -378,6 +386,7 @@ snapshot_interpreted_elements!(
     (small_text, SMALL_TEXT),
     (text_styles, TEXT_STYLES),
     (header_inherit_align, HEADER_INHERIT_ALIGN),
+    (collapsed_section, COLLAPSED_SECTION),
 );
 
 const UNDERLINE_IN_CODEBLOCK: &str = "\
