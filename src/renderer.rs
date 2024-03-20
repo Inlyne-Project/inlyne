@@ -399,10 +399,15 @@ impl Renderer {
                             }
                         }
                     }
-                    let last_header_node = layout.headers.last().unwrap();
-                    let y = last_header_node.location.y
-                        + last_header_node.size.height
-                        + TABLE_ROW_GAP / 2.;
+                    let y = layout
+                        .headers
+                        .last()
+                        .map(|last_header_node| {
+                            last_header_node.location.y
+                                + last_header_node.size.height
+                                + TABLE_ROW_GAP / 2.0
+                        })
+                        .unwrap_or(0.0);
                     let x = layout
                         .headers
                         .last()
