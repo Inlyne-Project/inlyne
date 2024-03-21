@@ -20,16 +20,26 @@ Except 9 times out of 10 you need an entire web browser to quickly open a file..
 Introducing **Inlyne**, a GPU powered yet browserless tool to help you quickly
 view markdown files in the blink of an eye 👀.
 
-## Install
+## Installation
 
-To install just use `cargo install inlyne`, almost everything comes pre-bundled (see [Dependencies](#dependencies)).
-Alternatively you can install through various package managers.
+`inlyne` is already present in a handful of different package repos.
+Installation should be mostly painless as _most_ things come pre-bundled.
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/inlyne.svg?exclude_unsupported=1)](https://repology.org/project/inlyne/versions)
 
-### Dependencies
+### Building from Source
 
-The `fontconfig` package from your distribution needs to be installed. See https://github.com/yeslogic/fontconfig-rs#dependencies.
+There are a small handful of dependencies needed to build `inlyne` from source.
+Namely
+
+1. `cargo` with a somewhat recent Rust toolchain
+   [(the relevant docs)](https://www.rust-lang.org/learn/get-started)
+2. A C-compiler
+3. (On Linux) Development libraries for `fontconfig`, `xkbcommon`, and `wayland`
+   (when the `wayland` feature flag is set)
+
+For instance on Ubuntu `gcc` covers 2. and `libfontconfig-dev`,
+`libxkbcommon-dev` and `libwayland-dev` would cover 3.
 
 ## Features
 
