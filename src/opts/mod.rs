@@ -6,11 +6,12 @@ mod tests;
 use std::path::Path;
 
 use crate::color;
-pub use cli::{Args, ThemeType};
+pub use cli::{Cli, Commands, ThemeType, View};
 pub use config::{Config, FontOptions, KeybindingsSection};
 
 use crate::history::History;
 use anyhow::Result;
+use clap::Parser;
 use serde::Deserialize;
 use smart_debug::SmartDebug;
 
@@ -53,7 +54,7 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn parse_and_load_from(args: Args, config: Config) -> Result<Self> {
+    pub fn parse_and_load_from(args: View, config: Config) -> Result<Self> {
         #[cfg(test)]
         {
             // "Use" the unused params
@@ -69,7 +70,7 @@ impl Opts {
 
     #[cfg(test)]
     pub fn parse_and_load_with_system_theme(
-        args: Args,
+        args: View,
         config: Config,
         theme: Option<ResolvedTheme>,
     ) -> Result<Self> {
@@ -77,7 +78,7 @@ impl Opts {
     }
 
     fn parse_and_load_inner(
-        args: Args,
+        args: View,
         config: Config,
         fallback_theme: Option<ResolvedTheme>,
     ) -> Result<Self> {
@@ -92,7 +93,7 @@ impl Opts {
             keybindings,
         } = config;
 
-        let Args {
+        let View {
             file_path,
             theme: args_theme,
             scale: args_scale,
@@ -135,11 +136,11 @@ impl Opts {
 
     /// Arguments to supply to program that are opened externally.
     pub fn program_args(file_path: &Path) -> Vec<String> {
-        let current_args = Args::new();
+        let current_args = Cli::parse().to_view().expect("Should contain an view!");
+
         let mut args = Vec::new();
 
         args.push(file_path.display().to_string());
-
         if let Some(theme) = current_args.theme {
             args.push("--theme".to_owned());
             args.push(theme.as_str().to_owned());

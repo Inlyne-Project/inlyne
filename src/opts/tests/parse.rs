@@ -1,9 +1,10 @@
+use clap::CommandFactory;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::opts::config::{self, FontOptions, LinesToScroll};
-use crate::opts::{cli, Args, Opts, ResolvedTheme, ThemeType};
+use crate::opts::{Cli, Opts, ResolvedTheme, ThemeType, View};
 use crate::test_utils::init_test_log;
 
 use crate::history::History;
@@ -44,7 +45,7 @@ impl ResolvedTheme {
 fn debug_assert() {
     init_test_log();
 
-    cli::command().debug_assert();
+    Cli::command().debug_assert();
 }
 
 #[test]
