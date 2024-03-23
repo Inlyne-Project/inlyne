@@ -1,4 +1,3 @@
-use anyhow::bail;
 use clap::{
     builder::PossibleValue, command, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
 };
@@ -51,13 +50,13 @@ impl Cli {
             self.command.expect("Command should be Some!")
         }
     }
-    pub fn to_view(self) -> anyhow::Result<View> {
+    pub fn to_view(self) -> Result<View, &'static str> {
         Ok(if let Some(view) = self.view_file {
             view
         } else if let Some(Commands::View(view)) = self.command {
             view
         } else {
-            bail!("Cli options do not contain an view option")
+            return Err("Cli options do not contain an view option");
         })
     }
 }
