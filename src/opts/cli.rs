@@ -43,14 +43,14 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub fn to_commands(self) -> Commands {
+    pub fn into_commands(self) -> Commands {
         if let Some(view) = self.view_file {
             Commands::View(view)
         } else {
             self.command.expect("Command should be Some!")
         }
     }
-    pub fn to_view(self) -> Result<View, &'static str> {
+    pub fn into_view(self) -> Result<View, &'static str> {
         Ok(if let Some(view) = self.view_file {
             view
         } else if let Some(Commands::View(view)) = self.command {

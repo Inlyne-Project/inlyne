@@ -56,7 +56,7 @@ fn defaults() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config::Config::default(),
             None,
@@ -79,7 +79,7 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config,
             Some(ResolvedTheme::Light),
@@ -101,7 +101,7 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config,
             Some(ResolvedTheme::Dark),
@@ -122,7 +122,7 @@ fn config_overrides_default() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config,
             None,
@@ -143,7 +143,7 @@ fn from_cli() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config::Config::default(),
             Some(ResolvedTheme::Light),
@@ -166,7 +166,7 @@ fn from_cli() {
         Opts::parse_and_load_with_system_theme(
             Cli::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"]))
                 .unwrap()
-                .to_view()
+                .into_view()
                 .unwrap(),
             config,
             Some(ResolvedTheme::Light),
@@ -195,7 +195,7 @@ fn cli_kitchen_sink() {
     ]);
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(args).unwrap().to_view().unwrap(),
+            Cli::try_parse_from(args).unwrap().into_view().unwrap(),
             config::Config::default(),
             Some(ResolvedTheme::Light),
         )
@@ -223,7 +223,7 @@ fn builtin_syntax_theme() {
     let opts = Opts::parse_and_load_with_system_theme(
         Cli::try_parse_from(gen_args(vec!["file.md"]))
             .unwrap()
-            .to_view()
+            .into_view()
             .unwrap(),
         config,
         Some(ResolvedTheme::Light),
@@ -251,7 +251,7 @@ fn custom_syntax_theme() {
 
     let args = Cli::try_parse_from(gen_args(vec!["file.md"]))
         .unwrap()
-        .to_view()
+        .into_view()
         .unwrap();
 
     let res = Opts::parse_and_load_with_system_theme(

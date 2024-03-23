@@ -756,7 +756,7 @@ fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().compact())
         .init();
 
-    let command = Cli::parse().to_commands();
+    let command = Cli::parse().into_commands();
 
     match command {
         Commands::View(view) => {
