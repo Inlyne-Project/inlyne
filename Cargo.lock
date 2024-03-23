@@ -1896,6 +1896,8 @@ dependencies = [
 name = "inlyne"
 version = "0.4.1"
 dependencies = [
+ "anstream",
+ "anstyle",
  "anyhow",
  "base64 0.22.0",
  "bytemuck",
