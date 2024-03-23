@@ -41,7 +41,7 @@ use image::{Image, ImageData};
 use interpreter::HtmlInterpreter;
 use keybindings::action::{Action, HistDirection, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
-use opts::{Args, Config, Opts};
+use opts::{Cli, Config, Opts};
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
 use raw_window_handle::HasRawDisplayHandle;
 use renderer::Renderer;
@@ -51,7 +51,9 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
+use crate::opts::Commands;
 use anyhow::Context;
+use clap::Parser;
 use taffy::Taffy;
 use winit::event::{
     ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent,
@@ -754,21 +756,26 @@ fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().compact())
         .init();
 
-    let args = Args::new();
-    let config = match &args.config {
-        Some(config_path) => Config::load_from_file(config_path)?,
-        None => Config::load_from_system().unwrap_or_else(|err| {
-            tracing::warn!(
-                "Failed reading config file. Falling back to defaults. Error: {}",
-                err
-            );
-            Config::default()
-        }),
-    };
-    let opts = Opts::parse_and_load_from(args, config)?;
+    let command = Cli::parse().into_commands();
 
-    let inlyne = Inlyne::new(opts)?;
-    inlyne.run();
+    match command {
+        Commands::View(view) => {
+            let config = match &view.config {
+                Some(config_path) => Config::load_from_file(config_path)?,
+                None => Config::load_from_system().unwrap_or_else(|err| {
+                    tracing::warn!(
+                        "Failed reading config file. Falling back to defaults. Error: {}",
+                        err
+                    );
+                    Config::default()
+                }),
+            };
+            let opts = Opts::parse_and_load_from(view, config)?;
+
+            let inlyne = Inlyne::new(opts)?;
+            inlyne.run();
+        }
+    }
 
     Ok(())
 }
