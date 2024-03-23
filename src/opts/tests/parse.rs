@@ -1,14 +1,14 @@
-use clap::CommandFactory;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
-use crate::opts::config::{self, FontOptions, LinesToScroll};
-use crate::opts::{Cli, Opts, ResolvedTheme, ThemeType, View};
-use crate::test_utils::init_test_log;
-
-use crate::history::History;
+use clap::{CommandFactory, Parser};
 use pretty_assertions::assert_eq;
+
+use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
+use crate::history::History;
+use crate::opts::config::{self, FontOptions, LinesToScroll};
+use crate::opts::{Cli, Opts, ResolvedTheme, ThemeType};
+use crate::test_utils::init_test_log;
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
     std::iter::once("inlyne")
@@ -54,7 +54,10 @@ fn defaults() {
 
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config::Config::default(),
             None,
         )
@@ -74,7 +77,10 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config,
             Some(ResolvedTheme::Light),
         )
@@ -93,7 +99,10 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config,
             Some(ResolvedTheme::Dark),
         )
@@ -111,7 +120,10 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config,
             None,
         )
@@ -129,7 +141,10 @@ fn from_cli() {
 
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config::Config::default(),
             Some(ResolvedTheme::Light),
         )
@@ -149,7 +164,10 @@ fn from_cli() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"])).unwrap(),
+            Cli::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"]))
+                .unwrap()
+                .to_view()
+                .unwrap(),
             config,
             Some(ResolvedTheme::Light),
         )
@@ -177,7 +195,7 @@ fn cli_kitchen_sink() {
     ]);
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Args::try_parse_from(args).unwrap(),
+            Cli::try_parse_from(args).unwrap().to_view().unwrap(),
             config::Config::default(),
             Some(ResolvedTheme::Light),
         )
@@ -203,7 +221,10 @@ fn builtin_syntax_theme() {
     });
 
     let opts = Opts::parse_and_load_with_system_theme(
-        Args::try_parse_from(gen_args(vec!["file.md"])).unwrap(),
+        Cli::try_parse_from(gen_args(vec!["file.md"]))
+            .unwrap()
+            .to_view()
+            .unwrap(),
         config,
         Some(ResolvedTheme::Light),
     )
@@ -228,7 +249,10 @@ fn custom_syntax_theme() {
         config
     }
 
-    let args = Args::try_parse_from(gen_args(vec!["file.md"])).unwrap();
+    let args = Cli::try_parse_from(gen_args(vec!["file.md"]))
+        .unwrap()
+        .to_view()
+        .unwrap();
 
     let res = Opts::parse_and_load_with_system_theme(
         args.clone(),
@@ -259,5 +283,5 @@ fn missing_file_arg() {
     init_test_log();
 
     // A file arg should be required
-    assert!(Args::try_parse_from(gen_args(Vec::new())).is_err());
+    assert!(Cli::try_parse_from(gen_args(Vec::new())).is_err());
 }
