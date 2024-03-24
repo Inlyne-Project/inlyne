@@ -148,9 +148,17 @@ impl<'de> Deserialize<'de> for ModifiedKey {
         }
 
         #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum ModOrMods {
+            Mod(ModifierType),
+            Mods(Vec<ModifierType>),
+        }
+
+        #[derive(Deserialize)]
         struct Inner {
             key: ShortKey,
-            r#mod: Vec<ModifierType>,
+            #[serde(rename = "mod")]
+            mod_: ModOrMods,
         }
 
         #[derive(Deserialize)]
@@ -170,10 +178,14 @@ impl<'de> Deserialize<'de> for ModifiedKey {
             }
             KeyOrModifiedKey::ModifiedKey(Inner {
                 key: ShortKey { key, shift },
-                r#mod,
+                mod_,
             }) => {
                 let mut modifiers = ModifiersState::empty();
-                for ty in r#mod {
+                let mod_ = match mod_ {
+                    ModOrMods::Mod(m) => vec![m],
+                    ModOrMods::Mods(mods) => mods,
+                };
+                for ty in mod_ {
                     modifiers |= match ty {
                         ModifierType::Alt => ModifiersState::ALT,
                         ModifierType::Ctrl => ModifiersState::CTRL,
