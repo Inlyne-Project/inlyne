@@ -782,6 +782,10 @@ fn main() -> anyhow::Result<()> {
                 .join("inlyne.toml");
 
             if !config_path.is_file() {
+                tracing::info!(
+                    "No config found. Creating a new config at: {}",
+                    config_path.display()
+                );
                 Config::create_default_config(&config_path)?;
             }
 
