@@ -49,16 +49,15 @@ base = [
 // make things less verbose
 // TODO(cosmic): Consider switching the casing away from PascalCase? Maybe keep it inline with the
 // rest of the config file and use kebab-case instead?
-// TODO(cosmic): Allow for passing a single string for `mod`
 const DEFAULTS_TEMPLATE: &str = r#"
 [keybindings]
 base = [
     # Regular
-    ["Copy", { key = "c", mod = ["CTRL_OR_CMD"] }],
-    ["ZoomIn", { key = "=", mod = ["CTRL_OR_CMD"] }],
-    ["ZoomOut", { key = "-", mod = ["CTRL_OR_CMD"] }],
-    ["HistoryNext", { key = "Right", mod = ["Alt"] }],
-    ["HistoryPrevious", { key = "Left", mod = ["Alt"] }],
+    ["Copy", { key = "c", mod = "CTRL_OR_CMD" }],
+    ["ZoomIn", { key = "=", mod = "CTRL_OR_CMD" }],
+    ["ZoomOut", { key = "-", mod = "CTRL_OR_CMD" }],
+    ["HistoryNext", { key = "Right", mod = "Alt" }],
+    ["HistoryPrevious", { key = "Left", mod = "Alt" }],
     ["ScrollUp", "Up"],
     ["ScrollDown", "Down"],
     ["PageUp", "PageUp"],
@@ -71,10 +70,10 @@ base = [
     ["ScrollUp", "k"],
     ["ScrollDown", "j"],
     ["ToTop", ["g", "g"]],
-    ["ToBottom", { key = "g", mod = ["Shift"] }],
+    ["ToBottom", "G"],
     ["Quit", "q"],
-    ["Quit", [{ key = "z", mod = ["Shift"] }, { key = "z", mod = ["Shift"] }]],
-    ["Quit", [{ key = "z", mod = ["Shift"] }, { key = "q", mod = ["Shift"] }]],
+    ["Quit", ["Z", "Z"]],
+    ["Quit", ["Z", "Q"]],
     ["HistoryNext", ["b", "n"]],
     ["HistoryPrevious", ["b", "p"]],
 ]
