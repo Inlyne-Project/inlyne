@@ -52,7 +52,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
-use crate::opts::Commands;
+use crate::opts::{Commands, ConfigCmd};
 use anyhow::Context;
 use clap::Parser;
 use taffy::Taffy;
@@ -775,6 +775,22 @@ fn main() -> anyhow::Result<()> {
 
             let inlyne = Inlyne::new(opts)?;
             inlyne.run();
+        }
+        Commands::Config(ConfigCmd::Open) => {
+            let config_path = dirs::config_dir()
+                .context("Failed to find the configuration directory")?
+                .join("inlyne")
+                .join("inlyne.toml");
+
+            if !config_path.is_file() {
+                tracing::info!(
+                    "No config found. Creating a new config at: {}",
+                    config_path.display()
+                );
+                Config::create_default_config(&config_path)?;
+            }
+
+            edit::edit_file(config_path)?;
         }
     }
 

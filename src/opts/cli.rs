@@ -64,6 +64,8 @@ impl Cli {
 #[derive(Subcommand, Debug, PartialEq, Clone)]
 pub enum Commands {
     View(View),
+    #[command(subcommand)]
+    Config(ConfigCmd),
 }
 
 /// View markdown a file with inlyne
@@ -89,4 +91,11 @@ pub struct View {
     /// Maximum width of page in pixels
     #[arg(short = 'w', long = "page-width")]
     pub page_width: Option<f32>,
+}
+
+/// Configuration related things
+#[derive(Subcommand, PartialEq, Clone, Debug)]
+pub enum ConfigCmd {
+    /// Opens the configuration file in the default text editor
+    Open,
 }

@@ -1,5 +1,6 @@
-use std::fs::read_to_string;
-use std::path::Path;
+use std::fs::{create_dir_all, read_to_string};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use super::ThemeType;
 use crate::color;
@@ -108,10 +109,21 @@ impl Config {
         let config_path = config_dir.join("inlyne").join("inlyne.toml");
 
         if !config_path.is_file() {
-            return Ok(Self::default());
+            Self::create_default_config(&config_path)?
         }
 
         Self::load_from_file(&config_path)
+    }
+
+    pub fn create_default_config(path: &PathBuf) -> anyhow::Result<()> {
+        create_dir_all(
+            path.parent()
+                .context("Could not find parent directory of path.")?,
+        )?;
+
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(include_bytes!("../../inlyne.default.toml"))?;
+        Ok(())
     }
 }
 

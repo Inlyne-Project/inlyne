@@ -6,7 +6,7 @@ mod tests;
 use std::path::Path;
 
 use crate::color;
-pub use cli::{Cli, Commands, ThemeType, View};
+pub use cli::{Cli, Commands, ConfigCmd, ThemeType, View};
 pub use config::{Config, FontOptions, KeybindingsSection};
 
 use crate::history::History;
