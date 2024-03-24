@@ -19,6 +19,7 @@ pub mod image;
 pub mod interpreter;
 mod keybindings;
 pub mod opts;
+mod panic_hook;
 pub mod positioner;
 pub mod renderer;
 pub mod table;
@@ -745,7 +746,7 @@ impl Inlyne {
 }
 
 fn main() -> anyhow::Result<()> {
-    human_panic::setup_panic!();
+    setup_panic!();
 
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive("inlyne=info".parse()?)

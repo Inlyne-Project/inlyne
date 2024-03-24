@@ -72,6 +72,8 @@ glyphon = "0.3"
 string_cache = { version = "0.8.7", default-features = false }
 raw-window-handle = "0.5.2"
 edit = "0.1.5"
+anstream = "0.6.13"
+anstyle = "1.0.6"
 
 [profile.release]
 strip = true
