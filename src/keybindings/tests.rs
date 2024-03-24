@@ -71,10 +71,10 @@ base = [
     ["ScrollUp", "k"],
     ["ScrollDown", "j"],
     ["ToTop", ["g", "g"]],
-    ["ToBottom", { key = "g", mod = ["Shift"] }],
+    ["ToBottom", "G"],
     ["Quit", "q"],
-    ["Quit", [{ key = "z", mod = ["Shift"] }, { key = "z", mod = ["Shift"] }]],
-    ["Quit", [{ key = "z", mod = ["Shift"] }, { key = "q", mod = ["Shift"] }]],
+    ["Quit", ["Z", "Z"]],
+    ["Quit", ["Z", "Q"]],
     ["HistoryNext", ["b", "n"]],
     ["HistoryPrevious", ["b", "p"]],
 ]
