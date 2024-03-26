@@ -1,9 +1,11 @@
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::color::{native_color, Theme};
 use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
+use crate::metrics::{histogram, HistTag};
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
 use crate::table::TABLE_ROW_GAP;
@@ -828,8 +830,12 @@ impl Renderer {
     }
 
     pub fn reposition(&mut self, elements: &mut [Positioned<Element>]) -> anyhow::Result<()> {
-        self.positioner
-            .reposition(&mut self.text_system, elements, self.zoom)
+        let start = Instant::now();
+        let res = self
+            .positioner
+            .reposition(&mut self.text_system, elements, self.zoom);
+        histogram!(HistTag::Reposition).record(start.elapsed());
+        res
     }
 
     pub fn set_scroll_y(&mut self, scroll_y: f32) {

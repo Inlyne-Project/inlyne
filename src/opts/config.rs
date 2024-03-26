@@ -74,6 +74,19 @@ pub struct KeybindingsSection {
     pub extra: Option<Keybindings>,
 }
 
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MetricsExporter {
+    Log,
+    Tcp,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct DebugSection {
+    pub metrics: Option<MetricsExporter>,
+}
+
 #[derive(Deserialize, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
@@ -85,6 +98,7 @@ pub struct Config {
     pub dark_theme: Option<OptionalTheme>,
     pub font_options: Option<FontOptions>,
     pub keybindings: KeybindingsSection,
+    pub debug: DebugSection,
 }
 
 impl Config {
