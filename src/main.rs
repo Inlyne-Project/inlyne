@@ -790,6 +790,7 @@ fn main() -> anyhow::Result<()> {
                         metrics::set_global_recorder(recorder)
                             .expect("Failed setting metrics recorder");
                     }
+                    #[cfg(inlyne_tcp_metrics)]
                     MetricsExporter::Tcp => metrics_exporter_tcp::TcpBuilder::new()
                         .install()
                         .expect("Failed to install TCP metrics server"),

@@ -78,6 +78,7 @@ pub struct KeybindingsSection {
 #[serde(rename_all = "kebab-case")]
 pub enum MetricsExporter {
     Log,
+    #[cfg(inlyne_tcp_metrics)]
     Tcp,
 }
 
