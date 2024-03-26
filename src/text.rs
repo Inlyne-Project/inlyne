@@ -442,6 +442,10 @@ impl TextBox {
                 select_end.0 - screen_position.0,
                 select_end.1 - screen_position.1,
             ) {
+                if start_cursor.index == end_cursor.index {
+                    return (vec![], String::new());
+                }
+
                 let mut y = screen_position.1;
                 for line in buffer.layout_runs() {
                     let line_contains =
