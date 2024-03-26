@@ -2,6 +2,7 @@ use std::cmp;
 use std::io;
 use std::time::Instant;
 
+use crate::metrics::{histogram, HistTag};
 use crate::utils::usize_in_mib;
 
 use image::codecs::{
@@ -23,10 +24,12 @@ pub fn lz4_compress<R: io::Read>(reader: &mut R) -> anyhow::Result<Vec<u8>> {
 }
 
 pub fn lz4_decompress(blob: &[u8], size: usize) -> anyhow::Result<Vec<u8>> {
+    let start = Instant::now();
     let mut lz4_dec = FrameDecoder::new(io::Cursor::new(blob));
     let mut decompressed = Vec::with_capacity(size);
     io::copy(&mut lz4_dec, &mut decompressed)?;
     decompressed.truncate(size);
+    histogram!(HistTag::ImageDecompress).record(start.elapsed());
     Ok(decompressed)
 }
 

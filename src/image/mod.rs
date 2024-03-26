@@ -11,6 +11,7 @@ use std::{fs, io};
 
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
+use crate::metrics::{histogram, HistTag};
 use crate::positioner::DEFAULT_MARGIN;
 use crate::utils::{self, usize_in_mib, Align, Point, Size};
 
@@ -220,6 +221,8 @@ impl Image {
         let image_data_clone = image_data.clone();
 
         std::thread::spawn(move || {
+            let start = Instant::now();
+
             let mut src_path = PathBuf::from(&src);
             if src_path.is_relative() {
                 if let Some(parent_dir) = file_path.parent() {
@@ -283,6 +286,7 @@ impl Image {
             };
 
             *image_data_clone.lock().unwrap() = Some(image);
+            histogram!(HistTag::ImageLoad).record(start.elapsed());
             image_callback.loaded_image(src, image_data_clone);
         });
 

@@ -18,6 +18,7 @@ pub mod history;
 pub mod image;
 pub mod interpreter;
 mod keybindings;
+mod metrics;
 pub mod opts;
 mod panic_hook;
 pub mod positioner;
@@ -36,12 +37,14 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, channel};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use file_watcher::Watcher;
 use image::{Image, ImageData};
 use interpreter::HtmlInterpreter;
 use keybindings::action::{Action, HistDirection, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
+use metrics::{histogram, HistTag};
 use opts::{Cli, Config, Opts};
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
 use raw_window_handle::HasRawDisplayHandle;
@@ -52,7 +55,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
-use crate::opts::{Commands, ConfigCmd};
+use crate::opts::{Commands, ConfigCmd, MetricsExporter};
 use anyhow::Context;
 use clap::Parser;
 use taffy::Taffy;
@@ -218,6 +221,8 @@ impl Inlyne {
                 .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
         };
         if let Ok(queue) = queue {
+            let positioning_start = Instant::now();
+
             for element in queue {
                 // Position element and add it to elements
                 let mut positioned_element = Positioned::new(element);
@@ -234,6 +239,8 @@ impl Inlyne {
                         + positioned_element.bounds.as_ref().unwrap().size.1;
                 elements.push(positioned_element);
             }
+
+            histogram!(HistTag::Positioner).record(positioning_start.elapsed());
         }
     }
 
@@ -301,6 +308,7 @@ impl Inlyne {
                     }
                 },
                 Event::RedrawRequested(_) => {
+                    let redraw_start = Instant::now();
                     Self::position_queued_elements(
                         &self.element_queue,
                         &mut self.renderer,
@@ -314,6 +322,8 @@ impl Inlyne {
                     if selecting {
                         selection_cache = self.renderer.selection_text.clone();
                     }
+
+                    histogram!(HistTag::Redraw).record(redraw_start.elapsed());
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => pending_resize = Some(size),
@@ -773,6 +783,24 @@ fn main() -> anyhow::Result<()> {
             };
             let opts = Opts::parse_and_load_from(view, config)?;
 
+            if let Some(exporter) = &opts.metrics {
+                match exporter {
+                    MetricsExporter::Log => {
+                        let recorder = metrics::LogRecorder::default();
+                        metrics::set_global_recorder(recorder)
+                            .expect("Failed setting metrics recorder");
+                    }
+                    #[cfg(inlyne_tcp_metrics)]
+                    MetricsExporter::Tcp => metrics_exporter_tcp::TcpBuilder::new()
+                        .install()
+                        .expect("Failed to install TCP metrics server"),
+                };
+            }
+
+            for tag in HistTag::iter() {
+                tag.set_global_description();
+            }
+
             let inlyne = Inlyne::new(opts)?;
             inlyne.run();
         }
@@ -783,7 +811,7 @@ fn main() -> anyhow::Result<()> {
                 .join("inlyne.toml");
 
             if !config_path.is_file() {
-                tracing::info!(
+                tracing::warn!(
                     "No config found. Creating a new config at: {}",
                     config_path.display()
                 );

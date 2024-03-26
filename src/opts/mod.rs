@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::color;
 pub use cli::{Cli, Commands, ConfigCmd, ThemeType, View};
-pub use config::{Config, FontOptions, KeybindingsSection};
+pub use config::{Config, DebugSection, FontOptions, KeybindingsSection, MetricsExporter};
 
 use crate::history::History;
 use anyhow::Result;
@@ -51,6 +51,7 @@ pub struct Opts {
     pub font_opts: FontOptions,
     pub keybindings: KeybindingsSection,
     pub color_scheme: Option<ResolvedTheme>,
+    pub metrics: Option<MetricsExporter>,
 }
 
 impl Opts {
@@ -91,6 +92,7 @@ impl Opts {
             dark_theme,
             font_options,
             keybindings,
+            debug,
         } = config;
 
         let View {
@@ -100,6 +102,8 @@ impl Opts {
             config: _,
             page_width: args_page_width,
         } = args;
+
+        let DebugSection { metrics } = debug;
 
         let resolved_theme = args_theme
             .or(config_theme)
@@ -131,6 +135,7 @@ impl Opts {
             font_opts,
             keybindings,
             color_scheme: resolved_theme,
+            metrics,
         })
     }
 

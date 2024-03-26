@@ -28,6 +28,7 @@ impl Opts {
             lines_to_scroll: LinesToScroll::default().0,
             keybindings: Default::default(),
             color_scheme: None,
+            metrics: Default::default(),
         }
     }
 }
