@@ -63,7 +63,7 @@ use winit::event::{
     ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent,
 };
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
-use winit::window::{CursorIcon, Window};
+use winit::window::{CursorIcon, Window, WindowBuilder};
 
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
@@ -156,8 +156,20 @@ impl Inlyne {
         let file_path = opts.history.get_path().to_owned();
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
-        let window = Arc::new(Window::new(&event_loop).unwrap());
-        window.set_title(&utils::format_title(&file_path));
+
+        let window = {
+            let mut wb = WindowBuilder::new().with_title(&utils::format_title(&file_path));
+
+            if let Some(ref pos) = opts.position {
+                wb = wb.with_position(winit::dpi::PhysicalPosition::new(pos.x, pos.y))
+            }
+            if let Some(ref size) = opts.size {
+                wb = wb.with_inner_size(winit::dpi::PhysicalSize::new(size.width, size.height))
+            }
+
+            Arc::new(wb.build(&event_loop).unwrap())
+        };
+
         let renderer = pollster::block_on(Renderer::new(
             &window,
             opts.theme.clone(),

@@ -20,6 +20,16 @@ theme = "Auto"
 # lines-to-scroll = 4.5
 lines-to-scroll = 3.0
 
+# Position of the window
+# [position]
+# x = 500
+# y = 200
+
+# Geomertry/Size of the window in pixels
+# [size]
+# width = 600
+# height = 500
+
 # The light and dark themes can be customized as well
 # Both the light and dark theme colors can be fully customized
 [dark-theme]

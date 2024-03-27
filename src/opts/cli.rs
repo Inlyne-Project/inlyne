@@ -1,3 +1,4 @@
+use super::{Position, Size};
 use clap::{
     builder::PossibleValue, command, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
 };
@@ -68,7 +69,7 @@ pub enum Commands {
     Config(ConfigCmd),
 }
 
-/// View markdown a file with inlyne
+/// View a markdown file with inlyne
 #[derive(ClapArgs, PartialEq, Debug, Clone, Default)]
 #[command(arg_required_else_help(true))]
 pub struct View {
@@ -91,6 +92,14 @@ pub struct View {
     /// Maximum width of page in pixels
     #[arg(short = 'w', long = "page-width")]
     pub page_width: Option<f32>,
+
+    /// Position of the opened window <x>,<y>
+    #[arg(short = 'p', long = "win-pos", value_parser = value_parser!(Position))]
+    pub position: Option<Position>,
+
+    /// Size of the opened window <width>x<height>
+    #[arg(short = 'g', long = "win-size", value_parser = value_parser!(Size))]
+    pub size: Option<Size>,
 }
 
 /// Configuration related things

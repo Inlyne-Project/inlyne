@@ -1,6 +1,7 @@
 use std::fs::{create_dir_all, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use super::ThemeType;
 use crate::color;
@@ -88,6 +89,53 @@ pub struct DebugSection {
     pub metrics: Option<MetricsExporter>,
 }
 
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl FromStr for Position {
+    type Err = &'static str;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = input.split(',').collect();
+        if parts.len() != 2 {
+            return Err("Invalid format for Position: expected format <x>,<y>");
+        }
+        let x = parts[0]
+            .parse::<i32>()
+            .map_err(|_| "Invalid x-coordinate: not a valid integer")?;
+        let y = parts[1]
+            .parse::<i32>()
+            .map_err(|_| "Invalid y-coordinate: not a valid integer")?;
+        Ok(Position { x, y })
+    }
+}
+
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Size {
+    pub width: u32,
+    pub height: u32,
+}
+impl FromStr for Size {
+    type Err = &'static str;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = input.split('x').collect();
+        if parts.len() != 2 {
+            return Err("Invalid format for Size: expected format <width>x<height>");
+        }
+        let width = parts[0]
+            .parse::<u32>()
+            .map_err(|_| "Invalid width: not a valid integer")?;
+        let height = parts[1]
+            .parse::<u32>()
+            .map_err(|_| "Invalid height: not a valid integer")?;
+        Ok(Size { width, height })
+    }
+}
+
 #[derive(Deserialize, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
@@ -100,6 +148,8 @@ pub struct Config {
     pub font_options: Option<FontOptions>,
     pub keybindings: KeybindingsSection,
     pub debug: DebugSection,
+    pub position: Option<Position>,
+    pub size: Option<Size>,
 }
 
 impl Config {
