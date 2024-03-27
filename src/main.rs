@@ -158,7 +158,7 @@ impl Inlyne {
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
 
         let window = {
-            let mut wb = WindowBuilder::new().with_title(&utils::format_title(&file_path));
+            let mut wb = WindowBuilder::new().with_title(utils::format_title(&file_path));
 
             if let Some(ref pos) = opts.position {
                 wb = wb.with_position(winit::dpi::PhysicalPosition::new(pos.x, pos.y))

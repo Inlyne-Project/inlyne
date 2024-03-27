@@ -1,9 +1,9 @@
-use super::{Position, Size};
 use clap::{
     builder::PossibleValue, command, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
 };
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeType {
@@ -30,6 +30,53 @@ impl ValueEnum for ThemeType {
 
     fn to_possible_value<'a>(&self) -> Option<PossibleValue> {
         Some(PossibleValue::new(self.as_str()))
+    }
+}
+
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl FromStr for Position {
+    type Err = &'static str;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = input.split(',').collect();
+        if parts.len() != 2 {
+            return Err("Invalid format for Position: expected format <x>,<y>");
+        }
+        let x = parts[0]
+            .parse::<i32>()
+            .map_err(|_| "Invalid x-coordinate: not a valid integer")?;
+        let y = parts[1]
+            .parse::<i32>()
+            .map_err(|_| "Invalid y-coordinate: not a valid integer")?;
+        Ok(Position { x, y })
+    }
+}
+
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Size {
+    pub width: u32,
+    pub height: u32,
+}
+impl FromStr for Size {
+    type Err = &'static str;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = input.split('x').collect();
+        if parts.len() != 2 {
+            return Err("Invalid format for Size: expected format <width>x<height>");
+        }
+        let width = parts[0]
+            .parse::<u32>()
+            .map_err(|_| "Invalid width: not a valid integer")?;
+        let height = parts[1]
+            .parse::<u32>()
+            .map_err(|_| "Invalid height: not a valid integer")?;
+        Ok(Size { width, height })
     }
 }
 

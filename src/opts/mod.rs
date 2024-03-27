@@ -6,10 +6,8 @@ mod tests;
 use std::path::Path;
 
 use crate::color;
-pub use cli::{Cli, Commands, ConfigCmd, ThemeType, View};
-pub use config::{
-    Config, DebugSection, FontOptions, KeybindingsSection, MetricsExporter, Position, Size,
-};
+pub use cli::{Cli, Commands, ConfigCmd, Position, Size, ThemeType, View};
+pub use config::{Config, DebugSection, FontOptions, KeybindingsSection, MetricsExporter};
 
 use crate::history::History;
 use anyhow::Result;
