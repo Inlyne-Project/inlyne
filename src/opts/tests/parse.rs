@@ -29,6 +29,8 @@ impl Opts {
             keybindings: Default::default(),
             color_scheme: None,
             metrics: Default::default(),
+            size: None,
+            position: None,
         }
     }
 }
