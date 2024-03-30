@@ -193,9 +193,13 @@ impl Inlyne {
 
         let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
-        std::env::set_current_dir(&file_path.parent().expect("File should have parent directory"))
-            .expect("Should be able to set directory to parent of file.");
-        
+        std::env::set_current_dir(
+            file_path
+                .parent()
+                .expect("File should have parent directory"),
+        )
+        .expect("Should be able to set directory to parent of file.");
+
         Ok(Self {
             opts,
             window,
@@ -453,7 +457,6 @@ impl Inlyne {
 
                                         if  path.extension().map_or(false, |ext| ext == "md")
                                             && !path.to_str().map_or(false, |s| s.starts_with("http")) {
-                                            
                                             // Open them in a new window, akin to what a browser does
                                             if modifiers.shift() {
                                                 Command::new(
@@ -591,7 +594,7 @@ impl Inlyne {
                                         Ok(contents) => {
                                             self.update_file(&file_path, contents);
                                             let parent = file_path.parent().expect("File should have parent directory");
-                                            std::env::set_current_dir(parent).expect(&format!("Could not set current directory to {parent:?}"))
+                                            std::env::set_current_dir(parent).expect("Could not set current directory.");
                                         }
                                         Err(err) => {
                                             tracing::warn!(
