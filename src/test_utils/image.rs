@@ -1,4 +1,7 @@
-use crate::image::ImageData;
+use crate::image::{
+    cache::{StableImage, SvgContext},
+    ImageData,
+};
 
 #[derive(Clone, Copy)]
 pub enum Sample {
@@ -86,60 +89,65 @@ pub enum SampleWebp {
 }
 
 impl Sample {
-    pub fn pre_decode(self) -> Vec<u8> {
+    pub fn pre_decode(self) -> &'static [u8] {
         match self {
             Self::Jpg(jpg) => match jpg {
-                SampleJpg::Rgb8 => include_bytes!("../../assets/test_data/rgb8.jpg").as_slice(),
-                SampleJpg::Rgb8a => include_bytes!("../../assets/test_data/rgba8.jpg").as_slice(),
+                SampleJpg::Rgb8 => include_bytes!("../../assets/test_data/rgb8.jpg"),
+                SampleJpg::Rgb8a => include_bytes!("../../assets/test_data/rgba8.jpg"),
             },
             Self::Gif(gif) => match gif {
                 SampleGif::AtuinDemo => {
-                    include_bytes!("../../assets/test_data/atuin_demo.gif").as_slice()
+                    include_bytes!("../../assets/test_data/atuin_demo.gif")
                 }
-                SampleGif::Rgb8 => include_bytes!("../../assets/test_data/rgb8.gif").as_slice(),
-                SampleGif::Rgba8 => include_bytes!("../../assets/test_data/rgba8.gif").as_slice(),
+                SampleGif::Rgb8 => include_bytes!("../../assets/test_data/rgb8.gif"),
+                SampleGif::Rgba8 => include_bytes!("../../assets/test_data/rgba8.gif"),
             },
             Self::Png(png) => match png {
                 SamplePng::Ariadne => {
-                    include_bytes!("../../assets/test_data/ariadne_example.png").as_slice()
+                    include_bytes!("../../assets/test_data/ariadne_example.png")
                 }
-                SamplePng::Bun => include_bytes!("../../assets/test_data/bun_logo.png").as_slice(),
-                SamplePng::Rgb8 => include_bytes!("../../assets/test_data/rgb8.png").as_slice(),
-                SamplePng::Rgba8 => include_bytes!("../../assets/test_data/rgba8.png").as_slice(),
+                SamplePng::Bun => include_bytes!("../../assets/test_data/bun_logo.png"),
+                SamplePng::Rgb8 => include_bytes!("../../assets/test_data/rgb8.png"),
+                SamplePng::Rgba8 => include_bytes!("../../assets/test_data/rgba8.png"),
             },
             Self::Qoi(qoi) => match qoi {
-                SampleQoi::Rgb8 => include_bytes!("../../assets/test_data/rgb8.qoi").as_slice(),
-                SampleQoi::Rgba8 => include_bytes!("../../assets/test_data/rgba8.qoi").as_slice(),
+                SampleQoi::Rgb8 => include_bytes!("../../assets/test_data/rgb8.qoi"),
+                SampleQoi::Rgba8 => include_bytes!("../../assets/test_data/rgba8.qoi"),
             },
             Self::Svg(svg) => match svg {
                 SampleSvg::Corro => include_bytes!("../../assets/test_data/corro.svg"),
                 SampleSvg::Cargo => {
-                    include_bytes!("../../assets/test_data/sample_cargo_badge.svg").as_slice()
+                    include_bytes!("../../assets/test_data/sample_cargo_badge.svg")
                 }
                 SampleSvg::Repology => {
-                    include_bytes!("../../assets/test_data/sample_repology_badge.svg").as_slice()
+                    include_bytes!("../../assets/test_data/sample_repology_badge.svg")
                 }
             },
             Self::Webp(SampleWebp::CargoPublicApi) => {
-                include_bytes!("../../assets/test_data/cargo_public_api.webp").as_slice()
+                include_bytes!("../../assets/test_data/cargo_public_api.webp")
             }
         }
-        .into()
     }
 
-    // TODO: adapt this to work with svg images too
-    pub fn post_decode(self) -> ImageData {
-        ImageData::load(&self.pre_decode(), true).unwrap()
+    // TODO: replace this with the common image loading function
+    pub fn post_decode(self, svg_ctx: &SvgContext) -> ImageData {
+        if let Self::Svg(_) = self {
+            let text = std::str::from_utf8(self.pre_decode()).unwrap();
+            let image = StableImage::from_svg(text);
+            image.render(svg_ctx).unwrap()
+        } else {
+            ImageData::load(&self.pre_decode(), true).unwrap()
+        }
     }
 
-    pub fn content_type(self) -> &'static str {
+    pub fn suffix(self) -> &'static str {
         match self {
-            Sample::Gif(_) => "image/gif",
-            Sample::Jpg(_) => "image/jpeg",
-            Sample::Png(_) => "image/png",
-            Sample::Qoi(_) => "image/qoi",
-            Sample::Svg(_) => "image/svg+xml",
-            Sample::Webp(_) => "image/webp",
+            Self::Gif(_) => ".gif",
+            Self::Jpg(_) => ".jpg",
+            Self::Png(_) => ".png",
+            Self::Qoi(_) => ".qoi",
+            Self::Svg(_) => ".svg",
+            Self::Webp(_) => ".webp",
         }
     }
 }
