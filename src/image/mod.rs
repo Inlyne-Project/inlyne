@@ -1,3 +1,4 @@
+pub mod cache;
 mod decode;
 #[cfg(test)]
 mod tests;
@@ -60,20 +61,21 @@ impl ImageSize {
     }
 }
 
-#[derive(SmartDebug, Default, Clone)]
+#[derive(SmartDebug, Clone)]
 pub struct ImageData {
     #[debug(wrapper = DebugBytesPrefix)]
-    lz4_blob: Vec<u8>,
-    scale: bool,
+    pub lz4_blob: Arc<[u8]>,
+    pub scale: bool,
     #[debug(wrapper = DebugInline)]
-    dimensions: (u32, u32),
+    pub dimensions: (u32, u32),
 }
 
 impl ImageData {
+    // TODO: make sure we aren't accidentally going `Arc<[u8]>` -> `&[u8]` -> `Arc<[u8]>`
     pub fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
         let (lz4_blob, dimensions) = decode::decode_and_compress(bytes)?;
         Ok(Self {
-            lz4_blob,
+            lz4_blob: lz4_blob.into(),
             scale,
             dimensions,
         })
@@ -99,7 +101,7 @@ impl ImageData {
 
         Self {
             dimensions,
-            lz4_blob,
+            lz4_blob: lz4_blob.into(),
             scale,
         }
     }

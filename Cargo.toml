@@ -35,6 +35,7 @@ anstream = "0.6.14"
 anstyle = "1.0.7"
 # Easier error handling
 anyhow = "1.0.86"
+bincode = "1.3.3"
 # System preferred color scheme detection
 dark-light = "1.1.1"
 # System specific directories
@@ -78,6 +79,7 @@ serde_yaml = "0.9.34"
 smart-debug = "0.0.3"
 # Helps power our syntax highlighting
 syntect = "5.2.0"
+redb = "2.0.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
 taffy = "0.3.19"
@@ -91,6 +93,7 @@ two-face = "0.4.0"
 twox-hash = "1.6.3"
 # HTTP client for requesting images from urls
 ureq = "2.9.7"
+url = "2.5.0"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
 

@@ -57,7 +57,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
-use crate::opts::{Commands, ConfigCmd, MetricsExporter};
+use crate::opts::{CacheCmd, Commands, ConfigCmd, MetricsExporter};
 use crate::selection::Selection;
 use anyhow::Context;
 use clap::Parser;
@@ -809,6 +809,7 @@ fn main() -> anyhow::Result<()> {
 
             edit::edit_file(config_path)?;
         }
+        Commands::Cache(CacheCmd::Gc) => image::cache::run_global_garbage_collector()?,
     }
 
     Ok(())
