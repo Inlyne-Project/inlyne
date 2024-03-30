@@ -193,6 +193,9 @@ impl Inlyne {
 
         let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
+        std::env::set_current_dir(&file_path.parent().expect("File should have parent directory"))
+            .expect("Should be able to set directory to parent of file.");
+        
         Ok(Self {
             opts,
             window,
@@ -443,89 +446,58 @@ impl Inlyne {
                                 screen_size,
                                 self.renderer.zoom,
                             ) {
-                                if let Hoverable::Summary(summary) = hoverable {
-                                    let mut hidden = summary.hidden.borrow_mut();
-                                    *hidden = !*hidden;
-                                    event_loop_proxy
-                                        .send_event(InlyneEvent::Reposition)
-                                        .unwrap();
-                                }
+                                match hoverable {
+                                    Hoverable::Image(Image { is_link: Some(link), .. }) |
+                                    Hoverable::Text(Text { link: Some(link), .. }) => {
+                                        let path = PathBuf::from_str(link).unwrap(); // Can't fail
 
-                                let maybe_link = match hoverable {
-                                    Hoverable::Image(Image { is_link, .. }) => is_link,
-                                    Hoverable::Text(Text { link, .. }) => link,
-                                    Hoverable::Summary(_) => &None,
-                                };
-
-                                if let Some(link) = maybe_link {
-                                    let maybe_path = PathBuf::from_str(link).ok();
-                                    let is_local_md = maybe_path.as_ref().map_or(false, |p| {
-                                        p.extension().map_or(false, |ext| ext == "md")
-                                            && !p.to_str().map_or(false, |s| s.starts_with("http"))
-                                    });
-                                    if is_local_md {
-                                        // Open markdown files ourselves
-                                        let path = maybe_path.expect("not a path");
-                                        // Handle relative paths and make them
-                                        // absolute by prepending current
-                                        // parent
-                                        let path = if path.is_relative() {
-                                            // Simply canonicalizing it doesn't suffice and leads to "no such file or directory"
-                                            let current_parent = self
-                                                .opts
-                                                .history
-                                                .get_path()
-                                                .parent()
-                                                .expect("no current parent");
-                                            let mut normalized_link = path.as_path();
-                                            if let Ok(stripped) = normalized_link
-                                                .strip_prefix(std::path::Component::CurDir)
-                                            {
-                                                normalized_link = stripped;
-                                            }
-                                            let mut link = current_parent.to_path_buf();
-                                            link.push(normalized_link);
-                                            link
-                                        } else {
-                                            path
-                                        };
-                                        // Open them in a new window, akin to what a browser does
-                                        if modifiers.shift() {
-                                            Command::new(
-                                                std::env::current_exe()
-                                                    .unwrap_or_else(|_| "inlyne".into()),
-                                            )
-                                            .args(Opts::program_args(&path))
-                                            .spawn()
-                                            .expect("Could not spawn new inlyne instance");
-                                        } else {
-                                            match read_to_string(&path) {
-                                                Ok(contents) => {
-                                                    self.update_file(&path, contents);
-                                                    self.opts.history.make_next(path);
-                                                }
-                                                Err(err) => {
-                                                    tracing::warn!(
+                                        if  path.extension().map_or(false, |ext| ext == "md")
+                                            && !path.to_str().map_or(false, |s| s.starts_with("http")) {
+                                            
+                                            // Open them in a new window, akin to what a browser does
+                                            if modifiers.shift() {
+                                                Command::new(
+                                                    std::env::current_exe()
+                                                        .unwrap_or_else(|_| "inlyne".into()),
+                                                )
+                                                    .args(Opts::program_args(&path))
+                                                    .spawn()
+                                                    .expect("Could not spawn new inlyne instance");
+                                            } else {
+                                                match read_to_string(&path) {
+                                                    Ok(contents) => {
+                                                        self.update_file(&path, contents);
+                                                        self.opts.history.make_next(path);
+                                                    }
+                                                    Err(err) => {
+                                                        tracing::warn!(
                                                         "Failed loading markdown file at {}\nError: {}",
                                                         path.display(),
                                                         err,
                                                     );
+                                                    }
                                                 }
                                             }
+                                        } else if let Some(anchor_pos) =
+                                            self.renderer.positioner.anchors.get(&link.to_lowercase())
+                                        {
+                                            self.renderer.set_scroll_y(*anchor_pos);
+                                            self.window.request_redraw();
+                                            self.window.set_cursor_icon(CursorIcon::Default);
+                                        } else if let Err(e) = open::that(link) {
+                                            tracing::error!("Could not open link: {e} from {:?}", std::env::current_dir())
                                         }
-                                    } else if let Some(anchor_pos) =
-                                        self.renderer.positioner.anchors.get(&link.to_lowercase())
-                                    {
-                                        self.renderer.set_scroll_y(*anchor_pos);
-                                        self.window.request_redraw();
-                                        self.window.set_cursor_icon(CursorIcon::Default);
-                                    } else {
-                                        open::that(link).unwrap();
-                                    }
-                                } else if self.renderer.selection.is_none() {
-                                    // Only set selection when not over link
-                                    self.renderer.selection = Some((last_loc, last_loc));
-                                }
+                                    },
+                                    Hoverable::Summary(summary) => {
+                                        let mut hidden = summary.hidden.borrow_mut();
+                                        *hidden = !*hidden;
+                                        event_loop_proxy
+                                            .send_event(InlyneEvent::Reposition)
+                                            .unwrap();
+                                        self.renderer.selection = Some((last_loc, last_loc))
+                                    },
+                                    _ => self.renderer.selection = Some((last_loc, last_loc)),
+                                };
                             } else if self.renderer.selection.is_none() {
                                 self.renderer.selection = Some((last_loc, last_loc));
                             }
@@ -618,6 +590,8 @@ impl Inlyne {
                                     match read_to_string(&file_path) {
                                         Ok(contents) => {
                                             self.update_file(&file_path, contents);
+                                            let parent = file_path.parent().expect("File should have parent directory");
+                                            std::env::set_current_dir(parent).expect(&format!("Could not set current directory to {parent:?}"))
                                         }
                                         Err(err) => {
                                             tracing::warn!(
