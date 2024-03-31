@@ -193,9 +193,8 @@ impl Inlyne {
 
         let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
-        let _ = file_path
-            .parent().map(std::env::set_current_dir);
-        
+        let _ = file_path.parent().map(std::env::set_current_dir);
+
         Ok(Self {
             opts,
             window,

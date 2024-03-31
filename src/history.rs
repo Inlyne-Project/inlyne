@@ -24,9 +24,9 @@ impl History {
     }
 
     pub fn make_next(&mut self, file_path: PathBuf) {
-        #[cfg(not(test))] 
+        #[cfg(not(test))]
         let file_path = file_path.canonicalize().unwrap();
-        
+
         self.history.truncate(self.index + 1);
         self.history.push(file_path);
         self.index += 1;
