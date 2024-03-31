@@ -8,6 +8,8 @@ pub struct History {
 
 impl History {
     pub fn new(path_buf: PathBuf) -> Self {
+        #[cfg(not(test))]
+        let path_buf = path_buf.canonicalize().unwrap();
         Self {
             history: vec![path_buf],
             index: 0,
@@ -22,6 +24,9 @@ impl History {
     }
 
     pub fn make_next(&mut self, file_path: PathBuf) {
+        #[cfg(not(test))] 
+        let file_path = file_path.canonicalize().unwrap();
+        
         self.history.truncate(self.index + 1);
         self.history.push(file_path);
         self.index += 1;

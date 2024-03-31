@@ -193,13 +193,9 @@ impl Inlyne {
 
         let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
-        std::env::set_current_dir(
-            file_path
-                .parent()
-                .expect("File should have parent directory"),
-        )
-        .expect("Should be able to set directory to parent of file.");
-
+        let _ = file_path
+            .parent().map(std::env::set_current_dir);
+        
         Ok(Self {
             opts,
             window,
