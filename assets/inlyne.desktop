@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Inlyne
+GenericName=Markdown Viewer
+Exec=inlyne %f
+Type=Application
+StartupWMClass=inlyne
+MimeType=text/markdown;
+Categories=Office;Viewer;
+Keywords=Markdown;Viewer;
+Terminal=false
+Comment=a GPU powered, browserless, markdown + html viewer
