@@ -2,7 +2,7 @@ use std::fs::{create_dir_all, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use super::ThemeType;
+use super::{Position, Size, ThemeType};
 use crate::color;
 use crate::keybindings::Keybindings;
 
@@ -88,6 +88,12 @@ pub struct DebugSection {
     pub metrics: Option<MetricsExporter>,
 }
 
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct Window {
+    pub position: Option<Position>,
+    pub size: Option<Size>,
+}
+
 #[derive(Deserialize, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
@@ -100,6 +106,7 @@ pub struct Config {
     pub font_options: Option<FontOptions>,
     pub keybindings: KeybindingsSection,
     pub debug: DebugSection,
+    pub window: Option<Window>,
 }
 
 impl Config {
