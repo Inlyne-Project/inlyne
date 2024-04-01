@@ -95,8 +95,7 @@ impl Opts {
             font_options,
             keybindings,
             debug,
-            size,
-            position,
+            window,
         } = config;
 
         let View {
@@ -132,8 +131,11 @@ impl Opts {
         let page_width = args_page_width.or(config_page_width);
         let lines_to_scroll = lines_to_scroll.into();
 
-        let position = v_position.or(position);
-        let size = v_size.or(size);
+        let (position, size) = if let Some(window) = window {
+            (v_position.or(window.position), v_size.or(window.size))
+        } else {
+            (v_position, v_size)
+        };
 
         Ok(Self {
             history: History::new(file_path),
