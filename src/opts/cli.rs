@@ -145,7 +145,7 @@ pub struct View {
     pub position: Option<Position>,
 
     /// Size of the opened window <width>x<height>
-    #[arg(short = 'g', long = "win-size", value_parser = value_parser!(Size))]
+    #[arg(long = "win-size", value_parser = value_parser!(Size))]
     pub size: Option<Size>,
 }
 
