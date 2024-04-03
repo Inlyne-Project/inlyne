@@ -7,10 +7,10 @@ pub struct History {
 }
 
 impl History {
-    pub fn new(path_buf: PathBuf) -> Self {
-        let path_buf = path_buf.canonicalize().unwrap();
+    pub fn new(path: &Path) -> Self {
+        let canonicalized = path.canonicalize().unwrap();
         Self {
-            history: vec![path_buf],
+            history: vec![canonicalized],
             index: 0,
         }
     }
@@ -71,7 +71,7 @@ mod tests {
         fs::write(&fork1, "b").unwrap();
         fs::write(&fork2, "c").unwrap();
 
-        let mut hist = History::new(root.clone());
+        let mut hist = History::new(&root);
         assert_eq!(hist.get_path(), root);
         assert_eq!(hist.previous(), None);
 

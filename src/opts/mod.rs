@@ -127,7 +127,7 @@ impl Opts {
         let lines_to_scroll = lines_to_scroll.into();
 
         Ok(Self {
-            history: History::new(file_path),
+            history: History::new(&file_path),
             theme,
             scale,
             page_width,
