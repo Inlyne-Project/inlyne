@@ -62,7 +62,7 @@ mod tests {
             .prefix("inlyne-tests-")
             .tempdir()
             .unwrap();
-        let temp_path = temp_dir.path();
+        let temp_path = temp_dir.path().canonicalize().unwrap();
 
         let root = temp_path.join("a");
         let fork1 = temp_path.join("b");
