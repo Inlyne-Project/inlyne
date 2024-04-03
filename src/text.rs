@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
-use crate::utils::{Align, Line, Point, Rect, Selection, Size};
+use crate::utils::{Align, Line, Point, Rect, Size};
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
@@ -15,6 +15,7 @@ use glyphon::{
 };
 use smart_debug::SmartDebug;
 use taffy::prelude::{AvailableSpace, Size as TaffySize};
+use crate::selection::{Selection, SelectionKind};
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
@@ -413,9 +414,21 @@ impl TextBox {
         screen_position: Point,
         bounds: Size,
         zoom: f32,
-        selection: Selection,
+        selection: &mut Selection,
     ) -> (Vec<Rect>, String) {
-        let (mut select_start, mut select_end) = selection;
+
+
+        let mut select_start = Point::default();
+        let mut select_end = Point::default();
+
+        match &selection.selection {
+            SelectionKind::Drag { start, end } => {select_start = *start; select_end = *end },
+            SelectionKind::Click { mode, position, .. } => {
+                dbg!(mode);
+            }
+            _ => return dbg!((vec![], String::new())),
+        }
+
         if select_start.1 > select_end.1 || select_start.0 > select_end.0 {
             std::mem::swap(&mut select_start, &mut select_end);
         }
@@ -442,9 +455,6 @@ impl TextBox {
                 select_end.0 - screen_position.0,
                 select_end.1 - screen_position.1,
             ) {
-                if start_cursor.index == end_cursor.index {
-                    return (vec![], String::new());
-                }
 
                 let mut y = screen_position.1;
                 for line in buffer.layout_runs() {

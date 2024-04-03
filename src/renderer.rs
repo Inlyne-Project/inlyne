@@ -8,9 +8,10 @@ use crate::image::ImageRenderer;
 use crate::metrics::{histogram, HistTag};
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
+use crate::selection::Selection;
 use crate::table::TABLE_ROW_GAP;
 use crate::text::{CachedTextArea, TextCache, TextSystem};
-use crate::utils::{Point, Rect, Selection, Size};
+use crate::utils::{Point, Rect, Size};
 use crate::Element;
 
 use anyhow::{Context, Ok};
@@ -45,8 +46,6 @@ pub struct Renderer {
     pub page_width: f32,
     pub image_renderer: ImageRenderer,
     pub theme: Theme,
-    pub selection: Option<Selection>,
-    pub selection_text: String,
     pub zoom: f32,
     pub positioner: Positioner,
 }
@@ -186,8 +185,6 @@ impl Renderer {
             zoom: 1.,
             image_renderer,
             theme,
-            selection: None,
-            selection_text: String::new(),
             positioner,
         })
     }
@@ -211,7 +208,10 @@ impl Renderer {
     fn render_elements(
         &mut self,
         elements: &[Positioned<Element>],
+        selection: &mut Selection,
     ) -> anyhow::Result<Vec<CachedTextArea>> {
+        selection.text = String::new();
+        
         let mut text_areas: Vec<CachedTextArea> = Vec::new();
         let screen_size = self.screen_size();
         for element in elements.iter() {
@@ -337,7 +337,7 @@ impl Renderer {
                         let max = (line.max.0, line.max.1 + 2. * self.hidpi_scale * self.zoom);
                         self.draw_rectangle(Rect::from_min_max(min, max), line.color)?;
                     }
-                    if let Some(selection) = self.selection {
+                    if !selection.is_none() {
                         let (selection_rects, selection_text) = text_box.render_selection(
                             &mut self.text_system,
                             pos,
@@ -345,8 +345,8 @@ impl Renderer {
                             self.zoom,
                             selection,
                         );
-                        self.selection_text.push_str(&selection_text);
-                        self.selection_text.push('\n');
+                        selection.text.push_str(&selection_text);
+                        selection.text.push('\n');
                         for rect in selection_rects {
                             self.draw_rectangle(
                                 Rect::from_min_max(
@@ -379,7 +379,7 @@ impl Renderer {
                                 self.zoom,
                                 self.scroll_y,
                             ));
-                            if let Some(selection) = self.selection {
+                            if !selection.is_none() {
                                 let (selection_rects, selection_text) = text_box.render_selection(
                                     &mut self.text_system,
                                     (pos.0 + node.location.x, pos.1 + node.location.y),
@@ -387,8 +387,8 @@ impl Renderer {
                                     self.zoom,
                                     selection,
                                 );
-                                self.selection_text.push_str(&selection_text);
-                                self.selection_text.push('\n');
+                                selection.text.push_str(&selection_text);
+                                selection.text.push('\n');
                                 for rect in selection_rects {
                                     self.draw_rectangle(
                                         Rect::from_min_max(
@@ -442,7 +442,7 @@ impl Renderer {
                                         self.scroll_y,
                                     ));
 
-                                    if let Some(selection) = self.selection {
+                                    if !selection.is_none() {
                                         let (selection_rects, selection_text) = text_box
                                             .render_selection(
                                                 &mut self.text_system,
@@ -451,8 +451,8 @@ impl Renderer {
                                                 self.zoom,
                                                 selection,
                                             );
-                                        self.selection_text.push_str(&selection_text);
-                                        self.selection_text.push('\n');
+                                        selection.text.push_str(&selection_text);
+                                        selection.text.push('\n');
                                         for rect in selection_rects {
                                             self.draw_rectangle(
                                                 Rect::from_min_max(
@@ -512,7 +512,9 @@ impl Renderer {
                         )?;
                     }
                 }
-                Element::Row(row) => text_areas.append(&mut self.render_elements(&row.elements)?),
+                Element::Row(row) => {
+                    text_areas.append(&mut self.render_elements(&row.elements, selection)?)
+                }
                 Element::Section(section) => {
                     if let Some(ref summary) = *section.summary {
                         let bounds = summary.bounds.as_ref().unwrap();
@@ -525,10 +527,12 @@ impl Renderer {
                             native_color(self.theme.text_color, &self.surface_format),
                             *section.hidden.borrow(),
                         )?;
-                        text_areas.append(&mut self.render_elements(std::slice::from_ref(summary))?)
+                        text_areas.append(
+                            &mut self.render_elements(std::slice::from_ref(summary), selection)?,
+                        )
                     }
                     if !*section.hidden.borrow() {
-                        text_areas.append(&mut self.render_elements(&section.elements)?)
+                        text_areas.append(&mut self.render_elements(&section.elements, selection)?)
                     }
                 }
             }
@@ -721,7 +725,7 @@ impl Renderer {
         bind_groups
     }
 
-    pub fn redraw(&mut self, elements: &mut [Positioned<Element>]) -> anyhow::Result<()> {
+    pub fn redraw(&mut self, elements: &mut [Positioned<Element>], selection: &mut Selection) -> anyhow::Result<()> {
         let frame = self
             .surface
             .get_current_texture()
@@ -736,8 +740,7 @@ impl Renderer {
         // Prepare and render elements that use lyon
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
-        self.selection_text = String::new();
-        let cached_text_areas = self.render_elements(elements)?;
+        let cached_text_areas = self.render_elements(elements, selection)?;
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
