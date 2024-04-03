@@ -8,7 +8,6 @@ pub struct History {
 
 impl History {
     pub fn new(path_buf: PathBuf) -> Self {
-        #[cfg(not(test))]
         let path_buf = path_buf.canonicalize().unwrap();
         Self {
             history: vec![path_buf],
@@ -24,7 +23,6 @@ impl History {
     }
 
     pub fn make_next(&mut self, file_path: PathBuf) {
-        #[cfg(not(test))]
         let file_path = file_path.canonicalize().unwrap();
 
         self.history.truncate(self.index + 1);
@@ -54,13 +52,24 @@ impl History {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
     fn sanity() {
-        let root = PathBuf::from("a");
-        let fork1 = PathBuf::from("b");
-        let fork2 = PathBuf::from("c");
+        let temp_dir = tempfile::Builder::new()
+            .prefix("inlyne-tests-")
+            .tempdir()
+            .unwrap();
+        let temp_path = temp_dir.path();
+
+        let root = temp_path.join("a");
+        let fork1 = temp_path.join("b");
+        let fork2 = temp_path.join("c");
+        fs::write(&root, "a").unwrap();
+        fs::write(&fork1, "b").unwrap();
+        fs::write(&fork2, "c").unwrap();
 
         let mut hist = History::new(root.clone());
         assert_eq!(hist.get_path(), root);
