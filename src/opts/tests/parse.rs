@@ -1,8 +1,9 @@
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{CommandFactory, Parser};
 use pretty_assertions::assert_eq;
+use tempfile::NamedTempFile;
 
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::history::History;
@@ -17,10 +18,20 @@ fn gen_args(args: Vec<&str>) -> Vec<OsString> {
         .collect()
 }
 
+fn temp_md_file() -> (NamedTempFile, String) {
+    let temp_file = tempfile::Builder::new()
+        .prefix("inlyne-tests-")
+        .suffix(".md")
+        .tempfile()
+        .unwrap();
+    let path = temp_file.path().to_str().unwrap().to_owned();
+    (temp_file, path)
+}
+
 impl Opts {
-    fn mostly_default(file_path: impl Into<PathBuf>) -> Self {
+    fn mostly_default(file_path: impl AsRef<Path>) -> Self {
         Self {
-            history: History::new(file_path.into()),
+            history: History::new(file_path.as_ref()),
             theme: ResolvedTheme::Light.as_theme(),
             scale: None,
             page_width: None,
@@ -55,9 +66,11 @@ fn debug_assert() {
 fn defaults() {
     init_test_log();
 
+    let (_tmp, md_file) = temp_md_file();
+
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["file.md"]))
+            Cli::try_parse_from(gen_args(vec![&md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -65,13 +78,15 @@ fn defaults() {
             None,
         )
         .unwrap(),
-        Opts::mostly_default("file.md")
+        Opts::mostly_default(&md_file)
     );
 }
 
 #[test]
 fn config_overrides_default() {
     init_test_log();
+
+    let (_tmp, md_file) = temp_md_file();
 
     // Light system theme with dark in config
     let config = config::Config {
@@ -80,7 +95,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["file.md"]))
+            Cli::try_parse_from(gen_args(vec![&md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -91,7 +106,7 @@ fn config_overrides_default() {
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             color_scheme: Some(ResolvedTheme::Dark),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 
@@ -102,7 +117,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["file.md"]))
+            Cli::try_parse_from(gen_args(vec![&md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -113,7 +128,7 @@ fn config_overrides_default() {
         Opts {
             theme: ResolvedTheme::Light.as_theme(),
             color_scheme: Some(ResolvedTheme::Light),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 
@@ -123,7 +138,7 @@ fn config_overrides_default() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["file.md"]))
+            Cli::try_parse_from(gen_args(vec![&md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -133,7 +148,7 @@ fn config_overrides_default() {
         .unwrap(),
         Opts {
             scale: Some(1.5),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 }
@@ -142,9 +157,11 @@ fn config_overrides_default() {
 fn from_cli() {
     init_test_log();
 
+    let (_tmp, md_file) = temp_md_file();
+
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["--theme", "dark", "file.md"]))
+            Cli::try_parse_from(gen_args(vec!["--theme", "dark", &md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -155,7 +172,7 @@ fn from_cli() {
         Opts {
             theme: ResolvedTheme::Dark.as_theme(),
             color_scheme: Some(ResolvedTheme::Dark),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 
@@ -167,7 +184,7 @@ fn from_cli() {
     };
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
-            Cli::try_parse_from(gen_args(vec!["--scale", "1.5", "file.md"]))
+            Cli::try_parse_from(gen_args(vec!["--scale", "1.5", &md_file]))
                 .unwrap()
                 .into_view()
                 .unwrap(),
@@ -179,7 +196,7 @@ fn from_cli() {
             theme: ResolvedTheme::Dark.as_theme(),
             scale: Some(1.5),
             color_scheme: Some(ResolvedTheme::Dark),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 }
@@ -188,13 +205,15 @@ fn from_cli() {
 fn cli_kitchen_sink() {
     init_test_log();
 
+    let (_tmp, md_file) = temp_md_file();
+
     #[rustfmt::skip]
     let args = gen_args(vec![
         "--theme", "dark",
         "--scale", "1.5",
         "--config", "/path/to/file.toml",
         "--page-width", "500",
-        "file.md",
+        &md_file,
     ]);
     assert_eq!(
         Opts::parse_and_load_with_system_theme(
@@ -208,7 +227,7 @@ fn cli_kitchen_sink() {
             scale: Some(1.5),
             theme: ResolvedTheme::Dark.as_theme(),
             color_scheme: Some(ResolvedTheme::Dark),
-            ..Opts::mostly_default("file.md")
+            ..Opts::mostly_default(&md_file)
         }
     );
 }
@@ -217,6 +236,8 @@ fn cli_kitchen_sink() {
 fn builtin_syntax_theme() {
     init_test_log();
 
+    let (_tmp, md_file) = temp_md_file();
+
     let mut config = config::Config::default();
     config.light_theme = Some(config::OptionalTheme {
         code_highlighter: Some(SyntaxTheme::Defaults(ThemeDefaults::SolarizedLight)),
@@ -224,7 +245,7 @@ fn builtin_syntax_theme() {
     });
 
     let opts = Opts::parse_and_load_with_system_theme(
-        Cli::try_parse_from(gen_args(vec!["file.md"]))
+        Cli::try_parse_from(gen_args(vec![&md_file]))
             .unwrap()
             .into_view()
             .unwrap(),
@@ -241,8 +262,6 @@ fn builtin_syntax_theme() {
 
 #[test]
 fn custom_syntax_theme() {
-    init_test_log();
-
     fn config_with_theme_at(path: PathBuf) -> config::Config {
         let mut config = config::Config::default();
         config.light_theme = Some(config::OptionalTheme {
@@ -252,7 +271,11 @@ fn custom_syntax_theme() {
         config
     }
 
-    let args = Cli::try_parse_from(gen_args(vec!["file.md"]))
+    init_test_log();
+
+    let (_tmp, md_file) = temp_md_file();
+
+    let args = Cli::try_parse_from(gen_args(vec![&md_file]))
         .unwrap()
         .into_view()
         .unwrap();

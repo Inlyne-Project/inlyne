@@ -138,7 +138,7 @@ impl Opts {
         };
 
         Ok(Self {
-            history: History::new(file_path),
+            history: History::new(&file_path),
             theme,
             scale,
             page_width,
