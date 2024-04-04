@@ -7,13 +7,16 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::{fs, io};
+use std::{
+    fs,
+    io::{self, Read},
+};
 
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
 use crate::metrics::{histogram, HistTag};
 use crate::positioner::DEFAULT_MARGIN;
-use crate::utils::{self, usize_in_mib, Align, Point, Size};
+use crate::utils::{usize_in_mib, Align, Point, Size};
 
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
@@ -232,12 +235,8 @@ impl Image {
 
             let image_data = if let Ok(img_file) = fs::read(&src_path) {
                 img_file
-            } else if let Ok(bytes) = utils::client()
-                .get(&src)
-                .send()
-                .and_then(|resp| resp.bytes())
-            {
-                bytes.to_vec()
+            } else if let Ok(bytes) = http_get_image(&src) {
+                bytes
             } else {
                 tracing::warn!("Request for image from {} failed", src_path.display());
                 return;
@@ -380,6 +379,26 @@ impl Image {
         self.dimensions(screen_size, zoom)
             .map(|d| (d.0 as f32, d.1 as f32))
     }
+}
+
+pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
+    const USER_AGENT: &str = concat!(
+        "inlyne ",
+        env!("CARGO_PKG_VERSION"),
+        " https://github.com/trimental/inlyne"
+    );
+
+    const LIMIT: usize = 20 * 1_024 * 1_024;
+
+    let resp = ureq::get(url).set("User-Agent", USER_AGENT).call()?;
+    let len = resp
+        .header("Content-Length")
+        .and_then(|len| len.parse::<usize>().ok());
+    let mut body = Vec::with_capacity(len.unwrap_or(0).clamp(0, LIMIT));
+    resp.into_reader()
+        .take(u64::try_from(LIMIT).unwrap())
+        .read_to_end(&mut body)?;
+    Ok(body)
 }
 
 #[repr(C)]

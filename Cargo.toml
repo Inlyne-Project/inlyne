@@ -43,7 +43,6 @@ anyhow = "1.0.81"
 dirs = "5.0.1"
 serde = { version = "1.0.197", features = ["derive"] }
 toml = "0.8.11"
-reqwest = { version = "0.11.26", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 notify = "6.1.1"
 dark-light = "1.0.0"
 # We only decompress our own compressed data, so disable `safe-decode` and
@@ -77,6 +76,7 @@ anstyle = "1.0.6"
 metrics = "0.22.3"
 metrics-util = { version = "0.16.3", default-features = false, features = ["registry", "summary"] }
 parking_lot = "0.12.1"
+ureq = "2.9.6"
 
 [target.'cfg(inlyne_tcp_metrics)'.dependencies]
 metrics-exporter-tcp = "0.9.0"

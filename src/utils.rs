@@ -9,7 +9,6 @@ use comrak::adapters::SyntaxHighlighterAdapter;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
-use reqwest::blocking::Client;
 use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use syntect::parsing::SyntaxSet;
@@ -53,15 +52,6 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
 
         full_path.pop();
     }
-}
-
-pub fn client() -> Client {
-    const USER_AGENT: &str = concat!(
-        "inlyne ",
-        env!("CARGO_PKG_VERSION"),
-        " https://github.com/trimental/inlyne"
-    );
-    Client::builder().user_agent(USER_AGENT).build().unwrap()
 }
 
 pub(crate) fn default<T: Default>() -> T {
