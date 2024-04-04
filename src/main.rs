@@ -320,7 +320,7 @@ impl Inlyne {
                         .context("Renderer failed to redraw the screen")
                         .unwrap();
                     if selecting {
-                        selection_cache = self.renderer.selection_text.clone();
+                        selection_cache.clone_from(&self.renderer.selection_text);
                     }
 
                     histogram!(HistTag::Redraw).record(redraw_start.elapsed());
