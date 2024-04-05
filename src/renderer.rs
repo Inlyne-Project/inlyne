@@ -210,8 +210,6 @@ impl Renderer {
         elements: &[Positioned<Element>],
         selection: &mut Selection,
     ) -> anyhow::Result<Vec<CachedTextArea>> {
-        selection.text = String::new();
-        
         let mut text_areas: Vec<CachedTextArea> = Vec::new();
         let screen_size = self.screen_size();
         for element in elements.iter() {
@@ -337,16 +335,13 @@ impl Renderer {
                         let max = (line.max.0, line.max.1 + 2. * self.hidpi_scale * self.zoom);
                         self.draw_rectangle(Rect::from_min_max(min, max), line.color)?;
                     }
-                    if !selection.is_none() {
-                        let (selection_rects, selection_text) = text_box.render_selection(
-                            &mut self.text_system,
-                            pos,
-                            bounds,
-                            self.zoom,
-                            selection,
-                        );
-                        selection.text.push_str(&selection_text);
-                        selection.text.push('\n');
+                    if let Some(selection_rects) = text_box.render_selection(
+                        &mut self.text_system,
+                        pos,
+                        bounds,
+                        self.zoom,
+                        selection,
+                    ) {
                         for rect in selection_rects {
                             self.draw_rectangle(
                                 Rect::from_min_max(
@@ -379,16 +374,13 @@ impl Renderer {
                                 self.zoom,
                                 self.scroll_y,
                             ));
-                            if !selection.is_none() {
-                                let (selection_rects, selection_text) = text_box.render_selection(
-                                    &mut self.text_system,
-                                    (pos.0 + node.location.x, pos.1 + node.location.y),
-                                    (node.size.width, node.size.height),
-                                    self.zoom,
-                                    selection,
-                                );
-                                selection.text.push_str(&selection_text);
-                                selection.text.push('\n');
+                            if let Some(selection_rects) = text_box.render_selection(
+                                &mut self.text_system,
+                                (pos.0 + node.location.x, pos.1 + node.location.y),
+                                (node.size.width, node.size.height),
+                                self.zoom,
+                                selection,
+                            ) {
                                 for rect in selection_rects {
                                     self.draw_rectangle(
                                         Rect::from_min_max(
@@ -442,17 +434,13 @@ impl Renderer {
                                         self.scroll_y,
                                     ));
 
-                                    if !selection.is_none() {
-                                        let (selection_rects, selection_text) = text_box
-                                            .render_selection(
-                                                &mut self.text_system,
-                                                (pos.0 + node.location.x, pos.1 + node.location.y),
-                                                (node.size.width, node.size.height),
-                                                self.zoom,
-                                                selection,
-                                            );
-                                        selection.text.push_str(&selection_text);
-                                        selection.text.push('\n');
+                                    if let Some(selection_rects) = text_box.render_selection(
+                                        &mut self.text_system,
+                                        (pos.0 + node.location.x, pos.1 + node.location.y),
+                                        (node.size.width, node.size.height),
+                                        self.zoom,
+                                        selection,
+                                    ) {
                                         for rect in selection_rects {
                                             self.draw_rectangle(
                                                 Rect::from_min_max(
@@ -537,7 +525,6 @@ impl Renderer {
                 }
             }
         }
-
         self.draw_scrollbar()?;
         Ok(text_areas)
     }
@@ -725,7 +712,11 @@ impl Renderer {
         bind_groups
     }
 
-    pub fn redraw(&mut self, elements: &mut [Positioned<Element>], selection: &mut Selection) -> anyhow::Result<()> {
+    pub fn redraw(
+        &mut self,
+        elements: &mut [Positioned<Element>],
+        selection: &mut Selection,
+    ) -> anyhow::Result<()> {
         let frame = self
             .surface
             .get_current_texture()

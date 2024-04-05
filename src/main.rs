@@ -57,7 +57,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
 use crate::opts::{Commands, ConfigCmd, MetricsExporter};
-use crate::selection::{Selection, SelectionKind};
+use crate::selection::Selection;
 use anyhow::Context;
 use clap::Parser;
 use taffy::Taffy;
@@ -425,16 +425,8 @@ impl Inlyne {
                                 * self.renderer.positioner.reserved_height;
                             self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
-                        } else if let SelectionKind::Drag { start, end } = &mut self.selection.selection {
-                            if mouse_down {
-                                *end = loc;
-                                self.window.request_redraw();
-                            }
-                        } else if let SelectionKind::Start { position, .. } = self.selection.selection {
-                            if mouse_down {
-                                self.selection.selection = SelectionKind::Drag { start: position, end: loc };
-                                self.window.request_redraw();
-                            }
+                        } else if mouse_down && self.selection.handle_drag(loc) {
+                            self.window.request_redraw();
                         }
                         mouse_position = loc;
                     }
