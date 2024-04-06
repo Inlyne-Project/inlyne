@@ -205,7 +205,7 @@ impl HtmlInterpreter {
     }
 
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
-        let mut input = BufferQueue::new();
+        let mut input = BufferQueue::default();
 
         let span_color = self.native_color(self.theme.text_color);
         let code_highlighter = self.theme.code_highlighter.clone();
