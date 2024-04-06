@@ -416,7 +416,6 @@ impl TextBox {
         zoom: f32,
         selection: &mut Selection,
     ) -> Option<Vec<Rect>> {
-
         let mut rects = Vec::new();
         let mut selected_text = String::new();
 
@@ -451,11 +450,13 @@ impl TextBox {
 
                 let line = buffer.lines.get(cursor.line)?;
 
-                
                 match mode {
                     SelectionMode::Word => {
                         let text = line.text();
-                        if text.get(cursor.index..cursor.index)?.contains(|c: char| c.is_whitespace()) {
+                        if text
+                            .get(cursor.index..cursor.index)?
+                            .contains(|c: char| c.is_whitespace())
+                        {
                             return None;
                         }
 

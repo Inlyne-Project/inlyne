@@ -493,7 +493,7 @@ impl Inlyne {
                                         event_loop_proxy
                                             .send_event(InlyneEvent::Reposition)
                                             .unwrap();
-                                        // self.selection.add_position(mouse_position);
+                                        self.selection.add_position(mouse_position);
                                     },
                                     _ => {
                                         self.selection.add_position(mouse_position);
