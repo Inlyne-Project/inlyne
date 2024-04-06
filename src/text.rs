@@ -451,11 +451,13 @@ impl TextBox {
 
                 let line = buffer.lines.get(cursor.line)?;
 
-                let layout = line.layout_opt().as_ref()?.first()?;
                 
                 match mode {
                     SelectionMode::Word => {
                         let text = line.text();
+                        if text.get(cursor.index..cursor.index)?.contains(|c: char| c.is_whitespace()) {
+                            return None;
+                        }
 
                         let end_text = text
                             .get(cursor.index..)
@@ -465,28 +467,17 @@ impl TextBox {
                         let start_text = text
                             .get(..cursor.index)
                             .and_then(|str| str.split_whitespace().next_back())?;
-
                         let start_index = cursor.index - start_text.len();
 
                         let start = Cursor::new(cursor.line, start_index);
-                        let start_position = layout.glyphs.get(start_index).map(|g| (g.x, g.y))?;
-
                         let end = Cursor::new(cursor.line, end_index);
-                        let end_position = layout.glyphs.get(end_index).map(|g| (g.x, g.y))?;
 
-                        dbg!(start, end, start_position.1, end_position.1)
+                        (start, end, position.1, position.1)
                     } // TODO implement
                     SelectionMode::Line => {
                         let start = Cursor::new(cursor.line, 0);
-                        let start_position = layout.glyphs.first().map(|g| (g.x, g.y))?;
-
                         let end = Cursor::new(cursor.line, line.text().len());
-                        let end_position = layout
-                            .glyphs
-                            .get(line.text().len() - 1)
-                            .map(|g| (g.x, g.y))?;
-
-                        dbg!(start, end, start_position.1, end_position.1)
+                        (start, end, position.1, position.1)
                     } // TODO implement
                 }
             }
@@ -494,7 +485,6 @@ impl TextBox {
                 return None;
             }
         };
-        dbg!(&start_cursor, &end_cursor);
 
         let mut y = screen_position.1;
         for line in buffer.layout_runs() {
@@ -510,27 +500,27 @@ impl TextBox {
                         ((x + highlight_w).ceil(), y + line_height),
                     ));
                 }
-            }
-            // See https://docs.rs/cosmic-text/0.8.0/cosmic_text/struct.LayoutRun.html#method.highlight implementation
-            for glyph in line.glyphs.iter() {
-                let left_glyph_cursor = if line.rtl {
-                    Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
-                } else {
-                    Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
-                };
-                let right_glyph_cursor = if line.rtl {
-                    Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
-                } else {
-                    Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
-                };
-                if (left_glyph_cursor >= start_cursor && left_glyph_cursor <= end_cursor)
-                    && (right_glyph_cursor >= start_cursor && right_glyph_cursor <= end_cursor)
-                {
-                    selected_text.push_str(&line.text[glyph.start..glyph.end]);
+                // See https://docs.rs/cosmic-text/0.8.0/cosmic_text/struct.LayoutRun.html#method.highlight implementation
+                for glyph in line.glyphs.iter() {
+                    let left_glyph_cursor = if line.rtl {
+                        Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                    } else {
+                        Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                    };
+                    let right_glyph_cursor = if line.rtl {
+                        Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                    } else {
+                        Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                    };
+                    if (left_glyph_cursor >= start_cursor && left_glyph_cursor <= end_cursor)
+                        && (right_glyph_cursor >= start_cursor && right_glyph_cursor <= end_cursor)
+                    {
+                        selected_text.push_str(&line.text[glyph.start..glyph.end]);
+                    }
                 }
-            }
-            if end_y > y + line_height {
-                selected_text.push(' ')
+                if end_y > y + line_height {
+                    selected_text.push(' ')
+                }
             }
             y += line_height;
         }
