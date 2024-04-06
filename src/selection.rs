@@ -75,7 +75,6 @@ impl Selection {
                 time,
                 position,
             } => {
-                dbg!(&self.selection);
                 if mode == &SelectionMode::Word
                     && time.elapsed().as_millis() < CLICK_TOLERANCE
                     && dist_between_points(position, &new_position) < MAX_CLICK_DIST
