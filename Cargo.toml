@@ -18,7 +18,7 @@ rust-version = "1.72.1"
 exclude = [
     "/ci/*",
     "/.github/*",
-    "/tests/manual_test_data/*",
+    "/assets/manual_test_data/*",
 ]
 keywords = ["markdown", "viewer", "gpu"]
 
