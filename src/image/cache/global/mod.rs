@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fs};
 
-use super::{Key, ValidatedImage, Validation, ValidationProbe};
+use super::{Key, Validation, ValidationProbe};
 use crate::{image::ImageData, utils};
 
 use anyhow::Context;

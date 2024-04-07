@@ -81,7 +81,7 @@ impl ValidatedImage {
 /// A probe meant to store some short-lived information for checking if cache entries are valid
 // TODO: store system time and
 #[derive(Debug)]
-struct ValidationProbe(());
+pub struct ValidationProbe(());
 
 impl<'a> TryFrom<&Key<'a>> for ValidationProbe {
     type Error = anyhow::Error;
