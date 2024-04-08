@@ -73,6 +73,10 @@ impl CacheControlMeta {
         let stale_after = time + stale_after;
         Self { e_tag, stale_after }
     }
+
+    pub fn stale_after(&self) -> SystemTime {
+        self.stale_after
+    }
 }
 
 #[derive(Default)]

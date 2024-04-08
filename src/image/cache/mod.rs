@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::BTreeMap, path::Path, sync::RwLock, time::SystemTime};
+use std::{borrow::Cow, collections::BTreeMap, fs, path::Path, sync::RwLock, time::SystemTime};
 
 use crate::image::ImageData;
 
@@ -69,7 +69,7 @@ impl ValidatedImage {
         Self { image, validation }
     }
 
-    fn validate(&self, probe: &ValidationProbe) -> Option<ImageData> {
+    fn validate(&self, probe: ValidationProbe) -> Option<ImageData> {
         self.validation.is_valid(probe).then(|| self.image.clone())
     }
 
@@ -79,15 +79,37 @@ impl ValidatedImage {
 }
 
 /// A probe meant to store some short-lived information for checking if cache entries are valid
-// TODO: store system time and
-#[derive(Debug)]
-pub struct ValidationProbe(());
+#[derive(Clone, Copy, Debug)]
+pub struct ValidationProbe {
+    time: SystemTime,
+    source: TimeSource,
+}
 
-impl<'a> TryFrom<&Key<'a>> for ValidationProbe {
+#[derive(Clone, Copy, Debug)]
+pub enum TimeSource {
+    LocalMTime,
+    Now,
+}
+
+impl<'key> TryFrom<&Key<'key>> for ValidationProbe {
     type Error = anyhow::Error;
 
-    fn try_from(key: &Key<'a>) -> Result<Self, Self::Error> {
-        todo!();
+    fn try_from(Key(key): &Key<'key>) -> Result<Self, Self::Error> {
+        let (time, source) = if key.starts_with("file://") {
+            // TODO(comsic): could refactor `Key` to avoid having to do all of this. Feels a little
+            // weird to keep going back and forth from a string url to a parsed url (lazily cache
+            // the parsed url with a oncecell?)
+            let url: Url = key.parse().expect("TODO: this is infallible");
+            let path = url.to_file_path().expect("TODO: this is infallible");
+            let meta = fs::metadata(&path)?;
+            let m_time = meta.modified()?;
+            (m_time, TimeSource::LocalMTime)
+        } else {
+            let now = SystemTime::now();
+            (now, TimeSource::Now)
+        };
+
+        Ok(Self { time, source })
     }
 }
 
@@ -99,8 +121,17 @@ struct Validation {
 }
 
 impl Validation {
-    fn is_valid(&self, probe: &ValidationProbe) -> bool {
-        todo!();
+    fn is_valid(&self, probe: ValidationProbe) -> bool {
+        let ValidationProbe { time, source } = probe;
+        match (&self.kind, source) {
+            (&ValidationKind::Local(stored_m_time), TimeSource::LocalMTime) => {
+                stored_m_time == time
+            }
+            (ValidationKind::RemoteUrl(cache_meta), TimeSource::Now) => {
+                cache_meta.stale_after() < time
+            }
+            _ => todo!("This should be unreachable, can we represent this better?"),
+        }
     }
 }
 
@@ -110,6 +141,7 @@ enum ValidationKind {
     RemoteUrl(headers::CacheControlMeta),
 }
 
+// TODO: need to be able to pass in a fake time source, so that we can reasonably test this
 /// A multi-layered image cache
 ///
 /// Uses a fast in-memory cache backed by a secondary global cache
@@ -122,12 +154,21 @@ pub struct LayeredCache {
 
 impl LayeredCache {
     pub fn load() -> anyhow::Result<Self> {
-        global::Cache::load().map(Into::into)
+        let cache = match global::Cache::load() {
+            Ok(global) => global.into(),
+            Err(err) => {
+                tracing::warn!(
+                    "Failed loading persistent image cache: {err}\nFalling back to in-memory cache"
+                );
+                Self::in_memory()
+            }
+        };
+        Ok(cache)
     }
 
     /// Create a new cache in-memory (useful for testing)
-    pub fn in_memory() -> anyhow::Result<Self> {
-        global::Cache::in_memory().map(Into::into)
+    pub fn in_memory() -> Self {
+        global::Cache::in_memory().into()
     }
 
     pub fn fetch_cached(&mut self, key: Key<'static>) -> anyhow::Result<ImageData> {
@@ -138,14 +179,14 @@ impl LayeredCache {
             let local_read = self.per_session.read().expect("TODO");
             local_read
                 .get(&key)
-                .and_then(|validated_image| validated_image.validate(&probe))
+                .and_then(|validated_image| validated_image.validate(probe))
         };
 
         if let Some(image_data) = from_local_cache {
             return Ok(image_data);
         }
 
-        let (new_validation, image_data) = self.global.fetch_cached(&key, &probe)?;
+        let (new_validation, image_data) = self.global.fetch_cached(&key, probe)?;
 
         {
             let mut local_write = self.per_session.write().expect("TODO");

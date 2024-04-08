@@ -49,17 +49,33 @@ impl Cache {
         Ok(Self(db))
     }
 
-    pub fn in_memory() -> anyhow::Result<Self> {
+    pub fn in_memory() -> Self {
         let backend = InMemoryBackend::new();
-        let db = Database::builder().create_with_backend(backend)?;
-        Ok(Self(db))
+        let db = Database::builder()
+            .create_with_backend(backend)
+            .expect("In-memory backend should be infallible");
+        Self(db)
     }
 
     pub fn fetch_cached(
-        &self,
+        &mut self,
         key: &Key<'static>,
-        probe: &ValidationProbe,
+        probe: ValidationProbe,
     ) -> anyhow::Result<(Validation, ImageData)> {
+        let read_txn = self.0.begin_read()?;
+        let meta_table = read_txn.open_table(METADATA_TABLE)?;
+        let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
+        todo!();
+        // TODO: check the probe against the stored meta:
+        //
+        // - If the cache is fresh then return the meta and image data
+        // - If the cache is stale and there's and e-tag then send the etag with the request to
+        //   potentially skip transferring the body
+        // - Otherwise fetch the image from source (either local or remote) and store relevant info
+        //
+        // Notably we should ignore caching images from local sources, but I'm not sure how
+        // accurately we can determine that (although it's probably easy to get good enough to
+        // work)
         todo!();
     }
 
