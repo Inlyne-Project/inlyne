@@ -51,6 +51,7 @@ impl Selection {
         }
     }
 
+    #[must_use]
     pub fn handle_drag(&mut self, new_position: Point) -> bool {
         self.text.clear();
         match &mut self.selection {
