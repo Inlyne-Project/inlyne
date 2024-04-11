@@ -43,14 +43,15 @@ pub enum HeaderType {
 }
 
 impl HeaderType {
-    pub fn text_size(&self) -> f32 {
-        match &self {
-            Self::H1 => 32.,
-            Self::H2 => 24.,
-            Self::H3 => 18.72,
-            Self::H4 => 16.,
-            Self::H5 => 13.28,
-            Self::H6 => 10.72,
+    // https://html.spec.whatwg.org/multipage/rendering.html#sections-and-headings
+    pub fn size_multiplier(&self) -> f32 {
+        match self {
+            HeaderType::H1 => 2.0,
+            HeaderType::H2 => 1.5,
+            HeaderType::H3 => 1.17,
+            HeaderType::H4 => 1.0,
+            HeaderType::H5 => 0.83,
+            HeaderType::H6 => 0.67,
         }
     }
 }
