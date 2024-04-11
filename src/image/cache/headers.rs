@@ -1,5 +1,6 @@
 //! References:
 //!
+//! - <https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching>
 //! - <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control>
 //! - <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Age>
 //! - <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag>
@@ -18,6 +19,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CacheControlMeta {
     e_tag: Option<ETag>,
+    // TODO: the `stale_after` can be optional since an `ETag` can be used along with `no-cache` to
+    // handle caching responses still
     stale_after: SystemTime,
 }
 
@@ -58,8 +61,8 @@ impl CacheControlMeta {
         }
 
         max_age.and_then(|Age(mut max_age)| {
-            if let Some(age) = age {
-                max_age = max_age.checked_sub(age.0)?;
+            if let Some(Age(age)) = age {
+                max_age = max_age.checked_sub(age)?;
             }
             Some(Self::from_e_tag_stale_after_and_time(e_tag, max_age, time))
         })

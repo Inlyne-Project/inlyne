@@ -8,10 +8,13 @@ use redb::{backends::InMemoryBackend, Database, TableDefinition};
 
 mod value_impls;
 
+// TODO: separate remote and local validation types (separate key types too?) and then use an enum
+// for the common `Key`
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data when we don't need it
-const METADATA_TABLE: TableDefinition<Key, Validation> = TableDefinition::new("metadata_table");
-const DATA_TABLE: TableDefinition<Key, ImageData> = TableDefinition::new("data_table");
+const LOCAL_META: TableDefinition<Key, Validation> = TableDefinition::new("inlyne-local-meta");
+const REMOTE_META: TableDefinition<Key, Validation> = TableDefinition::new("inlyne-remote-meta");
+const IMAGE_DATA: TableDefinition<Key, ImageData> = TableDefinition::new("inlyne-image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -65,7 +68,6 @@ impl Cache {
         let read_txn = self.0.begin_read()?;
         let meta_table = read_txn.open_table(METADATA_TABLE)?;
         let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
-        todo!();
         // TODO: check the probe against the stored meta:
         //
         // - If the cache is fresh then return the meta and image data

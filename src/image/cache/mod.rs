@@ -1,7 +1,8 @@
-use std::{borrow::Cow, collections::BTreeMap, fs, path::Path, sync::RwLock, time::SystemTime};
+use std::{borrow::Cow, collections::BTreeMap, fs, path::Path, time::SystemTime};
 
 use crate::image::ImageData;
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -176,7 +177,7 @@ impl LayeredCache {
             .try_into()
             .expect("TODO: log and fallback to fetching from source");
         let from_local_cache = {
-            let local_read = self.per_session.read().expect("TODO");
+            let local_read = self.per_session.read();
             local_read
                 .get(&key)
                 .and_then(|validated_image| validated_image.validate(probe))
@@ -189,7 +190,7 @@ impl LayeredCache {
         let (new_validation, image_data) = self.global.fetch_cached(&key, probe)?;
 
         {
-            let mut local_write = self.per_session.write().expect("TODO");
+            let mut local_write = self.per_session.write();
             let entry = local_write
                 .entry(key)
                 .or_insert_with(|| ValidatedImage::new(image_data.clone(), new_validation.clone()));
