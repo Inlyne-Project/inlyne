@@ -474,12 +474,12 @@ impl TextBox {
                         let end = Cursor::new(cursor.line, end_index);
 
                         (start, end, position.1, position.1)
-                    } // TODO implement
+                    }
                     SelectionMode::Line => {
                         let start = Cursor::new(cursor.line, 0);
                         let end = Cursor::new(cursor.line, line.text().len());
                         (start, end, position.1, position.1)
-                    } // TODO implement
+                    }
                 }
             }
             _ => {
