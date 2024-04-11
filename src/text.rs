@@ -443,7 +443,7 @@ impl TextBox {
                 (start_cursor, end_cursor, start.1, end.1)
             }
             SelectionKind::Click { mode, position, .. } => {
-                let cursor = buffer.hit(
+                let mut cursor = buffer.hit(
                     position.0 - screen_position.0,
                     position.1 - screen_position.1,
                 )?;
@@ -453,22 +453,43 @@ impl TextBox {
                 match mode {
                     SelectionMode::Word => {
                         let text = line.text();
+                        
+                        let mut start_index = None;
+                        let mut end_index = None;
+                        
+                        match cursor.affinity {
+                            Affinity::Before => {
+                                if cursor.index == 0 { return None; }
+                                if text.get(cursor.index-1..cursor.index)?.contains(|c: char| c.is_whitespace()) {
+                                    cursor.index += 1;
+                                } else if cursor.index == text.len() || text.get(cursor.index..cursor.index+1)?.contains(|c: char| c.is_whitespace()){
+                                    end_index = Some(cursor.index);
+                                }
+                            }
+                            Affinity::After => {
+                                if text.get(cursor.index..cursor.index+1)?.contains(|c: char| c.is_whitespace()) {
+                                    cursor.index -= 1;
+                                } else if cursor.index == 0 || text.get(cursor.index-1..cursor.index)?.contains(|c: char| c.is_whitespace()){
+                                    start_index = Some(cursor.index)
+                                }
+                            }
+                        }
+                        
+                        if end_index.is_none() {
+                            let end_text = text
+                                .get(cursor.index..)
+                                .and_then(|str| str.split_whitespace().next())?;
+                            end_index = Some(end_text.len() + cursor.index);
+                        }
+                        if start_index.is_none() {
+                            let start_text = text
+                                .get(..cursor.index)
+                                .and_then(|str| str.split_whitespace().next_back())?;
+                            start_index = Some(cursor.index - start_text.len());
+                        }
 
-                        // TODO: Add an check for the case that an space is clicked
-                        //       and move the selection logic behind an check for cursor affinity.
-
-                        let end_text = text
-                            .get(cursor.index..)
-                            .and_then(|str| str.split_whitespace().next())?;
-                        let end_index = end_text.len() + cursor.index;
-
-                        let start_text = text
-                            .get(..cursor.index)
-                            .and_then(|str| str.split_whitespace().next_back())?;
-                        let start_index = cursor.index - start_text.len();
-
-                        let start = Cursor::new(cursor.line, start_index);
-                        let end = Cursor::new(cursor.line, end_index);
+                        let start = Cursor::new(cursor.line, start_index.expect("Should have an value"));
+                        let end = Cursor::new(cursor.line, end_index.expect("Should have an value"));
 
                         (start, end, position.1, position.1)
                     }
