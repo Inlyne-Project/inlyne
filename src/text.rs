@@ -453,12 +453,9 @@ impl TextBox {
                 match mode {
                     SelectionMode::Word => {
                         let text = line.text();
-                        if text
-                            .get(cursor.index..cursor.index)?
-                            .contains(|c: char| c.is_whitespace())
-                        {
-                            return None;
-                        }
+
+                        // TODO: Add an check for the case that an space is clicked
+                        //       and move the selection logic behind an check for cursor affinity.
 
                         let end_text = text
                             .get(cursor.index..)

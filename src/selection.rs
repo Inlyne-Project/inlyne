@@ -1,7 +1,6 @@
 use crate::utils::{dist_between_points, Point};
 use std::time::{Duration, Instant};
 
-
 const CLICK_TOLERANCE: Duration = Duration::from_millis(300);
 const MAX_CLICK_DIST: f32 = 5.0;
 
