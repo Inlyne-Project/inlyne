@@ -1,9 +1,8 @@
 use crate::utils::{dist_between_points, Point};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-type Milliseconds = u128;
 
-const CLICK_TOLERANCE: Milliseconds = 300;
+const CLICK_TOLERANCE: Duration = Duration::from_millis(300);
 const MAX_CLICK_DIST: f32 = 5.0;
 
 #[derive(PartialEq, Debug)]
@@ -77,7 +76,7 @@ impl Selection {
                 position,
             } => {
                 if mode == &SelectionMode::Word
-                    && time.elapsed().as_millis() < CLICK_TOLERANCE
+                    && time.elapsed() < CLICK_TOLERANCE
                     && dist_between_points(position, &new_position) < MAX_CLICK_DIST
                 {
                     self.selection = SelectionKind::Click {
@@ -90,7 +89,7 @@ impl Selection {
                 }
             }
             SelectionKind::Start { position, time } => {
-                if time.elapsed().as_millis() < CLICK_TOLERANCE
+                if time.elapsed() < CLICK_TOLERANCE
                     && dist_between_points(position, &new_position) < MAX_CLICK_DIST
                 {
                     self.selection = SelectionKind::Click {
