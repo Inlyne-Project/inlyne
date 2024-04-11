@@ -453,28 +453,44 @@ impl TextBox {
                 match mode {
                     SelectionMode::Word => {
                         let text = line.text();
-                        
+
                         let mut start_index = None;
                         let mut end_index = None;
-                        
+
                         match cursor.affinity {
                             Affinity::Before => {
-                                if cursor.index == 0 { return None; }
-                                if text.get(cursor.index-1..cursor.index)?.contains(|c: char| c.is_whitespace()) {
+                                if cursor.index == 0 {
+                                    return None;
+                                }
+                                if text
+                                    .get(cursor.index - 1..cursor.index)?
+                                    .contains(|c: char| c.is_whitespace())
+                                {
                                     cursor.index += 1;
-                                } else if cursor.index == text.len() || text.get(cursor.index..cursor.index+1)?.contains(|c: char| c.is_whitespace()){
+                                } else if cursor.index == text.len()
+                                    || text
+                                        .get(cursor.index..cursor.index + 1)?
+                                        .contains(|c: char| c.is_whitespace())
+                                {
                                     end_index = Some(cursor.index);
                                 }
                             }
                             Affinity::After => {
-                                if text.get(cursor.index..cursor.index+1)?.contains(|c: char| c.is_whitespace()) {
+                                if text
+                                    .get(cursor.index..cursor.index + 1)?
+                                    .contains(|c: char| c.is_whitespace())
+                                {
                                     cursor.index -= 1;
-                                } else if cursor.index == 0 || text.get(cursor.index-1..cursor.index)?.contains(|c: char| c.is_whitespace()){
+                                } else if cursor.index == 0
+                                    || text
+                                        .get(cursor.index - 1..cursor.index)?
+                                        .contains(|c: char| c.is_whitespace())
+                                {
                                     start_index = Some(cursor.index)
                                 }
                             }
                         }
-                        
+
                         if end_index.is_none() {
                             let end_text = text
                                 .get(cursor.index..)
@@ -488,8 +504,10 @@ impl TextBox {
                             start_index = Some(cursor.index - start_text.len());
                         }
 
-                        let start = Cursor::new(cursor.line, start_index.expect("Should have an value"));
-                        let end = Cursor::new(cursor.line, end_index.expect("Should have an value"));
+                        let start =
+                            Cursor::new(cursor.line, start_index.expect("Should have an value"));
+                        let end =
+                            Cursor::new(cursor.line, end_index.expect("Should have an value"));
 
                         (start, end, position.1, position.1)
                     }
