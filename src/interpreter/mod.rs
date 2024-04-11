@@ -205,7 +205,7 @@ impl HtmlInterpreter {
     }
 
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
-        let mut input = BufferQueue::new();
+        let mut input = BufferQueue::default();
 
         let span_color = self.native_color(self.theme.text_color);
         let code_highlighter = self.theme.code_highlighter.clone();
@@ -811,7 +811,13 @@ impl HtmlInterpreter {
             }
         } else {
             if self.current_textbox.texts.is_empty() && self.state.text_options.pre_formatted == 0 {
-                str = str.trim_start().to_owned();
+                #[allow(
+                    unknown_lints, // Rust is still bad with back compat on new lints
+                    clippy::assigning_clones // Hit's a borrow-check issue. Needs a different impl
+                )]
+                {
+                    str = str.trim_start().to_owned();
+                }
             }
 
             let mut text = Text::new(str, self.hidpi_scale, text_native_color);
