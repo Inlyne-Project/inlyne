@@ -541,8 +541,7 @@ impl Renderer {
                     .clone();
                 rect.pos.1 -= self.scroll_y;
                 let color = glyphon::Color::rgb(255, 0, 255).0;
-                let _ =
-                    self.stroke_rectangle(rect, native_color(color, &self.surface_format), 1.0);
+                let _ = self.stroke_rectangle(rect, native_color(color, &self.surface_format), 1.0);
             }
         }
 
