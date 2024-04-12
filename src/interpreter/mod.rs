@@ -848,7 +848,7 @@ impl HtmlInterpreter {
             }
             for elem in self.state.element_stack.iter().rev() {
                 if let InterpreterElement::Header(header) = elem {
-                    self.current_textbox.font_size = header.ty.text_size();
+                    self.current_textbox.font_size *= header.ty.size_multiplier();
                     text = text.make_bold(true);
                     break;
                 }
