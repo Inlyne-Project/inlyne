@@ -3,7 +3,10 @@ mod config;
 #[cfg(test)]
 mod tests;
 
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use crate::color;
 pub use cli::{Cli, Commands, ConfigCmd, Position, Size, ThemeType, View};
@@ -14,6 +17,17 @@ use anyhow::Result;
 use clap::Parser;
 use serde::Deserialize;
 use smart_debug::SmartDebug;
+
+static RENDER_ELEMENT_BOUNDS: AtomicBool = AtomicBool::new(false);
+
+#[must_use]
+pub fn get_render_element_bounds() -> bool {
+    RENDER_ELEMENT_BOUNDS.load(Ordering::SeqCst)
+}
+
+pub fn set_render_element_bounds(b: bool) {
+    RENDER_ELEMENT_BOUNDS.store(b, Ordering::SeqCst);
+}
 
 #[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ResolvedTheme {
@@ -108,7 +122,12 @@ impl Opts {
             position: v_position,
         } = args;
 
-        let DebugSection { metrics } = debug;
+        let DebugSection {
+            metrics,
+            render_element_bounds,
+        } = debug;
+
+        set_render_element_bounds(render_element_bounds);
 
         let resolved_theme = args_theme
             .or(config_theme)

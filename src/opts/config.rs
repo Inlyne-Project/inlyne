@@ -83,9 +83,10 @@ pub enum MetricsExporter {
 }
 
 #[derive(Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(default)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct DebugSection {
     pub metrics: Option<MetricsExporter>,
+    pub render_element_bounds: bool,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]

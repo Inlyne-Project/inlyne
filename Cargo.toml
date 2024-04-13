@@ -26,7 +26,6 @@ keywords = ["markdown", "viewer", "gpu"]
 default = ["wayland", "x11"]
 x11 = ["copypasta/x11", "winit/x11"]
 wayland = ["copypasta/wayland", "winit/wayland"]
-debug = []
 
 [dependencies]
 winit = { version = "0.28.7", default-features = false }

@@ -524,8 +524,8 @@ impl Renderer {
                     }
                 }
             }
-            #[cfg(feature = "debug")]
-            {
+
+            if crate::opts::get_render_element_bounds() {
                 let mut rect = element
                     .bounds
                     .as_ref()
