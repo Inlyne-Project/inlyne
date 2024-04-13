@@ -299,13 +299,14 @@ impl Renderer {
                         }
                     }
                     if let Some(is_checked) = text_box.is_checkbox {
+                        let line_height = text_box.line_height(self.zoom);
                         let min = (
                             scrolled_pos.0 - box_size * 1.5,
-                            scrolled_pos.1 + size.1 / 2. - box_size / 2.,
+                            scrolled_pos.1 + line_height / 2. - box_size / 2.,
                         );
                         let max = (
                             scrolled_pos.0 + box_size - box_size * 1.5,
-                            scrolled_pos.1 + size.1 / 2. + box_size / 2.,
+                            scrolled_pos.1 + line_height / 2. + box_size / 2.,
                         );
                         if max.0 < screen_size.0 - DEFAULT_MARGIN - centering {
                             if is_checked {
