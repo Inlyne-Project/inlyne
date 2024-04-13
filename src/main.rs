@@ -387,9 +387,7 @@ impl Inlyne {
                             .contains(position.into())
                                 && mouse_down)
                         {
-                            let scrollbar_height = (screen_size.1
-                                / self.renderer.positioner.reserved_height)
-                                * screen_size.1;
+                            let scrollbar_height = self.renderer.scrollbar_height();
                             if scrollbar_held.is_none() {
                                 if Rect::new(
                                     (
@@ -438,6 +436,21 @@ impl Inlyne {
                         ElementState::Pressed => {
                             // Try to click a link
                             let screen_size = self.renderer.screen_size();
+
+                            let y = mouse_position.1 - self.renderer.scroll_y;
+                            if Rect::new(
+                                (screen_size.0 - DEFAULT_MARGIN / 4., 0.),
+                                (DEFAULT_MARGIN / 4., screen_size.1),
+                            ).contains((mouse_position.0, y)) {
+                                let scrollbar_height = self.renderer.scrollbar_height();
+
+                                let target_scroll = ((y - scrollbar_height / 2.) / screen_size.1)
+                                    * self.renderer.positioner.reserved_height;
+
+                                self.renderer.set_scroll_y(target_scroll);
+                                self.window.request_redraw();
+                            }
+
                             if let Some(hoverable) = Self::find_hoverable(
                                 &mut self.renderer.text_system,
                                 &mut self.renderer.positioner.taffy,

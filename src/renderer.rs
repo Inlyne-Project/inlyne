@@ -208,6 +208,10 @@ impl Renderer {
         Ok(())
     }
 
+    pub fn scrollbar_height(&self) -> f32 {
+        (self.screen_height() / self.positioner.reserved_height) * self.screen_height()
+    }
+
     fn render_elements(
         &mut self,
         elements: &[Positioned<Element>],
