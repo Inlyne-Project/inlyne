@@ -5,9 +5,6 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
-use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
-use crate::utils::{Align, Line, Point, Rect, Selection, Size};
-
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
     Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, LayoutGlyph,
@@ -15,6 +12,10 @@ use glyphon::{
 };
 use smart_debug::SmartDebug;
 use taffy::prelude::{AvailableSpace, Size as TaffySize};
+
+use crate::debug_impls::{self, DebugInline, DebugInlineMaybeF32Color};
+use crate::selection::{Selection, SelectionKind, SelectionMode};
+use crate::utils::{Align, Line, Point, Rect, Size};
 
 type KeyHash = u64;
 type HashBuilder = twox_hash::RandomXxHashBuilder64;
@@ -413,16 +414,8 @@ impl TextBox {
         screen_position: Point,
         bounds: Size,
         zoom: f32,
-        selection: Selection,
-    ) -> (Vec<Rect>, String) {
-        let (mut select_start, mut select_end) = selection;
-        if select_start.1 > select_end.1 || select_start.0 > select_end.0 {
-            std::mem::swap(&mut select_start, &mut select_end);
-        }
-        if screen_position.1 > select_end.1 || screen_position.1 + bounds.1 < select_start.1 {
-            return (vec![], String::new());
-        }
-
+        selection: &mut Selection,
+    ) -> Option<Vec<Rect>> {
         let mut rects = Vec::new();
         let mut selected_text = String::new();
 
@@ -434,65 +427,144 @@ impl TextBox {
             self.key(bounds, zoom),
         );
 
-        if let Some(start_cursor) = buffer.hit(
-            select_start.0 - screen_position.0,
-            select_start.1 - screen_position.1,
-        ) {
-            if let Some(end_cursor) = buffer.hit(
-                select_end.0 - screen_position.0,
-                select_end.1 - screen_position.1,
-            ) {
-                if start_cursor.index == end_cursor.index {
-                    return (vec![], String::new());
+        let (start_cursor, end_cursor, start_y, end_y) = match &selection.selection {
+            SelectionKind::Drag { mut start, mut end } => {
+                if start.1 > end.1 || start.0 > end.0 {
+                    std::mem::swap(&mut start, &mut end);
+                }
+                if screen_position.1 > end.1 || screen_position.1 + bounds.1 < start.1 {
+                    return None;
                 }
 
-                let mut y = screen_position.1;
-                for line in buffer.layout_runs() {
-                    let line_contains =
-                        move |y_point: f32| y_point >= y && y_point <= y + line_height;
-                    if line_contains(select_start.1)
-                        || line_contains(select_end.1)
-                        || (select_start.1 < y && select_end.1 > y + line_height)
-                    {
-                        if let Some((highlight_x, highlight_w)) =
-                            line.highlight(start_cursor, end_cursor)
-                        {
-                            let x = screen_position.0 + highlight_x;
-                            rects.push(Rect::from_min_max(
-                                (x.floor(), y),
-                                ((x + highlight_w).ceil(), y + line_height),
-                            ));
-                        }
-                    }
+                let start_cursor =
+                    buffer.hit(start.0 - screen_position.0, start.1 - screen_position.1)?;
+                let end_cursor =
+                    buffer.hit(end.0 - screen_position.0, end.1 - screen_position.1)?;
+                (start_cursor, end_cursor, start.1, end.1)
+            }
+            SelectionKind::Click { mode, position, .. } => {
+                let mut cursor = buffer.hit(
+                    position.0 - screen_position.0,
+                    position.1 - screen_position.1,
+                )?;
 
-                    // See https://docs.rs/cosmic-text/0.8.0/cosmic_text/struct.LayoutRun.html#method.highlight implementation
-                    for glyph in line.glyphs.iter() {
-                        let left_glyph_cursor = if line.rtl {
-                            Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
-                        } else {
-                            Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
-                        };
-                        let right_glyph_cursor = if line.rtl {
-                            Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
-                        } else {
-                            Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
-                        };
-                        if (left_glyph_cursor >= start_cursor && left_glyph_cursor <= end_cursor)
-                            && (right_glyph_cursor >= start_cursor
-                                && right_glyph_cursor <= end_cursor)
-                        {
-                            selected_text.push_str(&line.text[glyph.start..glyph.end]);
+                let line = buffer.lines.get(cursor.line)?;
+
+                match mode {
+                    SelectionMode::Word => {
+                        let text = line.text();
+
+                        let mut start_index = None;
+                        let mut end_index = None;
+
+                        match cursor.affinity {
+                            Affinity::Before => {
+                                if cursor.index == 0 {
+                                    return None;
+                                }
+                                if text
+                                    .get(cursor.index - 1..cursor.index)?
+                                    .contains(|c: char| c.is_whitespace())
+                                {
+                                    cursor.index += 1;
+                                } else if cursor.index == text.len()
+                                    || text
+                                        .get(cursor.index..cursor.index + 1)?
+                                        .contains(|c: char| c.is_whitespace())
+                                {
+                                    end_index = Some(cursor.index);
+                                }
+                            }
+                            Affinity::After => {
+                                if text
+                                    .get(cursor.index..cursor.index + 1)?
+                                    .contains(|c: char| c.is_whitespace())
+                                {
+                                    cursor.index -= 1;
+                                } else if cursor.index == 0
+                                    || text
+                                        .get(cursor.index - 1..cursor.index)?
+                                        .contains(|c: char| c.is_whitespace())
+                                {
+                                    start_index = Some(cursor.index)
+                                }
+                            }
                         }
+
+                        if end_index.is_none() {
+                            let end_text = text
+                                .get(cursor.index..)
+                                .and_then(|str| str.split_whitespace().next())?;
+                            end_index = Some(end_text.len() + cursor.index);
+                        }
+                        if start_index.is_none() {
+                            let start_text = text
+                                .get(..cursor.index)
+                                .and_then(|str| str.split_whitespace().next_back())?;
+                            start_index = Some(cursor.index - start_text.len());
+                        }
+
+                        let start =
+                            Cursor::new(cursor.line, start_index.expect("Should have an value"));
+                        let end =
+                            Cursor::new(cursor.line, end_index.expect("Should have an value"));
+
+                        (start, end, position.1, position.1)
                     }
-                    if select_end.1 > y + line_height {
-                        selected_text.push(' ')
+                    SelectionMode::Line => {
+                        let start = Cursor::new(cursor.line, 0);
+                        let end = Cursor::new(cursor.line, line.text().len());
+                        (start, end, position.1, position.1)
                     }
-                    y += line_height;
                 }
             }
+            _ => {
+                return None;
+            }
+        };
+
+        let mut y = screen_position.1;
+        for line in buffer.layout_runs() {
+            let line_contains = move |y_point: f32| y_point >= y && y_point <= y + line_height;
+            if line_contains(start_y)
+                || line_contains(end_y)
+                || (start_y < y && end_y > y + line_height)
+            {
+                if let Some((highlight_x, highlight_w)) = line.highlight(start_cursor, end_cursor) {
+                    let x = screen_position.0 + highlight_x;
+                    rects.push(Rect::from_min_max(
+                        (x.floor(), y),
+                        ((x + highlight_w).ceil(), y + line_height),
+                    ));
+                }
+                // See https://docs.rs/cosmic-text/0.8.0/cosmic_text/struct.LayoutRun.html#method.highlight implementation
+                for glyph in line.glyphs.iter() {
+                    let left_glyph_cursor = if line.rtl {
+                        Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                    } else {
+                        Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                    };
+                    let right_glyph_cursor = if line.rtl {
+                        Cursor::new_with_affinity(line.line_i, glyph.start, Affinity::After)
+                    } else {
+                        Cursor::new_with_affinity(line.line_i, glyph.end, Affinity::Before)
+                    };
+                    if (left_glyph_cursor >= start_cursor && left_glyph_cursor <= end_cursor)
+                        && (right_glyph_cursor >= start_cursor && right_glyph_cursor <= end_cursor)
+                    {
+                        selected_text.push_str(&line.text[glyph.start..glyph.end]);
+                    }
+                }
+                if end_y > y + line_height {
+                    selected_text.push(' ')
+                }
+            }
+            y += line_height;
         }
 
-        (rects, selected_text)
+        selection.add_line(&selected_text);
+
+        Some(rects)
     }
 }
 

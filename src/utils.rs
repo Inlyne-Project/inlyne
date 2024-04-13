@@ -62,8 +62,12 @@ pub fn usize_in_mib(num: usize) -> f32 {
     num as f32 / 1_024.0 / 1_024.0
 }
 
-pub type Selection = ((f32, f32), (f32, f32));
 pub type Point = (f32, f32);
+
+pub fn dist_between_points(p1: &Point, p2: &Point) -> f32 {
+    f32::sqrt((p2.0 - p1.0).powf(2.0) + (p2.1 - p1.1).powf(2.0))
+}
+
 pub type Size = (f32, f32);
 pub type ImageCache = Arc<Mutex<HashMap<String, Arc<Mutex<Option<ImageData>>>>>>;
 

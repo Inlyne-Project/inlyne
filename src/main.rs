@@ -23,6 +23,7 @@ pub mod opts;
 mod panic_hook;
 pub mod positioner;
 pub mod renderer;
+pub mod selection;
 pub mod table;
 pub mod test_utils;
 pub mod text;
@@ -56,6 +57,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
 use crate::opts::{Commands, ConfigCmd, MetricsExporter};
+use crate::selection::Selection;
 use anyhow::Context;
 use clap::Parser;
 use taffy::Taffy;
@@ -147,6 +149,7 @@ pub struct Inlyne {
     keycombos: KeyCombos,
     need_repositioning: bool,
     watcher: Watcher,
+    selection: Selection,
 }
 
 impl Inlyne {
@@ -221,6 +224,7 @@ impl Inlyne {
             keycombos,
             need_repositioning: false,
             watcher,
+            selection: Selection::new(),
         })
     }
 
@@ -280,9 +284,7 @@ impl Inlyne {
         let mut scrollbar_held = None;
         let mut mouse_down = false;
         let mut modifiers = ModifiersState::empty();
-        let mut last_loc = (0.0, 0.0);
-        let mut selection_cache = String::new();
-        let mut selecting = false;
+        let mut mouse_position: Point = Point::default();
 
         let event_loop = self.event_loop.take().unwrap();
         let event_loop_proxy = event_loop.create_proxy();
@@ -330,12 +332,9 @@ impl Inlyne {
                     );
                     self.renderer.set_scroll_y(self.renderer.scroll_y);
                     self.renderer
-                        .redraw(&mut self.elements)
+                        .redraw(&mut self.elements, &mut self.selection)
                         .context("Renderer failed to redraw the screen")
                         .unwrap();
-                    if selecting {
-                        selection_cache.clone_from(&self.renderer.selection_text);
-                    }
 
                     histogram!(HistTag::Redraw).record(redraw_start.elapsed());
                 }
@@ -426,14 +425,10 @@ impl Inlyne {
                                 * self.renderer.positioner.reserved_height;
                             self.renderer.set_scroll_y(target_scroll);
                             self.window.request_redraw();
-                        } else if let Some(selection) = &mut self.renderer.selection {
-                            if mouse_down {
-                                selection.1 = loc;
-                                selecting = true;
-                                self.window.request_redraw();
-                            }
+                        } else if mouse_down && self.selection.handle_drag(loc) {
+                            self.window.request_redraw();
                         }
-                        last_loc = loc;
+                        mouse_position = loc;
                     }
                     WindowEvent::MouseInput {
                         state,
@@ -441,19 +436,13 @@ impl Inlyne {
                         ..
                     } => match state {
                         ElementState::Pressed => {
-                            // Reset selection
-                            if self.renderer.selection.is_some() {
-                                self.renderer.selection = None;
-                                self.window.request_redraw();
-                            }
-
                             // Try to click a link
                             let screen_size = self.renderer.screen_size();
                             if let Some(hoverable) = Self::find_hoverable(
                                 &mut self.renderer.text_system,
                                 &mut self.renderer.positioner.taffy,
                                 &self.elements,
-                                last_loc,
+                                mouse_position,
                                 screen_size,
                                 self.renderer.zoom,
                             ) {
@@ -504,20 +493,21 @@ impl Inlyne {
                                         event_loop_proxy
                                             .send_event(InlyneEvent::Reposition)
                                             .unwrap();
-                                        self.renderer.selection = Some((last_loc, last_loc))
+                                        self.selection.add_position(mouse_position);
                                     },
-                                    _ => self.renderer.selection = Some((last_loc, last_loc)),
+                                    _ => {
+                                        self.selection.add_position(mouse_position);
+                                        self.window.request_redraw();
+                                    }
                                 };
-                            } else if self.renderer.selection.is_none() {
-                                self.renderer.selection = Some((last_loc, last_loc));
+                            } else {
+                                self.selection.add_position(mouse_position);
                             }
-
                             mouse_down = true;
                         }
                         ElementState::Released => {
                             scrollbar_held = None;
                             mouse_down = false;
-                            selecting = false;
                         }
                     },
                     WindowEvent::ModifiersChanged(new_state) => modifiers = new_state,
@@ -587,7 +577,7 @@ impl Inlyne {
                                     self.window.request_redraw();
                                 }
                                 Action::Copy => clipboard
-                                    .set_contents(selection_cache.trim().to_owned()),
+                                    .set_contents(self.selection.text.trim().to_owned()),
                                 Action::Quit => *control_flow = ControlFlow::Exit,
                                 Action::History(hist_dir) => {
                                     let changed_path = match hist_dir {
