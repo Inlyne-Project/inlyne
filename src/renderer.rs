@@ -191,6 +191,9 @@ impl Renderer {
 
     fn draw_scrollbar(&mut self) -> anyhow::Result<()> {
         let (screen_width, screen_height) = self.screen_size();
+        if screen_height > self.positioner.reserved_height {
+            return Ok(());
+        }
         let height = (screen_height / self.positioner.reserved_height) * screen_height;
         self.draw_rectangle(
             Rect::new(
