@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Inlyne
 GenericName=Markdown Viewer
-Exec=inlyne %f
+Exec=inlyne view %f
 Type=Application
 StartupWMClass=inlyne
 MimeType=text/markdown;
