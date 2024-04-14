@@ -43,6 +43,7 @@ impl Iterator for Iter<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Attr {
     Align(Align),
     Href(String),
@@ -68,6 +69,7 @@ impl Attr {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PrefersColorScheme(pub ResolvedTheme);
 
 impl PrefersColorScheme {

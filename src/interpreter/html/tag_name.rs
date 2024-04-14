@@ -36,6 +36,7 @@ pub enum TagName {
     TableRow,
     Underline,
     UnorderedList,
+    Root,
 }
 
 impl TryFrom<&Atom<LocalNameStaticSet>> for TagName {
