@@ -1751,6 +1751,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
+name = "http-cache-semantics"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92baf25cf0b8c9246baecf3a444546360a97b569168fdf92563ee6a47829920c"
+dependencies = [
+ "http",
+ "http-serde",
+ "serde",
+ "time",
+]
+
+[[package]]
+name = "http-serde"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1133cafcce27ea69d35e56b3a8772e265633e04de73c5f4e1afdffc1d19b5419"
+dependencies = [
+ "http",
+ "serde",
+]
+
+[[package]]
 name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1876,6 +1909,8 @@ dependencies = [
  "glyphon",
  "html-escape",
  "html5ever",
+ "http",
+ "http-cache-semantics",
  "human-panic",
  "image",
  "indexmap 2.2.6",
@@ -4535,6 +4570,7 @@ checksum = "d11a831e3c0b56e438a28308e7c810799e3c118417f342d30ecec080105395cd"
 dependencies = [
  "base64 0.22.1",
  "flate2",
+ "http",
  "log",
  "once_cell",
  "rustls",

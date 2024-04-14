@@ -1,9 +1,23 @@
+use std::time::{Duration, SystemTime};
+
 use crate::image::{
-    cache::{headers::ETag, Key, Validation, ValidationKind},
+    cache::{Key, LocalMeta},
     ImageData,
 };
 
+use http_cache_semantics::CachePolicy;
 use serde::{Deserialize, Serialize};
+
+macro_rules! default_value_impl {
+    ($ty:ty) => {
+        impl ::redb::Value for $ty {
+            types!();
+            fn_fixed_width!(None);
+            fn_type_name!(stringify!($ty));
+            bincode_byte_fns!();
+        }
+    };
+}
 
 macro_rules! bincode_byte_fns {
     () => {
@@ -36,6 +50,9 @@ macro_rules! fn_type_name {
 }
 
 macro_rules! types {
+    () => {
+        types!(self_type: Self, as_bytes: Vec<u8>);
+    };
     (self_type: $self_ty:ty, as_bytes: $bytes_ty:ty) => {
         type SelfType<'a> = $self_ty where Self: 'a;
         type AsBytes<'a> = $bytes_ty where Self: 'a;
@@ -50,45 +67,122 @@ macro_rules! fn_fixed_width {
     };
 }
 
-impl<'key> redb::Value for Key<'key> {
-    types!(self_type: Key<'a>, as_bytes: &'a str);
-    fn_fixed_width!(<&str>::fixed_width());
-    fn_type_name!("Key");
+#[derive(Debug)]
+pub struct SystemTimeWrapper(SystemTime);
+
+impl From<SystemTime> for SystemTimeWrapper {
+    fn from(inner: SystemTime) -> Self {
+        Self(inner)
+    }
+}
+
+const LEN: usize = 8;
+type SystemTimeBytes = [u8; LEN];
+type SystemTimeBytes2 = [u8; LEN * 2];
+
+impl redb::Value for SystemTimeWrapper {
+    types!(self_type: Self, as_bytes: SystemTimeBytes);
+    fn_fixed_width!(None);
+    fn_type_name!("SystemTimeWrapper");
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'a,
+        Self: 'b,
+    {
+        let offset = value
+            .0
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Stop time traveling");
+        offset.as_secs().to_be_bytes()
+    }
 
     fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
     where
         Self: 'a,
     {
-        data.try_into().unwrap()
+        let bytes = SystemTimeBytes::try_from(data).expect("Should match `as_bytes` len");
+        let num_secs = u64::from_be_bytes(bytes);
+        let time = SystemTime::UNIX_EPOCH + Duration::from_secs(num_secs);
+        Self(time)
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CachePolicyWrapper(CachePolicy);
+
+impl From<CachePolicy> for CachePolicyWrapper {
+    fn from(inner: CachePolicy) -> Self {
+        Self(inner)
+    }
+}
+
+default_value_impl!(CachePolicyWrapper);
+default_value_impl!(Key);
+
+#[derive(Debug)]
+pub struct RemoteMeta {
+    last_used: SystemTime,
+    policy: CachePolicy,
+}
+
+type FlatRemoteMeta = (SystemTimeWrapper, CachePolicyWrapper);
+
+impl redb::Value for RemoteMeta {
+    types!();
+    fn_fixed_width!(None);
+    fn_type_name!("RemoteMeta");
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
-        Self: 'a + 'b,
+        Self: 'a,
+        Self: 'b,
     {
-        &value.0
+        let flat: FlatRemoteMeta = (value.last_used.into(), value.policy.clone().into());
+        FlatRemoteMeta::as_bytes(&flat)
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        let (last_used, policy) = <FlatRemoteMeta as redb::Value>::from_bytes(data);
+        let last_used = last_used.0;
+        let policy = policy.0;
+        Self { last_used, policy }
     }
 }
 
-impl redb::Value for Validation {
-    types!(self_type: Validation, as_bytes: Vec<u8>);
+impl redb::Value for LocalMeta {
+    types!(self_type: Self, as_bytes: SystemTimeBytes2);
     fn_fixed_width!(None);
-    fn_type_name!("Validation");
-    bincode_byte_fns!();
-}
+    fn_type_name!("LocalMeta");
 
-impl redb::Value for ValidationKind {
-    types!(self_type: ValidationKind, as_bytes: Vec<u8>);
-    fn_fixed_width!(None);
-    fn_type_name!("ValidationKind");
-    bincode_byte_fns!();
-}
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'a,
+        Self: 'b,
+    {
+        let [b00, b01, b02, b03, b04, b05, b06, b07] =
+            SystemTimeWrapper::as_bytes(&value.last_used.into());
+        let [b08, b09, b10, b11, b12, b13, b14, b15] =
+            SystemTimeWrapper::as_bytes(&value.m_time.into());
+        [
+            b00, b01, b02, b03, b04, b05, b06, b07, b08, b09, b10, b11, b12, b13, b14, b15,
+        ]
+    }
 
-impl redb::Value for ETag {
-    types!(self_type: ETag, as_bytes: Vec<u8>);
-    fn_fixed_width!(None);
-    fn_type_name!("ETag");
-    bincode_byte_fns!();
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        let bytes = SystemTimeBytes2::try_from(data).expect("Should match `as_bytes` len");
+        let first: SystemTimeBytes = std::array::from_fn(|i| bytes[i]);
+        let second: SystemTimeBytes = std::array::from_fn(|i| bytes[i + first.len()]);
+        let last_used = SystemTimeWrapper::from_bytes(&first).0;
+        let m_time = SystemTimeWrapper::from_bytes(&second).0;
+        Self { last_used, m_time }
+    }
 }
 
 // We do a little proxying through another type here because
@@ -134,7 +228,7 @@ impl<'a> From<&'a ImageData> for ImageDataRef<'a> {
 }
 
 impl redb::Value for ImageData {
-    types!(self_type: ImageData, as_bytes: Vec<u8>);
+    types!();
     fn_fixed_width!(None);
     fn_type_name!("ImageData");
 

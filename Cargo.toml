@@ -50,6 +50,8 @@ glyphon = "0.3"
 html-escape = "0.2.13"
 # Parsing the HTML document that the markdown+html was converted into
 html5ever = "0.27.0"
+http = "1.1.0"
+http-cache-semantics = "2.1.0"
 # Provides some extra helpers that we use for our custom panic hook
 human-panic = "2.0.0"
 # Generic image decoding
@@ -92,7 +94,7 @@ two-face = "0.4.0"
 # More text hashing...
 twox-hash = "1.6.3"
 # HTTP client for requesting images from urls
-ureq = "2.9.7"
+ureq = { version = "2.9.7", features = ["http-crate"] }
 url = "2.5.0"
 # Cross platform GPU magic sauce
 wgpu = "0.16"

@@ -1,19 +1,19 @@
 use std::{cmp::Ordering, fs};
 
-use super::{Key, Validation, ValidationProbe};
+use super::{Key, LocalMeta, ValidationProbe};
 use crate::{image::ImageData, utils};
 
 use anyhow::Context;
+use http_cache_semantics::CachePolicy;
 use redb::{backends::InMemoryBackend, Database, TableDefinition};
 
 mod value_impls;
 
-// TODO: separate remote and local validation types (separate key types too?) and then use an enum
-// for the common `Key`
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data when we don't need it
-const LOCAL_META: TableDefinition<Key, Validation> = TableDefinition::new("inlyne-local-meta");
-const REMOTE_META: TableDefinition<Key, Validation> = TableDefinition::new("inlyne-remote-meta");
+const LOCAL_META: TableDefinition<Key, LocalMeta> = TableDefinition::new("inlyne-local-meta");
+const REMOTE_META: TableDefinition<Key, value_impls::RemoteMeta> =
+    TableDefinition::new("inlyne-remote-meta");
 const IMAGE_DATA: TableDefinition<Key, ImageData> = TableDefinition::new("inlyne-image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
@@ -25,7 +25,7 @@ fn db_name() -> String {
     format!("image-cache-v{VERSION}.redb")
 }
 
-impl<'a> redb::Key for Key<'a> {
+impl redb::Key for Key {
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
         // Seems a bit odd to unwrap here, but it's what `redb` does for `&str`s internally...
         let data1 = std::str::from_utf8(data1).unwrap();
@@ -60,14 +60,10 @@ impl Cache {
         Self(db)
     }
 
-    pub fn fetch_cached(
-        &mut self,
-        key: &Key<'static>,
-        probe: ValidationProbe,
-    ) -> anyhow::Result<(Validation, ImageData)> {
+    pub fn fetch_cached(&mut self, key: &Key, probe: ValidationProbe) -> anyhow::Result<ImageData> {
         let read_txn = self.0.begin_read()?;
-        let meta_table = read_txn.open_table(METADATA_TABLE)?;
-        let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
+        // let meta_table = read_txn.open_table(METADATA_TABLE)?;
+        // let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
         // TODO: check the probe against the stored meta:
         //
         // - If the cache is fresh then return the meta and image data
