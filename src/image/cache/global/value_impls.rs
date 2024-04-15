@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::image::{
-    cache::{Key, LocalMeta},
+    cache::{global::RemoteMeta, Key, LocalMeta},
     ImageData,
 };
 
@@ -119,12 +119,6 @@ impl From<CachePolicy> for CachePolicyWrapper {
 
 default_value_impl!(CachePolicyWrapper);
 default_value_impl!(Key);
-
-#[derive(Debug)]
-pub struct RemoteMeta {
-    last_used: SystemTime,
-    policy: CachePolicy,
-}
 
 type FlatRemoteMeta = (SystemTimeWrapper, CachePolicyWrapper);
 

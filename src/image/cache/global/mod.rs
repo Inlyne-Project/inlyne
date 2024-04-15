@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fs};
+use std::{cmp::Ordering, fs, time::SystemTime};
 
 use super::{Key, LocalMeta, ValidationProbe};
 use crate::{image::ImageData, utils};
@@ -11,10 +11,9 @@ mod value_impls;
 
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data when we don't need it
-const LOCAL_META: TableDefinition<Key, LocalMeta> = TableDefinition::new("inlyne-local-meta");
-const REMOTE_META: TableDefinition<Key, value_impls::RemoteMeta> =
-    TableDefinition::new("inlyne-remote-meta");
-const IMAGE_DATA: TableDefinition<Key, ImageData> = TableDefinition::new("inlyne-image-data");
+const LOCAL_META: TableDefinition<Key, LocalMeta> = TableDefinition::new("local-meta");
+const REMOTE_META: TableDefinition<Key, RemoteMeta> = TableDefinition::new("remote-meta");
+const IMAGE_DATA: TableDefinition<Key, ImageData> = TableDefinition::new("image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -23,6 +22,12 @@ const VERSION: u32 = 0;
 
 fn db_name() -> String {
     format!("image-cache-v{VERSION}.redb")
+}
+
+#[derive(Debug)]
+pub struct RemoteMeta {
+    last_used: SystemTime,
+    policy: CachePolicy,
 }
 
 impl redb::Key for Key {
