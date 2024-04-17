@@ -25,6 +25,7 @@ pub mod positioner;
 pub mod renderer;
 pub mod selection;
 pub mod table;
+#[cfg(test)]
 pub mod test_utils;
 pub mod text;
 pub mod utils;

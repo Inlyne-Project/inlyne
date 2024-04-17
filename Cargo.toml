@@ -19,6 +19,7 @@ exclude = [
     "/ci/*",
     "/.github/*",
     "/assets/manual_test_data/*",
+    "/typos.toml",
 ]
 keywords = ["markdown", "viewer", "gpu"]
 
@@ -28,55 +29,150 @@ x11 = ["copypasta/x11", "winit/x11"]
 wayland = ["copypasta/wayland", "winit/wayland"]
 
 [dependencies]
-winit = { version = "0.28.7", default-features = false }
-wgpu = "0.16"
-bytemuck = { version = "1.15.0", features = [ "derive" ] }
-lyon = "1.0.1"
-comrak = { version = "0.22.0", default-features = false, features = ["shortcodes", "syntect"] }
-open = "5.1.2"
-html5ever = "0.27.0"
-image = "0.24.9"
-clap = { version = "4.4.18", features = ["cargo", "derive"] }
-copypasta = { version = "0.10.1", default-features = false }
-resvg = "0.37.0"
+# `anstream` and `anstyle` are both terminal helper crates used for our custom
+# panic hook (and already used by `clap`, so it's a "free" dependency)
+anstream = "0.6.13"
+anstyle = "1.0.6"
+# Easier error handling
 anyhow = "1.0.81"
-dirs = "5.0.1"
-serde = { version = "1.0.197", features = ["derive"] }
-toml = "0.8.12"
-notify = "6.1.1"
+# System preferred color scheme detection
 dark-light = "1.1.1"
-# We only decompress our own compressed data, so disable `safe-decode` and
-# `checked-decode`
-lz4_flex = { version = "0.11.3", default-features = false, features = ["frame", "safe-encode", "std"] }
-pollster = "0.3.0"
-serde_yaml = "0.9.34"
-indexmap = { version = "2.2.6", features = ["serde"] }
-html-escape = "0.2.13"
+# System specific directories
+dirs = "5.0.1"
+# Used to open the config file with `$ inlyne config open`
+edit = "0.1.5"
+# Faster hash for the text cache
 fxhash = "0.2.1"
-twox-hash = "1.6.3"
-taffy = "0.3.18"
-syntect = "5.2.0"
+# GPU text rendering
+glyphon = "0.3"
+# Used to values used in YAML frontmatter when converting to HTML
+html-escape = "0.2.13"
+# Parsing the HTML document that the markdown+html was converted into
+html5ever = "0.27.0"
+# Provides some extra helpers that we use for our custom panic hook
+human-panic = "1.2.3"
+# Generic image decoding
+image = "0.24.9"
+# 2D GPU graphics rendering
+lyon = "1.0.1"
+# Images are compressed to in-memory lz4 blobs
+lz4_flex = "0.11.3"
+# Generic metrics facade for our metrics recording/emission infra
+metrics = "0.22.3"
+# File event notifications for the live reloading feature
+notify = "6.1.1"
+# Used to open external links like in the user's browser
+open = "5.1.2"
+# Some alternative atomics that are slightly more ergonoics than `std`'s
+parking_lot = "0.12.1"
+# Dead simple way to handle some async operations
+pollster = "0.3.0"
+# Used to get a handle to the display, so that we can setup a clipboard
+raw-window-handle = "0.5.2"
+# SVG rendering
+resvg = "0.37.0"
+# Parses the optional YAML frontmatter (replace with just a yaml parser)
+serde_yaml = "0.9.34"
+# Easy `Debug` formatting changes used to keep snapshot tests more succinct
 smart-debug = "0.0.3"
+# Helps power our syntax highlighting
+syntect = "5.2.0"
+# Some CSS layout algos that we use as a pretty decent alternative to us
+# lacking HTML ones
+taffy = "0.3.18"
+# For parsing our config file
+toml = "0.8.12"
+# In application tracing (aka logging on steroids)
+tracing = "0.1.40"
+# Extra syntax and theme definitions for `syntect`
 two-face = "0.3.0"
+# More text hashing...
+twox-hash = "1.6.3"
+# HTTP client for requesting images from urls
+ureq = "2.9.6"
+# Cross platform GPU magic sauce
+wgpu = "0.16"
+
+# Used for casting types to GPU compatible formats
+[dependencies.bytemuck]
+version = "1.15.0"
+features = ["derive"]
+
+# Command line arg parsing
+[dependencies.clap]
+version = "4.4.18"
+features = ["cargo", "derive"]
+
+# Converts our markdown+html to pure HTML
+[dependencies.comrak]
+version = "0.22.0"
+default-features = false
+features = ["shortcodes", "syntect"]
+
+# Clipboard handling
+[dependencies.copypasta]
+version = "0.10.1"
+default-features = false
+
 # NOTE: We need `fontconfig` enabled to pick up fonts on some systems, but
 # `glyphon` doesn't provide any way set that feature for `fontdb`, so we have to
 # set the feature for the transitive dep while manually making sure that we keep
 # the versions in sync ;-;
-fontdb = { version = "0.14.1", features = ["fontconfig"] }
-human-panic = "1.2.3"
-notify-debouncer-full = { version = "0.3.1", default-features = false }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-glyphon = "0.3"
-string_cache = { version = "0.8.7", default-features = false }
-raw-window-handle = "0.5.2"
-edit = "0.1.5"
-anstream = "0.6.13"
-anstyle = "1.0.6"
-metrics = "0.22.3"
-metrics-util = { version = "0.16.3", default-features = false, features = ["registry", "summary"] }
-parking_lot = "0.12.1"
-ureq = "2.9.6"
+[dependencies.fontdb]
+version = "0.14.1"
+features = ["fontconfig"]
+
+# Common dep used from yaml that can probably be replaced with a `Vec<(_, _)>`
+[dependencies.indexmap]
+version = "2.2.6"
+features = ["serde"]
+
+# Metrics helpers used for our custom metric logger
+[dependencies.metrics-util]
+version = "0.16.3"
+default-features = false
+features = ["registry", "summary"]
+
+# Debouncer that papers over some issues with various ways that editors save
+# files
+[dependencies.notify-debouncer-full]
+version = "0.3.1"
+default-features = false
+
+# For dealing with both TOML and YAML
+[dependencies.serde]
+version = "1.0.197"
+features = ["derive"]
+
+# Common dep used by `html5ever`
+[dependencies.string_cache]
+version = "0.8.7"
+default-features = false
+
+# Our specific tracing implementation
+[dependencies.tracing-subscriber]
+version = "0.3.18"
+features = ["env-filter"]
+
+# Cross-platform window handling
+[dependencies.winit]
+version = "0.28.7"
+default-features = false
+
+[dev-dependencies]
+# Succinct and more readable binary blobs
+base64 = "0.22.0"
+# Used to update file's modified time for tests
+filetime = "0.2.23"
+# Snapshot testing
+insta = "1.38.0"
+# Assertions displayed as diffs which is immensely helpful for some of our large
+# values
+pretty_assertions = "1.4.0"
+# Throwaway files/dirs for isolated test environments
+tempfile = "3.10.1"
+# Use for setting up a local http server to test image requests in isolation
+tiny_http = "0.12.0"
 
 [target.'cfg(inlyne_tcp_metrics)'.dependencies]
 metrics-exporter-tcp = "0.9.0"
@@ -93,14 +189,6 @@ debug = true
 [profile.release-lto]
 inherits = "release"
 lto = true
-
-[dev-dependencies]
-base64 = "0.22.0"
-filetime = "0.2.23"
-insta = "1.38.0"
-pretty_assertions = "1.4.0"
-tempfile = "3.10.1"
-wiremock = "0.6.0"
 
 # Selectively bump up opt level for some dependencies to improve dev build perf
 [profile.dev.package]
