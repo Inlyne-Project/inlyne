@@ -11,14 +11,13 @@ use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
 use crate::image::{Image, ImageData};
 use crate::opts::ResolvedTheme;
-use crate::test_utils::init_test_log;
+use crate::test_utils::{init_test_log, mock_file_server, File};
 use crate::utils::Align;
 use crate::{Element, ImageCache};
 
 use base64::prelude::*;
 use syntect::highlighting::Theme as SyntectTheme;
 use wgpu::TextureFormat;
-use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
 
 // We use a dummy window with an internal counter that keeps track of when rendering a single md
 // document is finished
@@ -415,55 +414,14 @@ snapshot_interpreted_elements!(
     (num_is_bold, NUM_IS_BOLD),
 );
 
-struct File {
-    url_path: String,
-    mime: String,
-    bytes: Vec<u8>,
-}
-
-impl File {
-    fn new(url_path: &str, mime: &str, bytes: &[u8]) -> Self {
-        Self {
-            url_path: url_path.to_owned(),
-            mime: mime.to_owned(),
-            bytes: bytes.to_owned(),
-        }
-    }
-}
-
-/// Spin up a server, so we can test network requests without external services
-fn mock_file_server(files: &[File]) -> (MockServer, String) {
-    let setup_server = async {
-        let mock_server = MockServer::start().await;
-
-        for file in files {
-            let File {
-                url_path,
-                mime,
-                bytes,
-            } = file;
-            Mock::given(matchers::method("GET"))
-                .and(matchers::path(url_path))
-                .respond_with(ResponseTemplate::new(200).set_body_raw(bytes.to_owned(), mime))
-                .mount(&mock_server)
-                .await;
-        }
-
-        mock_server
-    };
-    let server = pollster::block_on(setup_server);
-
-    let server_url = server.uri();
-    (server, server_url)
-}
-
 #[test]
 fn centered_image_with_size_align_and_link() {
     init_test_log();
 
     let logo = include_bytes!("../../assets/test_data/bun_logo.png");
     let logo_path = "/bun_logo.png";
-    let (_server, server_url) = mock_file_server(&[File::new(logo_path, "image/png", logo)]);
+    let files = vec![File::new(logo_path, "image/png", logo)];
+    let (_server, server_url) = mock_file_server(files);
     let logo_url = server_url + logo_path;
 
     let text = format!(
@@ -488,8 +446,11 @@ fn image_loading_fails_gracefully() {
 
     let json = r#"{"im": "not an image"}"#;
     let json_path = "/snapshot.png";
-    let (_server, server_url) =
-        mock_file_server(&[File::new(json_path, "application/json", json.as_bytes())]);
+    let (_server, server_url) = mock_file_server(vec![File::new(
+        json_path,
+        "application/json",
+        json.as_bytes(),
+    )]);
     let json_url = server_url + json_path;
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
@@ -538,11 +499,13 @@ fn picture_dark_light() {
         (light_path, B64_SINGLE_PIXEL_WEBP_000),
         (default_path, B64_SINGLE_PIXEL_WEBP_999),
     ]
+    .into_iter()
     .map(|(path, b64_bytes)| {
         let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
         File::new(path, webp_mime, &bytes)
-    });
-    let (_server, server_url) = mock_file_server(&files);
+    })
+    .collect();
+    let (_server, server_url) = mock_file_server(files);
     let dark_url = format!("{server_url}{dark_path}");
     let light_url = format!("{server_url}{light_path}");
     let default_url = format!("{server_url}{default_path}");
