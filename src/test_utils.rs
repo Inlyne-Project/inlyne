@@ -1,12 +1,6 @@
-use std::{
-    sync::{
-        mpsc::{sync_channel, Receiver, SyncSender},
-        Arc,
-    },
-    thread,
-};
+use std::{sync::Arc, thread};
 
-use tiny_http::{Header, Method, Request, Response, Server};
+use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
 use tracing_subscriber::prelude::*;
 
 pub fn init_test_log() {
@@ -25,8 +19,24 @@ pub fn init_test_log() {
 }
 
 /// Spin up a server, so we can test network requests without external services
-pub fn mock_file_server(files: Vec<File>) -> (FileServer, String) {
-    let server = FileServer::spawn(files);
+pub fn mock_file_server(files: Vec<File>) -> (HttpServer, String) {
+    let files: Arc<[File]> = files.into();
+    let server = HttpServer::spawn(files, |files, req| match req.method() {
+        Method::Get => {
+            let path = req.url();
+            match files.iter().find(|file| file.url_path == path) {
+                Some(file) => {
+                    let header = Header::from_bytes(b"Content-Type", file.mime.as_bytes()).unwrap();
+                    Response::from_data(file.bytes.clone())
+                        .with_header(header)
+                        .boxed()
+                }
+                None => Response::empty(404).boxed(),
+            }
+        }
+        _ => Response::empty(404).boxed(),
+    });
+
     let url = server.url().to_owned();
     (server, url)
 }
@@ -47,19 +57,23 @@ impl File {
     }
 }
 
-pub struct FileServer {
+// TODO: move some of this to a `tiny-http-utils` crate?
+pub struct HttpServer {
     url: String,
-    shutdown_send: SyncSender<()>,
+    server: Arc<Server>,
 }
 
-impl FileServer {
+impl HttpServer {
     // Spawn the server
-    // |-> Move one handle to a shutdown thread
-    // |-> Move The other handle to a request handler thread
+    // |-> Move a handle to a request handler thread
     // |   \-> Each request gets handled on a newly spawned thread
     // \-> Return a server guard that shuts down on `drop()`
-    pub fn spawn<Files: Into<Arc<[File]>>>(files: Files) -> Self {
-        let files = files.into();
+    pub fn spawn<S, F>(state: S, handler_fn: F) -> Self
+    where
+        S: Send + Clone + 'static,
+        F: Fn(S, &Request) -> ResponseBox + Send + Clone + Copy + 'static,
+    {
+        // let files = files.into();
         // Bind to the ephemeral port and then get the actual resolved address
         let server = Server::http("127.0.0.1:0").unwrap();
         let ip = server
@@ -70,49 +84,27 @@ impl FileServer {
         let url = format!("http://{ip}");
 
         let server = Arc::new(server);
-        let (shutdown_send, shutdown_recv) = sync_channel(1);
 
-        Self::spawn_router(Arc::clone(&server), files);
-        Self::spawn_shutdown(server, shutdown_recv);
+        Self::spawn_router(Arc::clone(&server), state, handler_fn);
 
-        Self { url, shutdown_send }
+        Self { url, server }
     }
 
-    fn spawn_shutdown(server: Arc<Server>, shutdown_recv: Receiver<()>) {
-        thread::spawn(move || {
-            if let Ok(()) = shutdown_recv.recv() {
-                // Unblock the `.incoming_requests()`
-                server.unblock();
-            }
-        });
-    }
-
-    fn spawn_router(server: Arc<Server>, files: Arc<[File]>) {
+    fn spawn_router<S, F>(server: Arc<Server>, state: S, handler_fn: F)
+    where
+        S: Send + Clone + 'static,
+        F: Fn(S, &Request) -> ResponseBox + Send + Clone + Copy + 'static,
+    {
         thread::spawn(move || {
             for req in server.incoming_requests() {
-                let req_files = Arc::clone(&files);
-                thread::spawn(|| Self::handle_req(req, req_files));
+                let s2 = state.clone();
+                thread::spawn(move || {
+                    let resp = handler_fn(s2, &req);
+                    let _ = req.respond(resp);
+                });
             }
             // Time to shutdown now
         });
-    }
-
-    fn handle_req(req: Request, files: Arc<[File]>) {
-        match req.method() {
-            Method::Get => {
-                let path = req.url();
-                match files.iter().find(|file| file.url_path == path) {
-                    Some(file) => {
-                        let header =
-                            Header::from_bytes(b"Content-Type", file.mime.as_bytes()).unwrap();
-                        let resp = Response::from_data(file.bytes.clone()).with_header(header);
-                        let _ = req.respond(resp);
-                    }
-                    None => _ = req.respond(Response::empty(404)),
-                }
-            }
-            _ => _ = req.respond(Response::empty(404)),
-        }
     }
 
     pub fn url(&self) -> &str {
@@ -120,8 +112,9 @@ impl FileServer {
     }
 }
 
-impl Drop for FileServer {
+impl Drop for HttpServer {
     fn drop(&mut self) {
-        let _ = self.shutdown_send.send(());
+        // Unblock the `.incoming_requests()`
+        self.server.unblock();
     }
 }
