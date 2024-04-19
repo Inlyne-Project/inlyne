@@ -1,19 +1,18 @@
-use std::{cmp::Ordering, fs, time::SystemTime};
+use std::{fs, time::SystemTime};
 
-use super::{Key, LocalMeta, ValidationProbe};
+use super::{Key, RemoteKey};
 use crate::{image::ImageData, utils};
 
 use anyhow::Context;
 use http_cache_semantics::CachePolicy;
 use redb::{backends::InMemoryBackend, Database, TableDefinition};
 
-mod value_impls;
+mod redb_impls;
 
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
-// image data when we don't need it
-const LOCAL_META: TableDefinition<Key, LocalMeta> = TableDefinition::new("local-meta");
-const REMOTE_META: TableDefinition<Key, RemoteMeta> = TableDefinition::new("remote-meta");
-const IMAGE_DATA: TableDefinition<Key, ImageData> = TableDefinition::new("image-data");
+// unless necessary
+const REMOTE_META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
+const IMAGE_DATA: TableDefinition<RemoteKey, ImageData> = TableDefinition::new("image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -28,15 +27,6 @@ fn db_name() -> String {
 pub struct RemoteMeta {
     last_used: SystemTime,
     policy: CachePolicy,
-}
-
-impl redb::Key for Key {
-    fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
-        // Seems a bit odd to unwrap here, but it's what `redb` does for `&str`s internally...
-        let data1 = std::str::from_utf8(data1).unwrap();
-        let data2 = std::str::from_utf8(data2).unwrap();
-        data1.cmp(&data2)
-    }
 }
 
 pub fn run_garbage_collector() -> anyhow::Result<()> {
@@ -65,7 +55,7 @@ impl Cache {
         Self(db)
     }
 
-    pub fn fetch_cached(&mut self, key: &Key, probe: ValidationProbe) -> anyhow::Result<ImageData> {
+    pub fn fetch_cached(&self, key: &Key) -> anyhow::Result<ImageData> {
         let read_txn = self.0.begin_read()?;
         // let meta_table = read_txn.open_table(METADATA_TABLE)?;
         // let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());

@@ -1,7 +1,10 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    cmp::Ordering,
+    time::{Duration, SystemTime},
+};
 
 use crate::image::{
-    cache::{global::RemoteMeta, Key, LocalMeta},
+    cache::{global::RemoteMeta, RemoteKey},
     ImageData,
 };
 
@@ -118,7 +121,16 @@ impl From<CachePolicy> for CachePolicyWrapper {
 }
 
 default_value_impl!(CachePolicyWrapper);
-default_value_impl!(Key);
+default_value_impl!(RemoteKey);
+
+impl redb::Key for RemoteKey {
+    fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
+        // Seems a bit odd to unwrap here, but it's what `redb` does for `&str`s internally...
+        let data1 = std::str::from_utf8(data1).unwrap();
+        let data2 = std::str::from_utf8(data2).unwrap();
+        data1.cmp(&data2)
+    }
+}
 
 type FlatRemoteMeta = (SystemTimeWrapper, CachePolicyWrapper);
 
@@ -144,38 +156,6 @@ impl redb::Value for RemoteMeta {
         let last_used = last_used.0;
         let policy = policy.0;
         Self { last_used, policy }
-    }
-}
-
-impl redb::Value for LocalMeta {
-    types!(self_type: Self, as_bytes: SystemTimeBytes2);
-    fn_fixed_width!(None);
-    fn_type_name!("LocalMeta");
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'a,
-        Self: 'b,
-    {
-        let [b00, b01, b02, b03, b04, b05, b06, b07] =
-            SystemTimeWrapper::as_bytes(&value.last_used.into());
-        let [b08, b09, b10, b11, b12, b13, b14, b15] =
-            SystemTimeWrapper::as_bytes(&value.m_time.into());
-        [
-            b00, b01, b02, b03, b04, b05, b06, b07, b08, b09, b10, b11, b12, b13, b14, b15,
-        ]
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-    where
-        Self: 'a,
-    {
-        let bytes = SystemTimeBytes2::try_from(data).expect("Should match `as_bytes` len");
-        let first: SystemTimeBytes = std::array::from_fn(|i| bytes[i]);
-        let second: SystemTimeBytes = std::array::from_fn(|i| bytes[i + first.len()]);
-        let last_used = SystemTimeWrapper::from_bytes(&first).0;
-        let m_time = SystemTimeWrapper::from_bytes(&second).0;
-        Self { last_used, m_time }
     }
 }
 
