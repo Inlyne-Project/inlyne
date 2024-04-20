@@ -1,40 +1,44 @@
-use crate::interpreter::html;
-use crate::interpreter::html::{Attr, TagName};
+use crate::interpreter::html::{self, Attr, TagName};
 use crate::utils::markdown_to_html;
 use anyhow::{bail, Context};
-use html5ever::buffer_queue::BufferQueue;
-use html5ever::tendril::{fmt, Tendril};
-use html5ever::tokenizer::{
-    Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
+use html5ever::{
+    buffer_queue::BufferQueue,
+    tendril::{fmt, Tendril},
+    tokenizer::{Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts},
 };
 use smart_debug::SmartDebug;
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
-use std::str::FromStr;
-use std::sync::mpsc;
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+    str::FromStr,
+    sync::mpsc,
+};
 use syntect::highlighting::Theme;
 
 type RcNode = Rc<RefCell<HirNode>>;
 type WeakNode = Weak<RefCell<HirNode>>;
 
 #[derive(Debug, Clone)]
-enum TextOrHirNode {
+pub enum TextOrHirNode {
     Text(String),
     Hir(RcNode),
 }
 
 #[derive(SmartDebug, Clone)]
-struct HirNode {
+pub struct HirNode {
     #[debug(skip)]
-    parent: WeakNode,
-    tag: TagName,
-    attributes: Vec<Attr>,
-    content: Vec<TextOrHirNode>,
+    pub parent: WeakNode,
+    pub tag: TagName,
+    pub attributes: Vec<Attr>,
+    pub content: Vec<TextOrHirNode>,
+}
+pub fn unwrap_hir_node(node: RcNode) -> HirNode {
+    Rc::try_unwrap(node).unwrap().into_inner()
 }
 
 #[derive(SmartDebug, Clone)]
-struct Hir {
-    content: RcNode,
+pub struct Hir {
+    root: RcNode,
     #[debug(skip)]
     current: RcNode,
     to_close: Vec<TagName>,
@@ -48,10 +52,15 @@ impl Hir {
             content: vec![],
         }));
         Self {
-            content: Rc::clone(&root),
+            root: Rc::clone(&root),
             current: root,
             to_close: vec![TagName::Root],
         }
+    }
+
+    pub fn content(self) -> Vec<TextOrHirNode> {
+        drop(self.current);
+        unwrap_hir_node(self.root).content
     }
 
     pub fn transpile_md(self, receiver: mpsc::Receiver<String>, sender: mpsc::Sender<Hir>) {
@@ -115,7 +124,7 @@ impl Hir {
         let tag_name = match TagName::try_from(&tag.name) {
             Ok(name) => name,
             Err(name) => {
-                bail!("Missing implementation for start tag: {name}");
+                bail!("Missing implementation for end tag: {name}");
             }
         };
 
@@ -134,13 +143,14 @@ impl Hir {
 
         Ok(())
     }
-    fn process_text(&mut self, string: String) {
+    fn on_text(&mut self, string: String) {
         self.current
             .borrow_mut()
             .content
             .push(TextOrHirNode::Text(string))
     }
     fn on_end(&mut self) {
+        self.to_close.pop();
         for unclosed_tag in &self.to_close {
             tracing::warn!("File contains unclosed html tag: {unclosed_tag:?}");
         }
@@ -155,14 +165,19 @@ impl TokenSink for Hir {
             Token::TagToken(tag) => match tag.kind {
                 TagKind::StartTag => self.process_start_tag(tag),
                 TagKind::EndTag => {
-                    let _ = self.process_end_tag(tag);
+                    let _ = self.process_end_tag(tag); // TODO handle error in some way
                 }
             },
-            Token::CharacterTokens(str) => self.process_text(str.to_string()),
+            Token::CharacterTokens(str) => self.on_text(str.to_string()),
             Token::EOFToken => self.on_end(),
             Token::ParseError(err) => tracing::warn!("HTML parser emitted error: {err}"),
             Token::DoctypeToken(_) | Token::CommentToken(_) | Token::NullCharacterToken => {}
         }
         TokenSinkResult::Continue
+    }
+}
+impl Default for Hir {
+    fn default() -> Self {
+        Self::new()
     }
 }

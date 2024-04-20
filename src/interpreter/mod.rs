@@ -1,3 +1,4 @@
+mod ast;
 mod hir;
 mod html;
 #[cfg(test)]
@@ -22,6 +23,7 @@ use html::{
     Attr, Element as InterpreterElement, TagName,
 };
 
+use crate::interpreter::hir::Hir;
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
 use html5ever::tendril::*;
@@ -67,6 +69,7 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
 struct Span {
     color: [f32; 4],
     weight: FontWeight,
@@ -211,7 +214,7 @@ impl HtmlInterpreter {
 
         let span_color = self.native_color(self.theme.text_color);
         let code_highlighter = self.theme.code_highlighter.clone();
-        let mut tok = Tokenizer::new(self, TokenizerOpts::default());
+        let mut tok = Tokenizer::new(Hir::new(), TokenizerOpts::default());
 
         for md_string in receiver {
             tracing::debug!(
@@ -219,23 +222,27 @@ impl HtmlInterpreter {
                 md_string.len()
             );
 
-            if tok.sink.should_queue.load(AtomicOrdering::Relaxed) {
-                tok.sink.state = State::with_span_color(span_color);
-                tok.sink.current_textbox = TextBox::new(Vec::new(), tok.sink.hidpi_scale);
-                tok.sink.stopped = false;
-                let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
+            let htmlified = markdown_to_html(&md_string, code_highlighter.clone());
 
-                input.push_back(
-                    Tendril::from_str(&htmlified)
-                        .unwrap()
-                        .try_reinterpret::<fmt::UTF8>()
-                        .unwrap(),
-                );
+            input.push_back(
+                Tendril::from_str(&htmlified)
+                    .unwrap()
+                    .try_reinterpret::<fmt::UTF8>()
+                    .unwrap(),
+            );
 
-                let _ = tok.feed(&mut input);
-                assert!(input.is_empty());
-                tok.end();
-            }
+            let _ = tok.feed(&mut input);
+            assert!(input.is_empty());
+            tok.end();
+
+            let ast = ast::Ast {
+                surface_format: self.surface_format,
+                hidpi_scale: self.hidpi_scale,
+                theme: self.theme.clone(),
+                ..ast::Ast::new()
+            };
+            *self.element_queue.lock() = ast.interpret(std::mem::take(&mut tok.sink)).into_inner();
+            self.window.finished_single_doc();
         }
     }
 
