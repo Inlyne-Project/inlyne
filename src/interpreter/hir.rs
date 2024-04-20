@@ -113,7 +113,7 @@ impl Hir {
             .content
             .push(TextOrHirNode::Hir(Rc::clone(&node)));
 
-        if tag.self_closing {
+        if tag.self_closing || tag_name.is_void() {
             return;
         }
 
@@ -127,10 +127,14 @@ impl Hir {
                 bail!("Missing implementation for end tag: {name}");
             }
         };
+        if tag_name.is_void() {
+            return Ok(());
+        }
 
         let to_close = self.to_close.pop().context("Expected closing tag")?;
+
         if tag_name != to_close {
-            bail!("Expected {to_close:?} but found {tag_name:?}")
+            bail!("Expected closing {to_close:?} tag but found {tag_name:?}")
         }
         let parent = {
             self.current
@@ -150,7 +154,7 @@ impl Hir {
             .push(TextOrHirNode::Text(string))
     }
     fn on_end(&mut self) {
-        self.to_close.pop();
+        self.to_close.remove(0);
         for unclosed_tag in &self.to_close {
             tracing::warn!("File contains unclosed html tag: {unclosed_tag:?}");
         }
@@ -165,7 +169,10 @@ impl TokenSink for Hir {
             Token::TagToken(tag) => match tag.kind {
                 TagKind::StartTag => self.process_start_tag(tag),
                 TagKind::EndTag => {
-                    let _ = self.process_end_tag(tag); // TODO handle error in some way
+                    let e = self.process_end_tag(tag);
+                    if let Err(e) = e {
+                        tracing::error!("{e}");
+                    }
                 }
             },
             Token::CharacterTokens(str) => self.on_text(str.to_string()),

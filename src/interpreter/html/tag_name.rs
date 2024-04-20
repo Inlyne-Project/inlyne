@@ -39,6 +39,46 @@ pub enum TagName {
     Root,
 }
 
+impl TagName {
+    // https://html.spec.whatwg.org/multipage/syntax.html#void-elements
+    pub const fn is_void(&self) -> bool {
+        match self {
+            TagName::Break
+            | TagName::HorizontalRuler
+            | TagName::Image
+            | TagName::Input
+            | TagName::Source => true,
+
+            TagName::Anchor
+            | TagName::BlockQuote
+            | TagName::BoldOrStrong
+            | TagName::Code
+            | TagName::Details
+            | TagName::Div
+            | TagName::EmphasisOrItalic
+            | TagName::Header(_)
+            | TagName::Picture
+            | TagName::ListItem
+            | TagName::OrderedList
+            | TagName::Paragraph
+            | TagName::PreformattedText
+            | TagName::Section
+            | TagName::Small
+            | TagName::Span
+            | TagName::Strikethrough
+            | TagName::Summary
+            | TagName::Table
+            | TagName::TableBody
+            | TagName::TableDataCell
+            | TagName::TableHead
+            | TagName::TableHeader
+            | TagName::TableRow
+            | TagName::Underline
+            | TagName::UnorderedList
+            | TagName::Root => false,
+        }
+    }
+}
 impl TryFrom<&Atom<LocalNameStaticSet>> for TagName {
     type Error = Atom<LocalNameStaticSet>;
 

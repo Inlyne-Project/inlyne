@@ -43,7 +43,6 @@ impl InheritedState {
 }
 
 type Content = Vec<TextOrHirNode>;
-type Attributes = Vec<Attr>;
 
 pub(crate) struct Ast {
     pub ast: VecDeque<Element>,
@@ -390,7 +389,6 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::ast::{Ast, TextOptions};
     use crate::interpreter::hir::Hir;
     use html5ever::tendril::StrTendril;
     use html5ever::tokenizer::{BufferQueue, Tokenizer};
