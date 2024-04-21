@@ -154,10 +154,9 @@ impl Hir {
             .push(TextOrHirNode::Text(string))
     }
     fn on_end(&mut self) {
-        self.to_close.remove(0);
-        for unclosed_tag in &self.to_close {
+        self.to_close.iter().skip(1).for_each(|unclosed_tag| {
             tracing::warn!("File contains unclosed html tag: {unclosed_tag:?}");
-        }
+        })
     }
 }
 

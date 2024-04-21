@@ -53,4 +53,12 @@ impl Element {
             None
         }
     }
+
+    pub fn as_mut_table(&mut self) -> Option<&mut Table> {
+        if let Self::Table(table) = self {
+            Some(table)
+        } else {
+            None
+        }
+    }
 }
