@@ -1,16 +1,17 @@
 use std::{fs, time::SystemTime};
 
-use super::{Key, RemoteKey};
+use super::{Key, RemoteKey, StandardRequest};
 use crate::{image::ImageData, utils};
 
 use anyhow::Context;
-use http_cache_semantics::CachePolicy;
+use http::request;
+use http_cache_semantics::{BeforeRequest, CachePolicy};
 use redb::{backends::InMemoryBackend, Database, TableDefinition};
 
 mod redb_impls;
 
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
-// unless necessary
+// image data except when necessary
 const REMOTE_META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
 const IMAGE_DATA: TableDefinition<RemoteKey, ImageData> = TableDefinition::new("image-data");
 
@@ -25,8 +26,8 @@ fn db_name() -> String {
 
 #[derive(Debug)]
 pub struct RemoteMeta {
-    last_used: SystemTime,
-    policy: CachePolicy,
+    pub last_used: SystemTime,
+    pub policy: CachePolicy,
 }
 
 pub fn run_garbage_collector() -> anyhow::Result<()> {
@@ -47,6 +48,7 @@ impl Cache {
         Ok(Self(db))
     }
 
+    #[cfg(test)]
     pub fn in_memory() -> Self {
         let backend = InMemoryBackend::new();
         let db = Database::builder()
@@ -55,7 +57,41 @@ impl Cache {
         Self(db)
     }
 
-    pub fn fetch_cached(&self, key: &Key) -> anyhow::Result<ImageData> {
+    pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
+        // TODO: avoid re-doing this
+        let req: StandardRequest = key.into();
+        let maybe_check = match self.fetch_remote_meta(&key)? {
+            None => None,
+            // TODO: allow faking the time
+            Some(meta) => match meta.policy.before_request(&req, SystemTime::now()) {
+                BeforeRequest::Fresh(_) => {
+                    self.fetch_remote_cache(key)?
+                        .and_then(|(meta, image_data)| {
+                            match meta.policy.before_request(&req, SystemTime::now()) {
+                                // Return the fresh data
+                                BeforeRequest::Fresh(_) => Some(CacheCheck::Fresh(image_data)),
+                                // Went stale between checking meta vs getting the data
+                                BeforeRequest::Stale { request, .. } => {
+                                    Some(CacheCheck::Stale(request))
+                                }
+                            }
+                        })
+                }
+                BeforeRequest::Stale { request, .. } => Some(CacheCheck::Stale(request)),
+            },
+        };
+
+        Ok(maybe_check)
+    }
+
+    pub fn fetch_remote_meta(&self, key: &RemoteKey) -> anyhow::Result<Option<RemoteMeta>> {
+        todo!();
+    }
+
+    pub fn fetch_remote_cache(
+        &self,
+        key: &RemoteKey,
+    ) -> anyhow::Result<Option<(RemoteMeta, ImageData)>> {
         let read_txn = self.0.begin_read()?;
         // let meta_table = read_txn.open_table(METADATA_TABLE)?;
         // let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
@@ -73,7 +109,15 @@ impl Cache {
     }
 
     pub fn run_garbage_collector(&self) -> anyhow::Result<()> {
-        // TODO: pass over and remove entries and then run compaction
+        // TODO: pass over and remove entries and then run compaction. Can get the size of various
+        // parts of the image data table to determine when we should actually run compaction
+        // (things generally run better when there are pages that can be reused instead of always
+        // compacting down to the minimal size)
         todo!();
     }
+}
+
+pub enum CacheCheck {
+    Fresh(ImageData),
+    Stale(request::Parts),
 }

@@ -81,11 +81,10 @@ impl From<SystemTime> for SystemTimeWrapper {
 
 const LEN: usize = 8;
 type SystemTimeBytes = [u8; LEN];
-type SystemTimeBytes2 = [u8; LEN * 2];
 
 impl redb::Value for SystemTimeWrapper {
     types!(self_type: Self, as_bytes: SystemTimeBytes);
-    fn_fixed_width!(None);
+    fn_fixed_width!(Some(LEN));
     fn_type_name!("SystemTimeWrapper");
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>

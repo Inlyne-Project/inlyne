@@ -7,11 +7,12 @@ use std::{
 
 use crate::image::ImageData;
 
-use http_cache_semantics::CachePolicy;
+use http::request;
+use http_cache_semantics::{BeforeRequest, CachePolicy};
 use parking_lot::RwLock;
 use url::Url;
 
-use super::RemoteKey;
+use super::{RemoteKey, StandardRequest};
 
 #[derive(Default)]
 pub struct Cache {
@@ -24,40 +25,43 @@ impl Cache {
         Self::default()
     }
 
-    pub fn fetch_local_cached(&self, local: PathBuf) -> anyhow::Result<ImageData> {
-        let Some(m_time) = fs::metadata(&local).and_then(|meta| meta.modified()).ok()
+    pub fn fetch_local_cached(&self, local: &Path) -> Option<ImageData> {
+        let Some(m_time) = fs::metadata(local).and_then(|meta| meta.modified()).ok()
         // Fallback to always refetching when we can't read the mtime
         else {
-            return Self::fetch_local(&local);
+            return None;
         };
 
         {
-            if let Some((stored, image_data)) = self.local.read().get(&local) {
+            if let Some((stored, image_data)) = self.local.read().get(local) {
                 if *stored == m_time {
-                    return Ok(image_data.to_owned());
+                    return Some(image_data.to_owned());
                 }
             }
         }
 
-        {
-            let image_data = Self::fetch_local(&local)?;
-            self.local
-                .write()
-                .insert(local, (m_time, image_data.clone()));
-            Ok(image_data)
-        }
+        None
     }
 
     pub fn fetch_local(local: &Path) -> anyhow::Result<ImageData> {
-        todo!();
+        let contents = fs::read(local)?;
+        // TODO: need to try loading as an svg too to mimic current behavior
+        ImageData::load(&contents, true)
     }
 
     pub fn check_remote_cache(&self, remote: &RemoteKey) -> Option<RemoteEntry> {
-        self.remote.read().get(remote).map(|(policy, data)| todo!())
+        self.remote.read().get(remote).map(|(policy, image_data)| {
+            let req: StandardRequest = remote.into();
+            // TODO: allow for faking time here
+            match policy.before_request(&req, SystemTime::now()) {
+                BeforeRequest::Fresh(_) => RemoteEntry::Fresh(image_data.to_owned()),
+                BeforeRequest::Stale { request, .. } => RemoteEntry::Stale(request),
+            }
+        })
     }
 }
 
 pub enum RemoteEntry {
     Fresh(ImageData),
-    Stale(CachePolicy),
+    Stale(request::Parts),
 }
