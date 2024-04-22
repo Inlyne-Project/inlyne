@@ -10,12 +10,13 @@ use crate::utils::Align;
 use crate::Element;
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
-use std::cell::{Cell, RefCell};
-use std::num::NonZeroU8;
+use html5ever::tendril::{SliceExt, StrTendril};
+use std::cell::RefCell;
+use std::num::NonZeroUsize;
 use std::ops::DerefMut;
 use wgpu::TextureFormat;
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct TextOptions {
     pub underline: bool,
     pub bold: bool,
@@ -26,16 +27,17 @@ struct TextOptions {
     pub pre_formatted: bool,
     pub block_quote: u8,
     pub align: Option<Align>,
+    pub link: Option<StrTendril>,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct InheritedState {
     global_indent: f32,
     text_options: TextOptions,
     span: Span,
 
     /// Li render as ether as "· " or as an "{1..}. ".
-    list_prefix: Option<Option<NonZeroU8>>,
+    list_prefix: Option<Option<NonZeroUsize>>,
 }
 impl InheritedState {
     fn with_span_color(span_color: [f32; 4]) -> Self {
@@ -62,7 +64,6 @@ pub struct Ast {
     pub current_textbox: RefCell<TextBox>,
     pub hidpi_scale: f32,
     pub surface_format: TextureFormat,
-    pub link: Cell<Option<String>>,
 }
 impl Ast {
     pub fn new() -> Self {
@@ -73,7 +74,6 @@ impl Ast {
             hidpi_scale: Default::default(),
             theme: Theme::dark_default(),
             surface_format: TextureFormat::Bgra8UnormSrgb,
-            link: Cell::new(None),
         }
     }
     pub fn interpret(mut self, hir: Hir) -> Self {
@@ -92,11 +92,11 @@ impl Ast {
             match node {
                 TextOrHirNode::Text(str) => self.text(
                     self.current_textbox.borrow_mut().deref_mut(),
-                    inherited_state,
+                    inherited_state.clone(),
                     str,
                 ),
                 TextOrHirNode::Hir(node) => {
-                    self.process_node(inherited_state, unwrap_hir_node(node))
+                    self.process_node(inherited_state.clone(), unwrap_hir_node(node))
                 }
             }
         }
@@ -108,17 +108,19 @@ impl Ast {
 
         match node.tag {
             TagName::Paragraph => {
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
 
-                self.process_content(inherited_state, content);
+                self.process_content(inherited_state.clone(), content);
 
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
                 self.push_spacer();
             }
             TagName::Anchor => {
                 for attr in attributes {
                     match attr {
-                        Attr::Href(link) => self.link.set(Some(link)),
+                        Attr::Href(link) => {
+                            inherited_state.text_options.link = Some(link.to_tendril())
+                        }
                         Attr::Anchor(a) => self.current_textbox.borrow_mut().set_anchor(a),
                         _ => {}
                     }
@@ -126,19 +128,22 @@ impl Ast {
                 self.process_content(inherited_state, content);
             }
             TagName::Div => {
-                self.push_text_box(inherited_state);
-                self.process_content(inherited_state, content);
+                self.push_text_box(inherited_state.clone());
+                self.process_content(inherited_state.clone(), content);
                 self.push_text_box(inherited_state);
             }
             TagName::BlockQuote => {
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
                 inherited_state.text_options.block_quote += 1;
                 inherited_state.global_indent += DEFAULT_MARGIN / 2.;
 
-                self.process_content(inherited_state, content);
+                self.process_content(inherited_state.clone(), content);
+
+                let indent = inherited_state.global_indent;
 
                 self.push_text_box(inherited_state);
-                if inherited_state.global_indent == DEFAULT_MARGIN / 2. {
+
+                if indent == DEFAULT_MARGIN / 2. {
                     self.push_spacer();
                 }
             }
@@ -147,7 +152,7 @@ impl Ast {
                 self.process_content(inherited_state, content);
             }
             TagName::Break => {
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
                 self.process_content(inherited_state, content);
             }
             TagName::Code => {
@@ -171,7 +176,7 @@ impl Ast {
                 self.process_content(inherited_state, content);
             }
             TagName::Header(header) => {
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
                 self.push_spacer();
 
                 inherited_state.set_align(attributes.iter().find_map(|attr| attr.to_align()));
@@ -181,7 +186,7 @@ impl Ast {
                 if header == HeaderType::H1 {
                     inherited_state.text_options.underline = true;
                 }
-                self.process_content(inherited_state, content);
+                self.process_content(inherited_state.clone(), content);
 
                 let anchor = self
                     .current_textbox
@@ -227,7 +232,7 @@ impl Ast {
                 self.process_unordered_list(inherited_state, content, attributes);
             }
             TagName::PreformattedText => {
-                self.push_text_box(inherited_state);
+                self.push_text_box(inherited_state.clone());
                 let style = attributes
                     .iter()
                     .find_map(|attr| attr.to_style())
@@ -242,12 +247,10 @@ impl Ast {
                 }
                 inherited_state.text_options.pre_formatted = true;
                 self.current_textbox.borrow_mut().set_code_block(true);
-                self.process_content(inherited_state, content);
+                self.process_content(inherited_state.clone(), content);
 
                 self.push_text_box(inherited_state);
                 self.push_spacer();
-                inherited_state.text_options.pre_formatted = false;
-                self.current_textbox.borrow_mut().set_code_block(false);
             }
             TagName::Small => {
                 inherited_state.text_options.small = true;
@@ -298,7 +301,7 @@ impl Ast {
         }
     }
 
-    fn text(&self, text_box: &mut TextBox, state: InheritedState, mut string: String) {
+    fn text(&self, text_box: &mut TextBox, mut state: InheritedState, mut string: String) {
         let text_native_color = self.native_color(self.theme.text_color);
         if string == "\n" {
             if state.text_options.pre_formatted {
@@ -360,7 +363,7 @@ impl Ast {
                     text = text.make_underlined(true);
                 }
             }
-            if let Some(link) = self.link.take() {
+            if let Some(link) = state.text_options.link.take() {
                 text = text.with_link(link.to_string());
                 text = text.with_color(self.native_color(self.theme.link_color));
             }
@@ -427,11 +430,11 @@ impl Ast {
             |node| {
                 match node.tag {
                 TagName::TableHead | TagName::TableBody => {
-                    self.process_table_head_body(table, inherited_state, node.content);
+                    self.process_table_head_body(table, inherited_state.clone(), node.content);
                 }
                 TagName::TableRow => {
                     table.rows.push(vec![]);
-                    self.process_table_row(table, inherited_state, node.content)
+                    self.process_table_row(table, inherited_state.clone(), node.content)
                 }
                 _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
             }
@@ -451,7 +454,7 @@ impl Ast {
             |node| match node.tag {
                 TagName::TableRow => {
                     table.rows.push(vec![]);
-                    self.process_table_row(table, inherited_state, node.content)
+                    self.process_table_row(table, inherited_state.clone(), node.content)
                 }
                 _ => tracing::warn!(
                     "Only TableRows can be inside an TableHead or TableBody, found: {:?}",
@@ -472,7 +475,7 @@ impl Ast {
             content,
             |_| {},
             |node| {
-                let mut inherited_state = inherited_state;
+                let mut inherited_state = inherited_state.clone();
                 inherited_state.set_align(node.attributes.iter().find_map(|attr| attr.to_align()));
                 match node.tag {
                     TagName::TableHeader => self.process_table_header(table, inherited_state, node.content),
@@ -500,7 +503,7 @@ impl Ast {
             content,
             |text| {
                 let mut tb = TextBox::new(vec![], self.hidpi_scale);
-                self.text(&mut tb, inherited_state, text);
+                self.text(&mut tb, inherited_state.clone(), text);
                 row.push(tb);
             },
             |_| tracing::warn!("Currently only text is allowed in an TableHeader."),
@@ -525,7 +528,7 @@ impl Ast {
             content,
             |text| {
                 let mut tb = TextBox::new(vec![], self.hidpi_scale);
-                self.text(&mut tb, inherited_state, text);
+                self.text(&mut tb, inherited_state.clone(), text);
                 row.push(tb);
             },
             |_| tracing::warn!("Currently only text is allowed in an TableDataCell."),
@@ -533,7 +536,7 @@ impl Ast {
     }
     fn process_ordered_list(
         &mut self,
-        inherited_state: InheritedState,
+        mut inherited_state: InheritedState,
         content: Content,
         attributes: Attributes,
     ) {
@@ -549,12 +552,8 @@ impl Ast {
             |_| {},
             |node| match node.tag {
                 TagName::ListItem => {
-                    self.process_list_item(
-                        format!("{index}. "),
-                        inherited_state,
-                        node.content,
-                        node.attributes,
-                    );
+                    inherited_state.list_prefix = Some(NonZeroUsize::try_from(index).ok());
+                    self.process_list_item(inherited_state.clone(), node.content, node.attributes);
                     index += 1;
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
@@ -563,7 +562,7 @@ impl Ast {
     }
     fn process_unordered_list(
         &mut self,
-        inherited_state: InheritedState,
+        mut inherited_state: InheritedState,
         content: Content,
         attributes: Attributes,
     ) {
@@ -571,23 +570,21 @@ impl Ast {
             content,
             |_| {},
             |node| match node.tag {
-                TagName::ListItem => self.process_list_item(
-                    "· ".to_string(),
-                    inherited_state,
-                    node.content,
-                    node.attributes,
-                ),
+                TagName::ListItem => {
+                    inherited_state.list_prefix = Some(None);
+                    self.process_list_item(inherited_state.clone(), node.content, node.attributes);
+                }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
             },
         );
     }
     fn process_list_item(
         &mut self,
-        prefix: String,
         inherited_state: InheritedState,
         content: Content,
         attributes: Attributes,
     ) {
+        tracing::warn!("No li impl");
     }
 
     fn process_node_content<T, N>(content: Content, mut text_fn: T, mut node_fn: N)
