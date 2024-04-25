@@ -419,6 +419,8 @@ impl Ast {
 
                 self.push_element(tb);
             }
+        } else {
+            self.current_textbox.borrow_mut().is_checkbox = tb.is_checkbox;
         }
     }
 
