@@ -1,19 +1,11 @@
 use crate::interpreter::html::{self, Attr, TagName};
-use crate::utils::markdown_to_html;
 use anyhow::{bail, Context};
-use html5ever::{
-    buffer_queue::BufferQueue,
-    tendril::{fmt, Tendril},
-    tokenizer::{Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts},
-};
+use html5ever::tokenizer::{Tag, TagKind, Token, TokenSink, TokenSinkResult};
 use smart_debug::SmartDebug;
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
-    str::FromStr,
-    sync::mpsc,
 };
-use syntect::highlighting::Theme;
 
 type RcNode = Rc<RefCell<HirNode>>;
 type WeakNode = Weak<RefCell<HirNode>>;
@@ -61,34 +53,6 @@ impl Hir {
     pub fn content(self) -> Vec<TextOrHirNode> {
         drop(self.current);
         unwrap_hir_node(self.root).content
-    }
-
-    pub fn transpile_md(self, receiver: mpsc::Receiver<String>, sender: mpsc::Sender<Hir>) {
-        let mut input = BufferQueue::default();
-
-        let mut tok = Tokenizer::new(self, TokenizerOpts::default());
-
-        for md_string in receiver {
-            tracing::debug!(
-                "Received markdown for interpretation: {} bytes",
-                md_string.len()
-            );
-
-            let html = markdown_to_html(&md_string, Theme::default());
-
-            input.push_back(
-                Tendril::from_str(&html)
-                    .unwrap()
-                    .try_reinterpret::<fmt::UTF8>()
-                    .unwrap(),
-            );
-
-            let _ = tok.feed(&mut input);
-            assert!(input.is_empty());
-            tok.end();
-
-            sender.send(tok.sink.clone()).unwrap();
-        }
     }
 
     fn process_start_tag(&mut self, tag: Tag) {

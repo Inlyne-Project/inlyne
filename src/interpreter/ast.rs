@@ -299,13 +299,17 @@ impl Ast {
                 self.push_spacer();
             }
             TagName::TableHead | TagName::TableBody => {
-                tracing::warn!("TableHead and TableBody not supported");
+                tracing::warn!("TableHead and TableBody can only be in an Table element");
             }
-            TagName::TableRow => tracing::warn!("Summary can only be in an Table element"),
+            TagName::TableRow => tracing::warn!("TableRow can only be in an Table element"),
             TagName::TableDataCell => {
-                tracing::warn!("Summary can only be in an TableRow or an TableHeader element");
+                tracing::warn!(
+                    "TableDataCell can only be in an TableRow or an TableHeader element"
+                );
             }
-            TagName::TableHeader => tracing::warn!("Summary can only be in an TableRow element"),
+            TagName::TableHeader => {
+                tracing::warn!("TableHeader can only be in an Table element");
+            }
             TagName::Underline => {
                 inherited_state.text_options.underline = true;
                 self.process_content(inherited_state, content);
@@ -591,13 +595,13 @@ impl Ast {
     ) {
         self.push_text_box(inherited_state.clone());
         inherited_state.global_indent += DEFAULT_MARGIN / 2.;
+        inherited_state.list_prefix = Some(None);
 
         Self::process_node_content(
             content,
             |_| {},
             |node| match node.tag {
                 TagName::ListItem => {
-                    inherited_state.list_prefix = Some(None);
                     self.process_list_item(inherited_state.clone(), node.content, node.attributes);
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),

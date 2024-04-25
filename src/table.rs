@@ -136,9 +136,8 @@ impl Table {
             },
         )?;
 
-        let rows = nodes.into_iter();
-
-        let rows_layout: Vec<Vec<Layout>> = rows
+        let rows_layout: Vec<Vec<Layout>> = nodes
+            .into_iter()
             .map(|row| row.iter().map(|n| *taffy.layout(*n).unwrap()).collect())
             .collect();
         let size = taffy.layout(root)?.size;
