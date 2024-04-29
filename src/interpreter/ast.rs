@@ -1,19 +1,17 @@
 use crate::color::{native_color, Theme};
-use crate::interpreter::hir::{unwrap_hir_node, Hir, HirNode, TextOrHirNode};
+use crate::interpreter::hir::{Hir, HirNode, TextOrHirNode};
 use crate::interpreter::html::style::{FontStyle, FontWeight, Style, TextDecoration};
 use crate::interpreter::html::{style, Attr, HeaderType, TagName};
 use crate::interpreter::Span;
-use crate::positioner::{Section, Spacer, DEFAULT_MARGIN};
+use crate::positioner::{Positioned, Section, Spacer, DEFAULT_MARGIN};
 use crate::table::Table;
 use crate::text::{Text, TextBox};
 use crate::utils::Align;
 use crate::Element;
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
-use html5ever::tendril::{SliceExt, StrTendril};
-use std::cell::RefCell;
-use std::num::NonZeroUsize;
-use std::ops::DerefMut;
+use parking_lot::Mutex;
+use std::borrow::Cow;
 use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Default)]
@@ -27,7 +25,7 @@ struct TextOptions {
     pub pre_formatted: bool,
     pub block_quote: u8,
     pub align: Option<Align>,
-    pub link: Option<StrTendril>,
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -35,9 +33,6 @@ struct InheritedState {
     global_indent: f32,
     text_options: TextOptions,
     span: Span,
-
-    /// Li render as ether as "· " or as an "{1..}. ".
-    list_prefix: Option<Option<NonZeroUsize>>,
 }
 impl InheritedState {
     fn with_span_color(span_color: [f32; 4]) -> Self {
@@ -49,282 +44,124 @@ impl InheritedState {
     fn set_align(&mut self, align: Option<Align>) {
         self.text_options.align = align.or(self.text_options.align);
     }
-    fn set_align_from_attributes(&mut self, attributes: &Attributes) {
+    fn set_align_from_attributes(&mut self, attributes: Attributes) {
         self.set_align(attributes.iter().find_map(|attr| attr.to_align()));
     }
 }
 
-type Attributes = Vec<Attr>;
-type Content = Vec<TextOrHirNode>;
+type Content<'a> = &'a [TextOrHirNode];
+type Attributes<'a> = &'a [Attr];
+pub type Output<'a> = &'a mut Vec<Element>;
+pub type Input<'a> = &'a [HirNode];
+type State<'a> = Cow<'a, InheritedState>;
+type Opts<'a> = &'a AstOpts;
 
-pub struct Ast {
-    pub ast: Vec<Element>,
-    pub anchorizer: Anchorizer,
+pub struct AstOpts {
+    pub anchorizer: Mutex<Anchorizer>,
     pub theme: Theme,
-    pub current_textbox: RefCell<TextBox>,
     pub hidpi_scale: f32,
     pub surface_format: TextureFormat,
 }
-impl Ast {
-    pub fn new() -> Self {
+impl AstOpts {
+    fn new() -> Self {
         Self {
-            ast: Vec::new(),
             anchorizer: Default::default(),
-            current_textbox: Default::default(),
             hidpi_scale: Default::default(),
             theme: Theme::dark_default(),
             surface_format: TextureFormat::Bgra8UnormSrgb,
         }
     }
-    pub fn interpret(mut self, hir: Hir) -> Self {
-        let content = hir.content();
-        let state = InheritedState::with_span_color(self.native_color(self.theme.code_color));
-
-        self.process_content(state, content);
-        self
+    fn native_color(&self, color: u32) -> [f32; 4] {
+        native_color(color, &self.surface_format)
     }
-    pub fn into_inner(self) -> Vec<Element> {
-        self.ast
-    }
+}
 
-    fn process_content(&mut self, mut inherited_state: InheritedState, content: Content) {
-        for node in content {
-            match node {
-                TextOrHirNode::Text(str) => self.text(
-                    self.current_textbox.borrow_mut().deref_mut(),
-                    &mut inherited_state,
-                    str,
-                ),
-                TextOrHirNode::Hir(node) => {
-                    self.process_node(inherited_state.clone(), unwrap_hir_node(node))
-                }
-            }
+pub struct Ast {
+    pub opts: AstOpts,
+}
+impl Ast {
+    pub fn new() -> Self {
+        Self {
+            opts: AstOpts::new(),
         }
     }
+    pub fn interpret(&self, hir: Hir) -> Vec<Element> {
+        let nodes = hir.content();
+        let root = nodes.first().unwrap().content.clone();
+        let state = State::Owned(InheritedState::with_span_color(
+            self.opts.native_color(self.opts.theme.code_color),
+        ));
 
-    fn process_node(&mut self, mut inherited_state: InheritedState, node: HirNode) {
-        let content = node.content;
-        let attributes = node.attributes;
-
-        match node.tag {
-            TagName::Paragraph => {
-                self.push_text_box(inherited_state.clone());
-                inherited_state.set_align_from_attributes(&attributes);
-                self.current_textbox
-                    .borrow_mut()
-                    .set_align_or_default(inherited_state.text_options.align);
-
-                self.process_content(inherited_state.clone(), content);
-
-                self.push_text_box(inherited_state.clone());
-                self.push_spacer();
-            }
-            TagName::Anchor => {
-                for attr in attributes {
-                    match attr {
-                        Attr::Href(link) => {
-                            inherited_state.text_options.link = Some(link.to_tendril())
-                        }
-                        Attr::Anchor(a) => self.current_textbox.borrow_mut().set_anchor(a),
-                        _ => {}
-                    }
+        root.into_iter()
+            .filter_map(|ton| {
+                if let TextOrHirNode::Hir(node) = ton {
+                    let mut out = vec![];
+                    let mut tb = TextBox::new(vec![], self.opts.hidpi_scale);
+                    FlowProcess::process(
+                        &nodes,
+                        &mut out,
+                        &self.opts,
+                        &mut tb,
+                        FlowProcess::get_node(&nodes, node),
+                        state.clone(),
+                    );
+                    Some(out)
+                } else {
+                    None
                 }
-                self.process_content(inherited_state, content);
-            }
-            TagName::Div => {
-                self.push_text_box(inherited_state.clone());
+            })
+            .flatten()
+            .collect()
+    }
+}
 
-                inherited_state.set_align_from_attributes(&attributes);
-                self.current_textbox
-                    .borrow_mut()
-                    .set_align_or_default(inherited_state.text_options.align);
-
-                self.process_content(inherited_state.clone(), content);
-                self.push_text_box(inherited_state);
-            }
-            TagName::BlockQuote => {
-                self.push_text_box(inherited_state.clone());
-                inherited_state.text_options.block_quote += 1;
-                inherited_state.global_indent += DEFAULT_MARGIN / 2.;
-
-                self.process_content(inherited_state.clone(), content);
-
-                let indent = inherited_state.global_indent;
-
-                self.push_text_box(inherited_state);
-
-                if indent == DEFAULT_MARGIN / 2. {
-                    self.push_spacer();
-                }
-            }
-            TagName::BoldOrStrong => {
-                inherited_state.text_options.bold = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Break => {
-                self.push_text_box(inherited_state.clone());
-                self.process_content(inherited_state, content);
-            }
-            TagName::Code => {
-                inherited_state.text_options.code = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Details => {
-                //TODO
-                return;
-                self.push_text_box(inherited_state);
-                self.push_spacer();
-                let section = Section::bare(self.hidpi_scale);
-                *section.hidden.borrow_mut() = true;
-                todo!("Details Implementation");
-                self.push_element(section);
-            }
-            TagName::Section => {}
-            TagName::Summary => tracing::warn!("Summary can only be in an Details element"),
-            TagName::EmphasisOrItalic => {
-                inherited_state.text_options.italic = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Header(header) => {
-                self.push_text_box(inherited_state.clone());
-                self.push_spacer();
-
-                inherited_state.set_align_from_attributes(&attributes);
-                self.current_textbox
-                    .borrow_mut()
-                    .set_align_or_default(inherited_state.text_options.align);
-
-                inherited_state.text_options.bold = true;
-                self.current_textbox.borrow_mut().font_size *= header.size_multiplier();
-
-                if header == HeaderType::H1 {
-                    inherited_state.text_options.underline = true;
-                }
-                self.process_content(inherited_state.clone(), content);
-
-                let anchor = self
-                    .current_textbox
-                    .borrow()
-                    .texts
-                    .iter()
-                    .flat_map(|t| t.text.chars())
-                    .collect();
-                let anchor = self.anchorizer.anchorize(anchor);
-                self.current_textbox
-                    .borrow_mut()
-                    .set_anchor(format!("#{anchor}"));
-                self.push_text_box(inherited_state);
-                self.push_spacer();
-            }
-            TagName::HorizontalRuler => {
-                self.push_element(Spacer::visible());
-                self.process_content(inherited_state, content);
-            }
-            TagName::Picture => tracing::warn!("No picture impl"),
-            TagName::Source => tracing::warn!("No source impl"),
-            TagName::Image => tracing::warn!("No image impl"),
-            TagName::Input => {
-                let mut is_checkbox = false;
-                let mut is_checked = false;
-                for attr in attributes {
-                    match attr {
-                        Attr::IsCheckbox => is_checkbox = true,
-                        Attr::IsChecked => is_checked = true,
-                        _ => {}
-                    }
-                }
-                if is_checkbox {
-                    self.current_textbox.borrow_mut().set_checkbox(is_checked);
-                }
-                self.process_content(inherited_state, content);
-            }
-            TagName::ListItem => tracing::warn!("ListItem can only be in an List element"),
-            TagName::OrderedList => {
-                self.process_ordered_list(inherited_state, content, attributes);
-            }
-            TagName::UnorderedList => {
-                self.process_unordered_list(inherited_state, content, attributes);
-            }
-            TagName::PreformattedText => {
-                self.push_text_box(inherited_state.clone());
-                let style = attributes
-                    .iter()
-                    .find_map(|attr| attr.to_style())
-                    .unwrap_or_default();
-                for style in style::Iter::new(&style) {
-                    if let Style::BackgroundColor(color) = style {
-                        let native_color = self.native_color(color);
-                        self.current_textbox
-                            .borrow_mut()
-                            .set_background_color(native_color);
-                    }
-                }
-                inherited_state.text_options.pre_formatted = true;
-                self.current_textbox.borrow_mut().set_code_block(true);
-                self.process_content(inherited_state.clone(), content);
-
-                self.push_text_box(inherited_state);
-                self.push_spacer();
-            }
-            TagName::Small => {
-                inherited_state.text_options.small = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Span => {
-                let style_str = attributes
-                    .iter()
-                    .find_map(|attr| attr.to_style())
-                    .unwrap_or_default();
-                for style in style::Iter::new(&style_str) {
-                    match style {
-                        Style::Color(color) => {
-                            inherited_state.span.color = native_color(color, &self.surface_format)
-                        }
-                        Style::FontWeight(weight) => inherited_state.span.weight = weight,
-                        Style::FontStyle(style) => inherited_state.span.style = style,
-                        Style::TextDecoration(decor) => inherited_state.span.decor = decor,
-                        _ => {}
-                    }
-                }
-                self.process_content(inherited_state, content);
-            }
-            TagName::Strikethrough => {
-                inherited_state.text_options.strike_through = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Table => {
-                let mut table = Table::new();
-                self.process_table(&mut table, inherited_state, content);
-                self.push_element(table);
-                self.push_spacer();
-            }
-            TagName::TableHead | TagName::TableBody => {
-                tracing::warn!("TableHead and TableBody can only be in an Table element");
-            }
-            TagName::TableRow => tracing::warn!("TableRow can only be in an Table element"),
-            TagName::TableDataCell => {
-                tracing::warn!(
-                    "TableDataCell can only be in an TableRow or an TableHeader element"
-                );
-            }
-            TagName::TableHeader => {
-                tracing::warn!("TableHeader can only be in an Table element");
-            }
-            TagName::Underline => {
-                inherited_state.text_options.underline = true;
-                self.process_content(inherited_state, content);
-            }
-            TagName::Root => tracing::error!("Root element can't reach interpreter."),
-        }
+trait Process {
+    type Context<'a>;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        state: State,
+    );
+    fn process_content(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        content: Content,
+        state: State,
+    ) {
+        unimplemented!()
     }
 
-    fn text(&self, text_box: &mut TextBox, state: &mut InheritedState, mut string: String) {
-        let text_native_color = self.native_color(self.theme.text_color);
+    fn process_node<T, N>(input: Input, node: &HirNode, mut text_fn: T, mut node_fn: N)
+    where
+        T: FnMut(&String),
+        N: FnMut(&HirNode),
+    {
+        node.content.iter().for_each(|node| match node {
+            TextOrHirNode::Text(text) => text_fn(text),
+            TextOrHirNode::Hir(node) => node_fn(Self::get_node(input, *node)),
+        })
+    }
+    fn get_node(input: Input, index: usize) -> &HirNode {
+        input.get(index).unwrap()
+    }
+    fn push_element<T: Into<Element>>(output: Output, element: T) {
+        output.push(element.into())
+    }
+    fn push_spacer(output: Output) {
+        Self::push_element(output, Spacer::invisible())
+    }
+    fn text(text_box: &mut TextBox, mut string: &str, opts: Opts, mut state: State) {
+        let text_native_color = opts.native_color(opts.theme.text_color);
         if string == "\n" {
             if state.text_options.pre_formatted {
                 text_box.texts.push(Text::new(
                     "\n".to_string(),
-                    self.hidpi_scale,
+                    opts.hidpi_scale,
                     text_native_color,
                 ));
             }
@@ -333,7 +170,7 @@ impl Ast {
                     if !last_char.is_whitespace() {
                         text_box.texts.push(Text::new(
                             " ".to_string(),
-                            self.hidpi_scale,
+                            opts.hidpi_scale,
                             text_native_color,
                         ));
                     }
@@ -345,7 +182,7 @@ impl Ast {
                     if !last_char.is_whitespace() {
                         text_box.texts.push(Text::new(
                             " ".to_string(),
-                            self.hidpi_scale,
+                            opts.hidpi_scale,
                             text_native_color,
                         ));
                     }
@@ -353,16 +190,10 @@ impl Ast {
             }
         } else {
             if text_box.texts.is_empty() && !state.text_options.pre_formatted {
-                #[allow(
-                unknown_lints, // Rust is still bad with back compat on new lints
-                clippy::assigning_clones // Hit's a borrow-check issue. Needs a different impl
-                )]
-                {
-                    string = string.trim_start().to_owned();
-                }
+                string = string.trim_start();
             }
 
-            let mut text = Text::new(string, self.hidpi_scale, text_native_color);
+            let mut text = Text::new(string.to_string(), opts.hidpi_scale, text_native_color);
 
             if state.text_options.block_quote >= 1 {
                 text_box.set_quote_block(state.text_options.block_quote as usize);
@@ -381,9 +212,9 @@ impl Ast {
                     text = text.make_underlined(true);
                 }
             }
-            if let Some(link) = state.text_options.link.take() {
+            if let Some(link) = state.to_mut().text_options.link.take() {
                 text = text.with_link(link.to_string());
-                text = text.with_color(self.native_color(self.theme.link_color));
+                text = text.with_color(opts.native_color(opts.theme.link_color));
             }
             if state.text_options.bold {
                 text = text.make_bold(true);
@@ -404,16 +235,9 @@ impl Ast {
             text_box.texts.push(text);
         }
     }
-
-    fn push_element<T: Into<Element>>(&mut self, element: T) {
-        self.ast.push(element.into())
-    }
-    fn push_text_box(&mut self, state: InheritedState) {
-        let mut tb = std::mem::replace(
-            self.current_textbox.borrow_mut().deref_mut(),
-            TextBox::new(vec![], self.hidpi_scale),
-        );
-        self.current_textbox.borrow_mut().indent = state.global_indent;
+    fn push_text_box(output: Output, text_box: &mut TextBox, opts: Opts, state: &State) {
+        let mut tb = std::mem::replace(text_box, TextBox::new(vec![], opts.hidpi_scale));
+        text_box.indent = state.global_indent;
 
         if !tb.texts.is_empty() {
             let content = tb.texts.iter().any(|text| !text.text.is_empty());
@@ -421,208 +245,489 @@ impl Ast {
             if content {
                 tb.indent = state.global_indent;
 
-                self.push_element(tb);
+                Self::push_element(output, tb);
             }
         } else {
-            self.current_textbox.borrow_mut().is_checkbox = tb.is_checkbox;
+            text_box.is_checkbox = tb.is_checkbox;
+        }
+    }
+}
+
+struct FlowProcess;
+impl Process for FlowProcess {
+    type Context<'a> = &'a mut TextBox;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        mut state: State,
+    ) {
+        let attributes = &node.attributes;
+        match node.tag {
+            TagName::Paragraph => {
+                Self::push_text_box(output, context, opts, &state);
+                state.to_mut().set_align_from_attributes(attributes);
+                context.set_align_or_default(state.text_options.align);
+
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+
+                Self::push_text_box(output, context, opts, &state);
+                Self::push_spacer(output);
+            }
+            TagName::Anchor => {
+                for attr in attributes {
+                    match attr {
+                        Attr::Href(link) => {
+                            state.to_mut().text_options.link = Some(link.to_owned())
+                        }
+                        Attr::Anchor(a) => context.set_anchor(a.to_owned()),
+                        _ => {}
+                    }
+                }
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Div => {
+                Self::push_text_box(output, context, opts, &state);
+
+                state.to_mut().set_align_from_attributes(attributes);
+                context.set_align_or_default(state.text_options.align);
+
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+                Self::push_text_box(output, context, opts, &state);
+            }
+            TagName::BlockQuote => {
+                Self::push_text_box(output, context, opts, &state);
+                state.to_mut().text_options.block_quote += 1;
+                state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
+
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+
+                let indent = state.global_indent;
+
+                Self::push_text_box(output, context, opts, &state);
+
+                if indent == DEFAULT_MARGIN / 2. {
+                    Self::push_spacer(output);
+                }
+            }
+            TagName::BoldOrStrong => {
+                state.to_mut().text_options.bold = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Break => {
+                Self::push_text_box(output, context, opts, &state);
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Code => {
+                state.to_mut().text_options.code = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Details => {}
+            TagName::Summary => tracing::warn!("Summary can only be in an Details element"),
+            TagName::Section => {}
+            TagName::EmphasisOrItalic => {
+                state.to_mut().text_options.italic = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Header(header) => {
+                Self::push_text_box(output, context, opts, &state);
+                Self::push_spacer(output);
+
+                state.to_mut().set_align_from_attributes(attributes);
+                context.set_align_or_default(state.text_options.align);
+
+                state.to_mut().text_options.bold = true;
+                context.font_size *= header.size_multiplier();
+
+                if header == HeaderType::H1 {
+                    state.to_mut().text_options.underline = true;
+                }
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+
+                let anchor = context.texts.iter().flat_map(|t| t.text.chars()).collect();
+                let anchor = opts.anchorizer.lock().anchorize(anchor);
+                context.set_anchor(format!("#{anchor}"));
+                Self::push_text_box(output, context, opts, &state);
+                Self::push_spacer(output);
+            }
+            TagName::HorizontalRuler => {
+                Self::push_element(output, Spacer::visible());
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Picture => tracing::warn!("No picture impl"),
+            TagName::Source => tracing::warn!("No source impl"),
+            TagName::Image => tracing::warn!("No image impl"),
+            TagName::Input => {
+                let mut is_checkbox = false;
+                let mut is_checked = false;
+                for attr in attributes {
+                    match attr {
+                        Attr::IsCheckbox => is_checkbox = true,
+                        Attr::IsChecked => is_checked = true,
+                        _ => {}
+                    }
+                }
+                if is_checkbox {
+                    context.set_checkbox(is_checked);
+                }
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::ListItem => tracing::warn!("ListItem can only be in an List element"),
+            TagName::OrderedList => {
+                OrderedListProcess::process(input, output, opts, context, node, state.clone());
+            }
+            TagName::UnorderedList => {
+                UnorderedListProcess::process(input, output, opts, context, node, state.clone());
+            }
+            TagName::PreformattedText => {
+                Self::push_text_box(output, context, opts, &state);
+                let style = attributes
+                    .iter()
+                    .find_map(|attr| attr.to_style())
+                    .unwrap_or_default();
+                for style in style::Iter::new(&style) {
+                    if let Style::BackgroundColor(color) = style {
+                        let native_color = opts.native_color(color);
+                        context.set_background_color(native_color);
+                    }
+                }
+                state.to_mut().text_options.pre_formatted = true;
+                context.set_code_block(true);
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+
+                Self::push_text_box(output, context, opts, &state);
+                Self::push_spacer(output);
+            }
+            TagName::Small => {
+                state.to_mut().text_options.small = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Span => {
+                let style_str = attributes
+                    .iter()
+                    .find_map(|attr| attr.to_style())
+                    .unwrap_or_default();
+                for style in style::Iter::new(&style_str) {
+                    match style {
+                        Style::Color(color) => {
+                            state.to_mut().span.color = opts.native_color(color);
+                        }
+                        Style::FontWeight(weight) => state.to_mut().span.weight = weight,
+                        Style::FontStyle(style) => state.to_mut().span.style = style,
+                        Style::TextDecoration(decor) => state.to_mut().span.decor = decor,
+                        _ => {}
+                    }
+                }
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Strikethrough => {
+                state.to_mut().text_options.strike_through = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Table => {
+                TableProcess::process(input, output, opts, (), node, state.clone());
+            }
+            TagName::TableHead | TagName::TableBody => {
+                tracing::warn!("TableHead and TableBody can only be in an Table element");
+            }
+            TagName::TableRow => tracing::warn!("TableRow can only be in an Table element"),
+            TagName::TableDataCell => {
+                tracing::warn!(
+                    "TableDataCell can only be in an TableRow or an TableHeader element"
+                );
+            }
+            TagName::TableHeader => {
+                tracing::warn!("TableDataCell can only be in an TableRow element");
+            }
+            TagName::Underline => {
+                state.to_mut().text_options.underline = true;
+                FlowProcess::process_content(
+                    input,
+                    output,
+                    opts,
+                    context,
+                    &node.content,
+                    state.clone(),
+                );
+            }
+            TagName::Root => tracing::error!("Root element can't reach interpreter."),
         }
     }
 
-    fn push_spacer(&mut self) {
-        self.push_element(Spacer::invisible());
-    }
-
-    #[must_use]
-    fn native_color(&self, color: u32) -> [f32; 4] {
-        native_color(color, &self.surface_format)
-    }
-
-    // https://html.spec.whatwg.org/multipage/tables.html#the-table-element
-    fn process_table(
-        &mut self,
-        table: &mut Table,
-        inherited_state: InheritedState,
+    fn process_content(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
         content: Content,
+        state: State,
     ) {
-        Self::process_node_content(
-            content,
-            |_| {},
-            |node| {
-                match node.tag {
-                TagName::TableHead | TagName::TableBody => {
-                    self.process_table_head_body(table, inherited_state.clone(), node.content);
+        for node in content {
+            match node {
+                TextOrHirNode::Text(string) => {
+                    Self::text(context, string.as_str(), opts, state.clone())
                 }
-                TagName::TableRow => {
-                    table.rows.push(vec![]);
-                    self.process_table_row(table, inherited_state.clone(), node.content)
+                TextOrHirNode::Hir(node_index) => {
+                    let node = Self::get_node(input, *node_index);
+                    Self::process(input, output, opts, context, node, state.clone());
                 }
-                _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
             }
-            },
-        );
-        // TODO: filter out empty rows. (without cloning)
+        }
     }
-    fn process_table_head_body(
-        &mut self,
-        table: &mut Table,
-        inherited_state: InheritedState,
-        content: Content,
+}
+
+struct DetailsProcess;
+impl Process for DetailsProcess {
+    type Context<'a> = ();
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        state: State,
     ) {
-        Self::process_node_content(
-            content,
-            |_| {},
-            |node| match node.tag {
-                TagName::TableRow => {
-                    table.rows.push(vec![]);
-                    self.process_table_row(table, inherited_state.clone(), node.content)
+        let mut section = Section::bare(opts.hidpi_scale);
+        *section.hidden.get_mut() = true;
+
+        let index = if let Some(first_child) = node.content.first() {
+            match first_child {
+                TextOrHirNode::Text(_) => 0,
+                TextOrHirNode::Hir(node) => {
+                    let node = Self::get_node(input, *node);
+                    if node.tag == TagName::Summary {
+                        1
+                    } else {
+                        0
+                    }
                 }
-                _ => tracing::warn!(
-                    "Only TableRows can be inside an TableHead or TableBody, found: {:?}",
-                    node.tag
-                ),
-            },
-        );
-    }
+            }
+        } else {
+            0
+        };
 
-    // https://html.spec.whatwg.org/multipage/tables.html#the-tr-element
-    fn process_table_row(
-        &mut self,
-        table: &mut Table,
-        inherited_state: InheritedState,
-        content: Content,
-    ) {
-        Self::process_node_content(
-            content,
-            |_| {},
-            |node| {
-                let mut inherited_state = inherited_state.clone();
-                inherited_state.set_align_from_attributes(&node.attributes);
-                match node.tag {
-                    TagName::TableHeader => self.process_table_header(table, inherited_state, node.content),
-                    TagName::TableDataCell => self.process_table_cell(table, inherited_state, node.content),
-                    _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
-                }
-            },
+        let mut section_content = vec![];
+        let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+        FlowProcess::process_content(
+            input,
+            &mut section_content,
+            opts,
+            &mut tb,
+            &node.content[index..],
+            state,
         );
-    }
 
-    // https://html.spec.whatwg.org/multipage/tables.html#the-th-element
-    fn process_table_header(
-        &mut self,
-        table: &mut Table,
-        mut inherited_state: InheritedState,
-        content: Content,
-    ) {
-        let row = table
-            .rows
-            .last_mut()
-            .expect("There should be at least one row.");
-        // TODO allow anything inside tables not only text.
-        inherited_state.text_options.bold = true;
-        Self::process_node_content(
-            content,
-            |text| {
-                let mut tb = TextBox::new(vec![], self.hidpi_scale);
-                tb.set_align_or_default(inherited_state.text_options.align);
-                self.text(&mut tb, &mut inherited_state, text);
-                row.push(tb);
-            },
-            |_| tracing::warn!("Currently only text is allowed in an TableHeader."),
-        );
+        for elem in section_content {
+            section.elements.push(Positioned::new(elem))
+        }
     }
+}
 
-    // https://html.spec.whatwg.org/multipage/tables.html#the-td-element
-    fn process_table_cell(
-        &mut self,
-        table: &mut Table,
-        mut inherited_state: InheritedState,
-        content: Content,
-    ) {
-        let row = table
-            .rows
-            .last_mut()
-            .expect("There should be at least one row.");
-        // TODO allow anything inside tables not only text.
-        // when doing this make process_node generic over some output so it can be use here
-
-        Self::process_node_content(
-            content,
-            |text| {
-                let mut tb = TextBox::new(vec![], self.hidpi_scale);
-                tb.set_align_or_default(inherited_state.text_options.align);
-                self.text(&mut tb, &mut inherited_state, text);
-                row.push(tb);
-            },
-            |_| tracing::warn!("Currently only text is allowed in an TableDataCell."),
-        );
-    }
-    fn process_ordered_list(
-        &mut self,
-        mut inherited_state: InheritedState,
-        content: Content,
-        attributes: Attributes,
+struct OrderedListProcess;
+impl Process for OrderedListProcess {
+    type Context<'a> = &'a mut TextBox;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        mut state: State,
     ) {
         let mut index = 1;
-        for attr in attributes {
+        for attr in &node.attributes {
             if let Attr::Start(start) = attr {
-                index = start;
+                index = *start;
             }
         }
-        self.push_text_box(inherited_state.clone());
-        inherited_state.global_indent += DEFAULT_MARGIN / 2.;
+        Self::push_text_box(output, context, opts, &state);
+        state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
 
-        Self::process_node_content(
-            content,
+        Self::process_node(
+            input,
+            node,
             |_| {},
             |node| match node.tag {
                 TagName::ListItem => {
-                    inherited_state.list_prefix = Some(NonZeroUsize::try_from(index).ok());
-                    self.process_list_item(inherited_state.clone(), node.content, node.attributes);
+                    ListItemProcess::process(
+                        input,
+                        output,
+                        opts,
+                        (context, Some(index)),
+                        node,
+                        state.clone(),
+                    );
                     index += 1;
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
             },
         );
-        if inherited_state.global_indent == DEFAULT_MARGIN / 2. {
-            self.push_spacer();
+        if state.global_indent == DEFAULT_MARGIN / 2. {
+            Self::push_spacer(output);
         }
     }
-    fn process_unordered_list(
-        &mut self,
-        mut inherited_state: InheritedState,
-        content: Content,
-        attributes: Attributes,
+}
+struct UnorderedListProcess;
+impl Process for UnorderedListProcess {
+    type Context<'a> = &'a mut TextBox;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        mut state: State,
     ) {
-        self.push_text_box(inherited_state.clone());
-        inherited_state.global_indent += DEFAULT_MARGIN / 2.;
-        inherited_state.list_prefix = Some(None);
+        Self::push_text_box(output, context, opts, &state);
+        state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
 
-        Self::process_node_content(
-            content,
+        Self::process_node(
+            input,
+            node,
             |_| {},
             |node| match node.tag {
                 TagName::ListItem => {
-                    self.process_list_item(inherited_state.clone(), node.content, node.attributes);
+                    ListItemProcess::process(
+                        input,
+                        output,
+                        opts,
+                        (context, None),
+                        node,
+                        state.clone(),
+                    );
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
             },
         );
-        if inherited_state.global_indent == DEFAULT_MARGIN / 2. {
-            self.push_spacer();
+        if state.global_indent == DEFAULT_MARGIN / 2. {
+            Self::push_spacer(output);
         }
     }
-    fn process_list_item(
-        &mut self,
-        inherited_state: InheritedState,
-        content: Content,
-        attributes: Attributes,
+}
+struct ListItemProcess;
+impl Process for ListItemProcess {
+    type Context<'a> = (&'a mut TextBox, Option<usize>);
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        (context, list_prefix): Self::Context<'_>,
+        node: &HirNode,
+        state: State,
     ) {
-        let anchor = attributes.iter().find_map(|attr| attr.to_anchor());
+        let anchor = node.attributes.iter().find_map(|attr| attr.to_anchor());
 
-        let first_child_is_checkbox = if let Some(TextOrHirNode::Hir(node)) = content.first() {
-            if node.borrow().tag == TagName::Input {
-                node.borrow()
-                    .attributes
+        let first_child_is_checkbox = if let Some(TextOrHirNode::Hir(node)) = node.content.first() {
+            let node = Self::get_node(input, *node);
+            if node.tag == TagName::Input {
+                node.attributes
                     .iter()
                     .any(|attr| matches!(attr, Attr::IsCheckbox))
             } else {
@@ -631,37 +736,151 @@ impl Ast {
         } else {
             false
         };
+
         if !first_child_is_checkbox {
-            let prefix = match inherited_state.list_prefix {
-                Some(Some(num)) => format!("{num}. "),
-                Some(None) => String::from("· "),
-                _ => unreachable!("ListItem should have an prefix from ether ListType."),
+            let prefix = match list_prefix {
+                Some(num) => format!("{num}. "),
+                None => String::from("· "),
             };
-            self.current_textbox.borrow_mut().texts.push(
+            context.texts.push(
                 Text::new(
                     prefix,
-                    self.hidpi_scale,
-                    self.native_color(self.theme.text_color),
+                    opts.hidpi_scale,
+                    opts.native_color(opts.theme.text_color),
                 )
                 .make_bold(true),
             )
         }
+        FlowProcess::process_content(input, output, opts, context, &node.content, state.clone());
 
-        self.process_content(inherited_state.clone(), content);
-
-        self.push_text_box(inherited_state)
+        Self::push_text_box(output, context, opts, &state)
     }
+}
 
-    fn process_node_content<T, N>(content: Content, mut text_fn: T, mut node_fn: N)
-    where
-        T: FnMut(String),
-        N: FnMut(HirNode),
-    {
-        for node in content {
-            match node {
-                TextOrHirNode::Text(text) => text_fn(text),
-                TextOrHirNode::Hir(node) => node_fn(unwrap_hir_node(node)),
-            }
+struct TableProcess;
+impl Process for TableProcess {
+    type Context<'a> = ();
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        state: State,
+    ) {
+        let mut table = Table::new();
+        Self::process_node(
+            input,
+            node,
+            |_| {},
+            |node| {
+                match node.tag {
+                    TagName::TableHead | TagName::TableBody => {
+                        TableHeadProcess::process(input, output, opts, &mut table, node, state.clone());
+                    }
+                    TagName::TableRow => {
+                        table.rows.push(vec![]);
+                        TableRowProcess::process(input, output, opts, &mut table, node, state.clone())
+                    }
+                    _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
+                }
+            },
+        );
+        Self::push_element(output, table);
+        Self::push_spacer(output);
+    }
+}
+
+struct TableHeadProcess;
+impl Process for TableHeadProcess {
+    type Context<'a> = &'a mut Table;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        state: State,
+    ) {
+        Self::process_node(
+            input,
+            node,
+            |_| {},
+            |node| match node.tag {
+                TagName::TableRow => {
+                    context.rows.push(vec![]);
+                    TableRowProcess::process(input, output, opts, context, node, state.clone())
+                }
+                _ => tracing::warn!(
+                    "Only TableRows can be inside an TableHead or TableBody, found {:?}",
+                    node.tag
+                ),
+            },
+        );
+    }
+}
+
+// https://html.spec.whatwg.org/multipage/tables.html#the-tr-element
+struct TableRowProcess;
+impl Process for TableRowProcess {
+    type Context<'a> = &'a mut Table;
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        context: Self::Context<'_>,
+        node: &HirNode,
+        state: State,
+    ) {
+        Self::process_node(
+            input,
+            node,
+            |_| {},
+            |node| {
+                let mut state = state.clone();
+                state.to_mut().set_align_from_attributes(&node.attributes);
+                match node.tag {
+                    TagName::TableHeader => TableCellProcess::process(input, output, opts, (context, true), node, state),
+                    TagName::TableDataCell => TableCellProcess::process(input, output, opts, (context, false), node, state),
+                    _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
+                }
+            },
+        );
+    }
+}
+
+// https://html.spec.whatwg.org/multipage/tables.html#the-th-element
+// https://html.spec.whatwg.org/multipage/tables.html#the-td-element
+struct TableCellProcess;
+impl Process for TableCellProcess {
+    /// (Table, IsHeader)
+    type Context<'a> = (&'a mut Table, bool);
+    fn process(
+        input: Input,
+        output: Output,
+        opts: Opts,
+        (context, header): Self::Context<'_>,
+        node: &HirNode,
+        mut state: State,
+    ) {
+        let row = context
+            .rows
+            .last_mut()
+            .expect("There should be at least one row.");
+        // TODO allow anything inside tables not only text.
+        if header {
+            state.to_mut().text_options.bold = true;
         }
+        Self::process_node(
+            input,
+            node,
+            |text| {
+                let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+                tb.set_align_or_default(state.text_options.align);
+                Self::text(&mut tb, text, opts, state.clone());
+                row.push(tb);
+            },
+            |_| tracing::warn!("Currently only text is allowed in an TableHeader."),
+        );
     }
 }
