@@ -217,14 +217,12 @@ impl HtmlInterpreter {
         let code_highlighter = self.theme.code_highlighter.clone();
         let mut tok = Tokenizer::new(Hir::new(), TokenizerOpts::default());
 
-        let ast = Ast {
-            opts: AstOpts {
-                anchorizer: parking_lot::Mutex::new(Anchorizer::default()),
-                hidpi_scale: self.hidpi_scale,
-                surface_format: self.surface_format,
-                theme: self.theme,
-            },
-        };
+        let ast = Ast::new(AstOpts {
+            anchorizer: parking_lot::Mutex::new(Anchorizer::default()),
+            hidpi_scale: self.hidpi_scale,
+            surface_format: self.surface_format,
+            theme: self.theme,
+        });
         for md_string in receiver {
             tracing::debug!(
                 "Received markdown for interpretation: {} bytes",
