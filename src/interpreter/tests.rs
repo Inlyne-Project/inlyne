@@ -121,7 +121,7 @@ impl InterpreterOpts {
         let hidpi_scale = 1.0;
         let file_path = PathBuf::from("does_not_exist");
         let image_cache = ImageCache::default();
-        let window = Box::new(DummyWindow(counter));
+        let window = Arc::new(parking_lot::Mutex::new(DummyWindow(counter)));
         let interpreter = HtmlInterpreter::new_with_interactor(
             Arc::clone(&element_queue),
             theme,

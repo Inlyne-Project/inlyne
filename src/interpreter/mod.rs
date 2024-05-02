@@ -146,7 +146,7 @@ pub struct HtmlInterpreter {
     stopped: bool,
     first_pass: bool,
     image_cache: ImageCache,
-    window: Box<dyn WindowInteractor + Send>,
+    window: Arc<parking_lot::Mutex<dyn WindowInteractor + Send>>,
     color_scheme: Option<ResolvedTheme>,
 }
 
@@ -176,7 +176,7 @@ impl HtmlInterpreter {
             hidpi_scale,
             file_path,
             image_cache,
-            Box::new(live_window),
+            Arc::new(parking_lot::Mutex::new(live_window)),
             color_scheme,
         )
     }
@@ -190,7 +190,7 @@ impl HtmlInterpreter {
         hidpi_scale: f32,
         file_path: PathBuf,
         image_cache: ImageCache,
-        window: Box<dyn WindowInteractor + Send>,
+        window: Arc<parking_lot::Mutex<dyn WindowInteractor + Send>>,
         color_scheme: Option<ResolvedTheme>,
     ) -> Self {
         Self {
@@ -222,6 +222,9 @@ impl HtmlInterpreter {
             hidpi_scale: self.hidpi_scale,
             surface_format: self.surface_format,
             theme: self.theme,
+            color_scheme: self.color_scheme,
+            image_cache: Arc::clone(&self.image_cache),
+            window: Arc::clone(&self.window),
         });
         for md_string in receiver {
             tracing::debug!(
@@ -243,7 +246,7 @@ impl HtmlInterpreter {
             tok.end();
 
             *self.element_queue.lock() = ast.interpret(std::mem::take(&mut tok.sink)).into();
-            self.window.finished_single_doc();
+            self.window.lock().finished_single_doc();
         }
     }
 
@@ -318,7 +321,7 @@ impl HtmlInterpreter {
     fn push_element<I: Into<Element>>(&mut self, element: I) {
         self.element_queue.lock().push(element.into());
         if self.first_pass {
-            self.window.request_redraw()
+            self.window.lock().request_redraw()
         }
     }
 
@@ -331,13 +334,13 @@ impl HtmlInterpreter {
             Some(image_data) if is_url => {
                 Image::from_image_data(image_data.clone(), self.hidpi_scale)
             }
-            _ => Image::from_src(
-                src.clone(),
-                self.file_path.clone(),
-                self.hidpi_scale,
-                self.window.image_callback(),
-            )
-            .unwrap(),
+            _ => panic!(), //_ => Image::from_src(
+                           //    src.clone(),
+                           //    self.file_path.clone(),
+                           //    self.hidpi_scale,
+                           //    self.window.image_callback(),
+                           //)
+                           //.unwrap(),
         }
         .with_align(align);
 
@@ -917,7 +920,7 @@ impl TokenSink for HtmlInterpreter {
                 self.push_current_textbox();
                 self.should_queue.store(false, AtomicOrdering::Relaxed);
                 self.first_pass = false;
-                self.window.finished_single_doc();
+                self.window.lock().finished_single_doc();
             }
             Token::ParseError(err) => tracing::warn!("HTML parser emitted error: {err}"),
             Token::DoctypeToken(_) | Token::CommentToken(_) | Token::NullCharacterToken => {}

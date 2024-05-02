@@ -83,7 +83,7 @@ impl Attr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PrefersColorScheme(pub ResolvedTheme);
 
 impl PrefersColorScheme {
