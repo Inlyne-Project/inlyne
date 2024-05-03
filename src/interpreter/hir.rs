@@ -1,5 +1,4 @@
 use crate::interpreter::html::{self, Attr, TagName};
-use anyhow::{bail, Context};
 use html5ever::tokenizer::{Tag, TagKind, Token, TokenSink, TokenSinkResult};
 use smart_debug::SmartDebug;
 use std::fmt::{Display, Formatter};
@@ -83,29 +82,39 @@ impl Hir {
         self.parents.push(self.nodes.len() - 1);
         self.to_close.push(tag_name);
     }
-    fn process_end_tag(&mut self, tag: Tag) -> anyhow::Result<()> {
+    fn process_end_tag(&mut self, tag: Tag) {
         let tag_name = match TagName::try_from(&tag.name) {
             Ok(name) => name,
             Err(name) => {
-                bail!("Missing implementation for end tag: {name}");
+                tracing::info!("Missing implementation for end tag: {name}");
+                return;
             }
         };
         if tag_name.is_void() {
-            return Ok(());
+            return;
         }
 
-        let to_close = self.to_close.pop().context("Expected closing tag")?;
-
+        let Some(to_close) = self.to_close.pop() else {
+            return;
+        };
+        if to_close == TagName::Root {
+            tracing::warn!("Found unexpected/unopened closing {tag_name:?}");
+            return;
+        }
         if tag_name != to_close {
-            bail!("Expected closing {to_close:?} tag but found {tag_name:?}")
+            tracing::warn!("Expected closing {to_close:?} tag but found {tag_name:?}")
         }
         self.parents.pop();
-        Ok(())
     }
     fn on_text(&mut self, string: String) {
         let current_node = self.current_node();
 
-        if string == "\n" && current_node.content.is_empty() {
+        if matches!(
+            current_node.tag,
+            TagName::PreformattedText | TagName::Details
+        ) && current_node.content.is_empty()
+            && string.trim().is_empty()
+        {
             return;
         }
 
@@ -114,7 +123,7 @@ impl Hir {
     fn on_end(&mut self) {
         self.to_close.iter().skip(1).for_each(|unclosed_tag| {
             tracing::warn!("File contains unclosed html tag: {unclosed_tag:?}");
-        })
+        });
     }
 }
 
@@ -125,12 +134,7 @@ impl TokenSink for Hir {
         match token {
             Token::TagToken(tag) => match tag.kind {
                 TagKind::StartTag => self.process_start_tag(tag),
-                TagKind::EndTag => {
-                    let e = self.process_end_tag(tag);
-                    if let Err(e) = e {
-                        tracing::error!("{e}");
-                    }
-                }
+                TagKind::EndTag => self.process_end_tag(tag),
             },
             Token::CharacterTokens(str) => self.on_text(str.to_string()),
             Token::EOFToken => self.on_end(),

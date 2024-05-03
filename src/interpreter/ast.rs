@@ -98,7 +98,31 @@ impl<T> Dummy<T> {
 }
 impl<T> OutputStream for Dummy<T> {
     type Output = T;
-    fn push(&mut self, i: impl Into<Self::Output>) {}
+    fn push(&mut self, _i: impl Into<Self::Output>) {}
+}
+trait Push {
+    fn push_spacer(&mut self);
+    fn push_text_box(&mut self, text_box: &mut TextBox, opts: Opts, state: &State);
+}
+impl<T: OutputStream<Output = Element>> Push for T {
+    fn push_spacer(&mut self) {
+        self.push(Spacer::invisible())
+    }
+    fn push_text_box(&mut self, text_box: &mut TextBox, opts: Opts, state: &State) {
+        let mut tb = std::mem::replace(text_box, TextBox::new(vec![], opts.hidpi_scale));
+        text_box.indent = state.global_indent;
+
+        if !tb.texts.is_empty() {
+            let content = tb.texts.iter().any(|text| !text.text.is_empty());
+
+            if content {
+                tb.indent = state.global_indent;
+                self.push(tb);
+            }
+        } else {
+            text_box.is_checkbox = tb.is_checkbox;
+        }
+    }
 }
 
 pub struct AstOpts {
@@ -129,7 +153,7 @@ impl Ast {
         let nodes = hir.content();
         let root = nodes.first().unwrap().content.clone();
         let state = State::Owned(InheritedState::with_span_color(
-            self.opts.native_color(self.opts.theme.text_color),
+            self.opts.native_color(self.opts.theme.code_color),
         ));
         root.into_iter()
             .filter_map(|ton| {
@@ -144,6 +168,7 @@ impl Ast {
                         FlowProcess::get_node(&nodes, node),
                         state.clone(),
                     );
+                    out.push_text_box(&mut tb, &self.opts, &state);
                     Some(out)
                 } else {
                     None
@@ -169,12 +194,12 @@ trait Process {
         state: State,
     );
     fn process_content<'a>(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        content: impl IntoIterator<Item = &'a TextOrHirNode>,
-        state: State,
+        _input: Input,
+        _output: out!(),
+        _opts: Opts,
+        _context: Self::Context<'_>,
+        _content: impl IntoIterator<Item = &'a TextOrHirNode>,
+        _state: State,
     ) {
         unimplemented!()
     }
@@ -191,12 +216,6 @@ trait Process {
     }
     fn get_node(input: Input, index: usize) -> &HirNode {
         input.get(index).unwrap()
-    }
-    fn push_element<T: Into<Element>>(output: out!(), element: T) {
-        output.push(element.into())
-    }
-    fn push_spacer(output: out!()) {
-        Self::push_element(output, Spacer::invisible())
     }
     fn text(text_box: &mut TextBox, mut string: &str, opts: Opts, mut state: State) {
         let text_native_color = opts.native_color(opts.theme.text_color);
@@ -278,22 +297,6 @@ trait Process {
             text_box.texts.push(text);
         }
     }
-    fn push_text_box(output: out!(), text_box: &mut TextBox, opts: Opts, state: &State) {
-        let mut tb = std::mem::replace(text_box, TextBox::new(vec![], opts.hidpi_scale));
-        text_box.indent = state.global_indent;
-
-        if !tb.texts.is_empty() {
-            let content = tb.texts.iter().any(|text| !text.text.is_empty());
-
-            if content {
-                tb.indent = state.global_indent;
-
-                Self::push_element(output, tb);
-            }
-        } else {
-            text_box.is_checkbox = tb.is_checkbox;
-        }
-    }
 }
 
 struct FlowProcess;
@@ -310,7 +313,6 @@ impl Process for FlowProcess {
         let attributes = &node.attributes;
         match node.tag {
             TagName::Paragraph => {
-                Self::push_text_box(output, context, opts, &state);
                 state.to_mut().set_align_from_attributes(attributes);
                 context.set_align_or_default(state.text_options.align);
 
@@ -323,8 +325,8 @@ impl Process for FlowProcess {
                     state.clone(),
                 );
 
-                Self::push_text_box(output, context, opts, &state);
-                Self::push_spacer(output);
+                output.push_text_box(context, opts, &state);
+                output.push_spacer();
             }
             TagName::Anchor => {
                 for attr in attributes {
@@ -346,7 +348,7 @@ impl Process for FlowProcess {
                 );
             }
             TagName::Div => {
-                Self::push_text_box(output, context, opts, &state);
+                output.push_text_box(context, opts, &state);
 
                 state.to_mut().set_align_from_attributes(attributes);
                 context.set_align_or_default(state.text_options.align);
@@ -359,10 +361,10 @@ impl Process for FlowProcess {
                     &node.content,
                     state.clone(),
                 );
-                Self::push_text_box(output, context, opts, &state);
+                output.push_text_box(context, opts, &state);
             }
             TagName::BlockQuote => {
-                Self::push_text_box(output, context, opts, &state);
+                output.push_text_box(context, opts, &state);
                 state.to_mut().text_options.block_quote += 1;
                 state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
 
@@ -377,10 +379,10 @@ impl Process for FlowProcess {
 
                 let indent = state.global_indent;
 
-                Self::push_text_box(output, context, opts, &state);
+                output.push_text_box(context, opts, &state);
 
                 if indent == DEFAULT_MARGIN / 2. {
-                    Self::push_spacer(output);
+                    output.push_spacer();
                 }
             }
             TagName::BoldOrStrong => {
@@ -394,17 +396,7 @@ impl Process for FlowProcess {
                     state.clone(),
                 );
             }
-            TagName::Break => {
-                Self::push_text_box(output, context, opts, &state);
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
-            }
+            TagName::Break => output.push_text_box(context, opts, &state),
             TagName::Code => {
                 state.to_mut().text_options.code = true;
                 FlowProcess::process_content(
@@ -433,8 +425,8 @@ impl Process for FlowProcess {
                 );
             }
             TagName::Header(header) => {
-                Self::push_text_box(output, context, opts, &state);
-                Self::push_spacer(output);
+                output.push_text_box(context, opts, &state);
+                output.push_spacer();
 
                 state.to_mut().set_align_from_attributes(attributes);
                 context.set_align_or_default(state.text_options.align);
@@ -457,20 +449,10 @@ impl Process for FlowProcess {
                 let anchor = context.texts.iter().flat_map(|t| t.text.chars()).collect();
                 let anchor = opts.anchorizer.lock().anchorize(anchor);
                 context.set_anchor(format!("#{anchor}"));
-                Self::push_text_box(output, context, opts, &state);
-                Self::push_spacer(output);
+                output.push_text_box(context, opts, &state);
+                output.push_spacer();
             }
-            TagName::HorizontalRuler => {
-                Self::push_element(output, Spacer::visible());
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
-            }
+            TagName::HorizontalRuler => output.push(Spacer::visible()),
             TagName::Picture => PictureProcess::process(input, output, opts, (), node, state),
             TagName::Source => tracing::warn!("Source tag can only be inside an Picture."),
             TagName::Image => ImageProcess::process(input, output, opts, None, node, state),
@@ -504,7 +486,7 @@ impl Process for FlowProcess {
                 UnorderedListProcess::process(input, output, opts, context, node, state.clone());
             }
             TagName::PreformattedText => {
-                Self::push_text_box(output, context, opts, &state);
+                output.push_text_box(context, opts, &state);
                 let style = attributes
                     .iter()
                     .find_map(|attr| attr.to_style())
@@ -526,8 +508,8 @@ impl Process for FlowProcess {
                     state.clone(),
                 );
 
-                Self::push_text_box(output, context, opts, &state);
-                Self::push_spacer(output);
+                output.push_text_box(context, opts, &state);
+                output.push_spacer();
             }
             TagName::Small => {
                 state.to_mut().text_options.small = true;
@@ -673,17 +655,11 @@ impl Process for DetailsProcess {
         }
 
         let mut section_content = vec![];
+        let s = &mut section_content.map(Positioned::new);
         let mut tb = TextBox::new(vec![], opts.hidpi_scale);
 
-        FlowProcess::process_content(
-            input,
-            &mut section_content.map(Positioned::new),
-            opts,
-            &mut tb,
-            content,
-            state,
-        );
-
+        FlowProcess::process_content(input, s, opts, &mut tb, content, state.clone());
+        s.push_text_box(&mut tb, opts, &state);
         section.elements = section_content;
         output.push(section)
     }
@@ -706,7 +682,7 @@ impl Process for OrderedListProcess {
                 index = *start;
             }
         }
-        Self::push_text_box(output, context, opts, &state);
+        output.push_text_box(context, opts, &state);
         state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
 
         Self::process_node(
@@ -729,7 +705,7 @@ impl Process for OrderedListProcess {
             },
         );
         if state.global_indent == DEFAULT_MARGIN / 2. {
-            Self::push_spacer(output);
+            output.push_spacer();
         }
     }
 }
@@ -744,7 +720,7 @@ impl Process for UnorderedListProcess {
         node: &HirNode,
         mut state: State,
     ) {
-        Self::push_text_box(output, context, opts, &state);
+        output.push_text_box(context, opts, &state);
         state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
 
         Self::process_node(
@@ -766,7 +742,7 @@ impl Process for UnorderedListProcess {
             },
         );
         if state.global_indent == DEFAULT_MARGIN / 2. {
-            Self::push_spacer(output);
+            output.push_spacer();
         }
     }
 }
@@ -811,8 +787,7 @@ impl Process for ListItemProcess {
             )
         }
         FlowProcess::process_content(input, output, opts, context, &node.content, state.clone());
-
-        Self::push_text_box(output, context, opts, &state)
+        output.push_text_box(context, opts, &state)
     }
 }
 
@@ -840,7 +815,7 @@ impl ImageProcess {
             image = image.with_size(size);
         }
 
-        Self::push_element(output, image);
+        output.push(image);
         //Self::push_spacer(output, );
     }
 }
@@ -884,12 +859,12 @@ struct SourceProcess;
 impl Process for SourceProcess {
     type Context<'a> = &'a mut Builder;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
+        _input: Input,
+        _output: out!(),
+        _opts: Opts,
         context: Self::Context<'_>,
         node: &HirNode,
-        state: State,
+        _state: State,
     ) {
         let mut media = None;
         let mut src_set = None;
@@ -936,14 +911,13 @@ impl Process for PictureProcess {
             }
         });
 
-        let last = iter.next_back();
+        let Some(last) = iter.next_back() else {
+            return;
+        };
 
         for node in iter {
             SourceProcess::process(input, output, opts, &mut builder, node, state.clone());
         }
-        let Some(last) = last else {
-            return;
-        };
 
         state.to_mut().set_align_from_attributes(&node.attributes);
         if let Some(align) = state.text_options.align {
@@ -983,8 +957,9 @@ impl Process for TableProcess {
                 }
             },
         );
-        Self::push_element(output, table);
-        Self::push_spacer(output);
+        output.push_spacer();
+        output.push(table);
+        output.push_spacer();
     }
 }
 
@@ -1068,16 +1043,19 @@ impl Process for TableCellProcess {
         if header {
             state.to_mut().text_options.bold = true;
         }
-        Self::process_node(
+
+        let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+        tb.set_align_or_default(state.text_options.align);
+
+        FlowProcess::process_content(
             input,
-            node,
-            |text| {
-                let mut tb = TextBox::new(vec![], opts.hidpi_scale);
-                tb.set_align_or_default(state.text_options.align);
-                Self::text(&mut tb, text, opts, state.clone());
-                row.push(tb);
-            },
-            |_| tracing::warn!("Currently only text is allowed in an TableHeader."),
+            &mut Dummy::new(),
+            opts,
+            &mut tb,
+            &node.content,
+            state.clone(),
         );
+
+        row.push(tb);
     }
 }
