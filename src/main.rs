@@ -35,7 +35,6 @@ use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, channel};
 use std::sync::Arc;
 use std::time::Instant;
@@ -146,7 +145,6 @@ pub struct Inlyne {
     lines_to_scroll: f32,
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
-    interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
     need_repositioning: bool,
     watcher: Watcher,
@@ -201,14 +199,12 @@ impl Inlyne {
             renderer.theme.clone(),
             renderer.surface_format,
             renderer.hidpi_scale,
-            file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
             opts.color_scheme,
         );
 
         let (interpreter_sender, interpreter_receiver) = channel();
-        let interpreter_should_queue = interpreter.should_queue.clone();
         std::thread::spawn(move || interpreter.interpret_md(interpreter_receiver));
 
         interpreter_sender.send(md_string)?;
@@ -228,7 +224,6 @@ impl Inlyne {
             elements: Vec::new(),
             lines_to_scroll,
             interpreter_sender,
-            interpreter_should_queue,
             image_cache,
             keycombos,
             need_repositioning: false,
@@ -272,13 +267,10 @@ impl Inlyne {
     }
 
     fn load_file(&mut self, contents: String) {
-        self.interpreter_should_queue
-            .store(false, Ordering::Relaxed);
         self.element_queue.lock().clear();
         self.elements.clear();
         self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
         self.renderer.positioner.anchors.clear();
-        self.interpreter_should_queue.store(true, Ordering::Relaxed);
         self.interpreter_sender.send(contents).unwrap();
     }
 

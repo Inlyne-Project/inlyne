@@ -55,9 +55,7 @@ impl InheritedState {
     }
 }
 
-type Content<'a> = &'a [TextOrHirNode];
 type Attributes<'a> = &'a [Attr];
-//pub type Output<'a> = &'a mut Vec<Element>;
 pub type Input<'a> = &'a [HirNode];
 type State<'a> = Cow<'a, InheritedState>;
 type Opts<'a> = &'a AstOpts;
@@ -219,7 +217,7 @@ trait Process {
     }
     fn text(text_box: &mut TextBox, mut string: &str, opts: Opts, mut state: State) {
         let text_native_color = opts.native_color(opts.theme.text_color);
-        if string == "\n" {
+        if string.trim().is_empty() {
             if state.text_options.pre_formatted {
                 text_box.texts.push(Text::new(
                     "\n".to_string(),
@@ -227,18 +225,6 @@ trait Process {
                     text_native_color,
                 ));
             }
-            if let Some(last_text) = text_box.texts.last() {
-                if let Some(last_char) = last_text.text.chars().last() {
-                    if !last_char.is_whitespace() {
-                        text_box.texts.push(Text::new(
-                            " ".to_string(),
-                            opts.hidpi_scale,
-                            text_native_color,
-                        ));
-                    }
-                }
-            }
-        } else if string.trim().is_empty() && !state.text_options.pre_formatted {
             if let Some(last_text) = text_box.texts.last() {
                 if let Some(last_char) = last_text.text.chars().last() {
                     if !last_char.is_whitespace() {
@@ -758,7 +744,9 @@ impl Process for ListItemProcess {
         state: State,
     ) {
         let anchor = node.attributes.iter().find_map(|attr| attr.to_anchor());
-
+        if let Some(anchor) = anchor {
+            context.set_anchor(anchor)
+        }
         let first_child_is_checkbox = if let Some(TextOrHirNode::Hir(node)) = node.content.first() {
             let node = Self::get_node(input, *node);
             if node.tag == TagName::Input {
@@ -822,7 +810,7 @@ impl ImageProcess {
 impl Process for ImageProcess {
     type Context<'a> = Option<Builder>;
     fn process(
-        input: Input,
+        _input: Input,
         output: out!(),
         opts: Opts,
         mut context: Self::Context<'_>,
@@ -850,7 +838,7 @@ impl Process for ImageProcess {
         }
 
         match builder.try_finish() {
-            Ok(pic) => Self::push_image_from_picture(output, pic, opts, state.clone()), // TODO
+            Ok(pic) => Self::push_image_from_picture(output, pic, opts, state.clone()),
             Err(err) => tracing::warn!("Invalid <img>: {err}"),
         }
     }
@@ -935,7 +923,7 @@ impl Process for TableProcess {
         input: Input,
         output: out!(),
         opts: Opts,
-        context: Self::Context<'_>,
+        _context: Self::Context<'_>,
         node: &HirNode,
         state: State,
     ) {
@@ -1012,9 +1000,21 @@ impl Process for TableRowProcess {
                 let mut state = state.clone();
                 state.to_mut().set_align_from_attributes(&node.attributes);
                 match node.tag {
-                    TagName::TableHeader => TableCellProcess::process(input, output, opts, (context, true), node, state),
-                    TagName::TableDataCell => TableCellProcess::process(input, output, opts, (context, false), node, state),
-                    _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
+                    TagName::TableHeader => {
+                        TableCellProcess::process(input, output, opts, (context, true), node, state)
+                    }
+                    TagName::TableDataCell => TableCellProcess::process(
+                        input,
+                        output,
+                        opts,
+                        (context, false),
+                        node,
+                        state,
+                    ),
+                    _ => tracing::warn!(
+                        "Only TableHeader and TableDataCell can be inside an TableRow, found: {:?}",
+                        node.tag
+                    ),
                 }
             },
         );
@@ -1029,7 +1029,7 @@ impl Process for TableCellProcess {
     type Context<'a> = (&'a mut Table, bool);
     fn process(
         input: Input,
-        output: out!(),
+        _output: out!(),
         opts: Opts,
         (context, header): Self::Context<'_>,
         node: &HirNode,

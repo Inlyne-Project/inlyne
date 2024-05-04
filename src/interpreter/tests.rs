@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     mpsc, Arc,
@@ -119,7 +118,6 @@ impl InterpreterOpts {
         let element_queue = Arc::default();
         let surface_format = TextureFormat::Bgra8UnormSrgb;
         let hidpi_scale = 1.0;
-        let file_path = PathBuf::from("does_not_exist");
         let image_cache = ImageCache::default();
         let window = Arc::new(parking_lot::Mutex::new(DummyWindow(counter)));
         let interpreter = HtmlInterpreter::new_with_interactor(
@@ -127,7 +125,6 @@ impl InterpreterOpts {
             theme,
             surface_format,
             hidpi_scale,
-            file_path,
             image_cache,
             window,
             color_scheme,
@@ -805,7 +802,7 @@ fn toml_gets_highlighted() {
 
 fn find_image(elements: &[Element]) -> Option<&Image> {
     elements.iter().find_map(|element| match element {
-        crate::Element::Image(image) => Some(image),
+        Element::Image(image) => Some(image),
         _ => None,
     })
 }
