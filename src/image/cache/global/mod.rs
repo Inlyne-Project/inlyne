@@ -9,7 +9,7 @@ use crate::{
 use anyhow::Context;
 use http::request;
 use http_cache_semantics::{BeforeRequest, CachePolicy};
-use redb::{backends::InMemoryBackend, Database, TableDefinition};
+use redb::{Database, TableDefinition};
 
 mod redb_impls;
 
@@ -125,6 +125,7 @@ impl Cache {
 
     #[cfg(test)]
     pub fn in_memory() -> Self {
+        use redb::backends::InMemoryBackend;
         let backend = InMemoryBackend::new();
         let db = Database::builder()
             .create_with_backend(backend)

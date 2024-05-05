@@ -81,7 +81,7 @@ const MAX_ENTRY_SIZE_BYTES: u64 = MAX_CACHE_SIZE_BYTES / 10;
 
 // Internally stores a URL, but we keep it as a string to simplify DB storage and comparisons
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
-struct RemoteKey(String);
+pub struct RemoteKey(String);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
@@ -152,6 +152,7 @@ impl TimeSource for SystemTimeSource {
     }
 }
 
+/// Our custom `CacheOptions` (could be `const`)
 fn cache_options() -> http_cache_semantics::CacheOptions {
     // TODO: PR upstream for `const fn new() -> CacheOptions`
     http_cache_semantics::CacheOptions {
@@ -223,7 +224,9 @@ impl RequestLike for StandardRequest {
 
 #[must_use]
 pub enum L1Check {
+    // We are done 🥳🎉
     Fini(ImageData),
+    // Time to follow up
     Cont(SlowL1Cont),
 }
 
@@ -233,17 +236,17 @@ impl From<SlowL1Cont> for L1Check {
     }
 }
 
+impl From<ImageData> for L1Check {
+    fn from(image_data: ImageData) -> Self {
+        Self::Fini(image_data)
+    }
+}
+
 #[must_use]
 pub enum SlowL1Cont {
     CheckRemoteCache(RemoteKey),
     FetchLocal(PathBuf),
     FetchRemote(ureq::Request),
-}
-
-impl From<ImageData> for L1Check {
-    fn from(image_data: ImageData) -> Self {
-        Self::Fini(image_data)
-    }
 }
 
 // TODO: need to be able to pass in a fake time source, so that we can reasonably test this
