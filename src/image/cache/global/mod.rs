@@ -1,7 +1,10 @@
-use std::{fs, time::SystemTime};
+use std::{fmt, fs, path::PathBuf, time::SystemTime};
 
 use super::{Key, RemoteKey, StandardRequest};
-use crate::{image::ImageData, utils};
+use crate::{
+    image::ImageData,
+    utils::{self, inlyne_cache_dir},
+};
 
 use anyhow::Context;
 use http::request;
@@ -24,6 +27,67 @@ fn db_name() -> String {
     format!("image-cache-v{VERSION}.redb")
 }
 
+fn db_path() -> anyhow::Result<PathBuf> {
+    let cache_dir = utils::inlyne_cache_dir().context("Failed to locate cache dir")?;
+    let db_path = cache_dir.join(db_name());
+    Ok(db_path)
+}
+
+pub fn stats() -> anyhow::Result<Stats> {
+    Stats::new()
+}
+
+pub struct Stats {
+    pub path: PathBuf,
+    pub inner: Option<StatsInner>,
+}
+
+pub struct StatsInner {
+    pub size: Bytes,
+}
+
+pub struct Bytes(u64);
+
+impl From<u64> for Bytes {
+    fn from(bytes: u64) -> Self {
+        Self(bytes)
+    }
+}
+
+impl fmt::Display for Bytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut unit = "B";
+        let mut dividend = 1;
+        while self.0 / dividend / 1_024 > 1 {
+            unit = match unit {
+                "B" => "KiB",
+                "KiB" => "MiB",
+                _ => break,
+            };
+            dividend *= 1_024;
+        }
+
+        write!(f, "{} {}", self.0 / dividend, unit)
+    }
+}
+
+impl Stats {
+    fn new() -> anyhow::Result<Stats> {
+        let path = db_path()?;
+
+        let inner = if !path.is_file() {
+            None
+        } else {
+            let meta = fs::metadata(&path)?;
+            let size = meta.len().into();
+            let inner = StatsInner { size };
+            Some(inner)
+        };
+
+        Ok(Self { path, inner })
+    }
+}
+
 #[derive(Debug)]
 pub struct RemoteMeta {
     pub last_used: SystemTime,
@@ -39,12 +103,23 @@ pub struct Cache(Database);
 
 impl Cache {
     pub fn load() -> anyhow::Result<Self> {
-        let cache_dir = utils::inlyne_cache_dir().context("Failed to locate cache dir")?;
+        let cache_dir = inlyne_cache_dir().context("Unable to locate cache dir")?;
         fs::create_dir_all(&cache_dir)
             .with_context(|| format!("Failed to create cache dir at: {}", cache_dir.display()))?;
-        let db_path = cache_dir.join(db_name());
-        let db = Database::create(&db_path)
+        let db_path = db_path()?;
+        let file = fs::File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&db_path)
             .with_context(|| format!("Failed to create database at: {}", db_path.display()))?;
+        Self::load_from_file(file)
+    }
+
+    pub fn load_from_file(file: fs::File) -> anyhow::Result<Self> {
+        let db = Database::builder()
+            .create_file(file)
+            .context("Failed creating database")?;
         Ok(Self(db))
     }
 

@@ -163,4 +163,6 @@ pub enum ConfigCmd {
 pub enum CacheCmd {
     /// Run the garbage collector on the image cache file
     Gc,
+    /// Display different info about your cache
+    Stats,
 }

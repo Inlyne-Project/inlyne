@@ -810,6 +810,16 @@ fn main() -> anyhow::Result<()> {
             edit::edit_file(config_path)?;
         }
         Commands::Cache(CacheCmd::Gc) => image::cache::run_global_garbage_collector()?,
+        Commands::Cache(CacheCmd::Stats) => {
+            let image::cache::GlobalStats { path, inner } = image::cache::global_stats()?;
+            match inner {
+                None => {
+                    // TODO: colors
+                    println!("Path: {} (not found)", path.display());
+                }
+                Some(image::cache::GlobalStatsInner { size }) => todo!(),
+            }
+        }
     }
 
     Ok(())

@@ -65,8 +65,13 @@ use url::Url;
 
 mod global;
 mod session;
+#[cfg(test)]
+mod tests;
 
-pub use global::run_garbage_collector as run_global_garbage_collector;
+pub use global::{
+    run_garbage_collector as run_global_garbage_collector, stats as global_stats,
+    Stats as GlobalStats, StatsInner as GlobalStatsInner,
+};
 
 // TODO: spawn a cache worker when creating the cache and return a handle that can communicate with
 // it? Each request can be pushed to a thread-pool that shares the cache?
@@ -105,6 +110,13 @@ impl From<Url> for RemoteKey {
     }
 }
 
+impl From<RemoteKey> for ureq::Request {
+    fn from(key: RemoteKey) -> Self {
+        let req: StandardRequest = (&key).into();
+        (&req).into()
+    }
+}
+
 impl Key {
     fn from_abs_path(path: PathBuf) -> anyhow::Result<Self> {
         // TODO: check that it's absolute
@@ -125,6 +137,27 @@ impl From<Url> for Key {
         } else {
             Self::Remote(url.into())
         }
+    }
+}
+
+trait TimeSource {
+    fn now(&self) -> SystemTime;
+}
+
+struct SystemTimeSource;
+
+impl TimeSource for SystemTimeSource {
+    fn now(&self) -> SystemTime {
+        SystemTime::now()
+    }
+}
+
+fn cache_options() -> http_cache_semantics::CacheOptions {
+    // TODO: PR upstream for `const fn new() -> CacheOptions`
+    http_cache_semantics::CacheOptions {
+        // Our cache is per-user aka private
+        shared: false,
+        ..Default::default()
     }
 }
 
@@ -249,36 +282,28 @@ impl LayeredCache {
             },
             Key::Remote(remote) => match self.per_session.check_remote_cache(&remote) {
                 Some(session::RemoteEntry::Fresh(image_data)) => image_data.into(),
-                Some(session::RemoteEntry::Stale(_)) => SlowL1Cont::CheckRemoteCache(remote).into(),
-                /* match &self.global {
-                    Some(global) => match global.check_remote_cache(&remote)? {
-                        // TODO: this should refresh the per-session cache
-                        Some(global::CacheCheck::Fresh(image_data)) => image_data.into(),
-                        Some(global::CacheCheck::Stale(req_parts)) => Some(req_parts).into(),
-                        None => Some(req_parts).into(),
-                    },
-                    None => None.into(),
-                },
-                    */
-                None => SlowL1Cont::FetchRemote(todo!()).into(),
+                _ => SlowL1Cont::CheckRemoteCache(remote).into(),
             },
         };
 
         Ok(cache_l1_check)
     }
 
+    // TODO: split up the layers in here so that it's clearer when/where different layers should be
+    //       updated
     pub fn slow_l1_cont(&self, cont: SlowL1Cont) -> anyhow::Result<ImageData> {
         let image_date = match cont {
             SlowL1Cont::CheckRemoteCache(remote) => match &self.global {
                 Some(global) => match global.check_remote_cache(&remote)? {
                     // TODO: update the per-session cache
+                    // TODO: update the LRU time
                     Some(global::CacheCheck::Fresh(image_data)) => image_data,
                     Some(global::CacheCheck::Stale(req_parts)) => {
                         self.slow_l1_cont(SlowL1Cont::FetchRemote(req_parts.into()))?
                     }
-                    None => self.slow_l1_cont(SlowL1Cont::FetchRemote(todo!()))?,
+                    None => self.slow_l1_cont(SlowL1Cont::FetchRemote(remote.into()))?,
                 },
-                None => todo!(),
+                None => self.slow_l1_cont(SlowL1Cont::FetchRemote(remote.into()))?,
             },
             SlowL1Cont::FetchLocal(_) => todo!(),
             SlowL1Cont::FetchRemote(_) => todo!(),
