@@ -8,15 +8,15 @@ use crate::{
 
 use anyhow::Context;
 use http::request;
-use http_cache_semantics::{BeforeRequest, CachePolicy};
-use redb::{Database, TableDefinition};
+use http_cache_semantics::{BeforeRequest, CachePolicy, RequestLike};
+use redb::{AccessGuard, Database, TableDefinition};
 
 mod redb_impls;
 
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data except when necessary
-const REMOTE_META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
-const IMAGE_DATA: TableDefinition<RemoteKey, ImageData> = TableDefinition::new("image-data");
+const META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
+const DATA: TableDefinition<RemoteKey, ImageData> = TableDefinition::new("image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -136,52 +136,42 @@ impl Cache {
     pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
         // TODO: avoid re-doing this
         let req: StandardRequest = key.into();
-        let maybe_check = match self.fetch_remote_meta(&key)? {
+        let read_txn = self.0.begin_read()?;
+        let meta_table = read_txn.open_table(META)?;
+        let maybe_check = match meta_table.get(key)?.map(|e| e.value()) {
             None => None,
-            // TODO: allow faking the time
             Some(meta) => match meta.policy.before_request(&req, SystemTime::now()) {
                 BeforeRequest::Fresh(_) => {
-                    self.fetch_remote_cache(key)?
-                        .and_then(|(meta, image_data)| {
-                            match meta.policy.before_request(&req, SystemTime::now()) {
-                                // Return the fresh data
-                                BeforeRequest::Fresh(_) => Some(CacheCheck::Fresh(image_data)),
-                                // Went stale between checking meta vs getting the data
-                                BeforeRequest::Stale { request, .. } => {
-                                    Some(CacheCheck::Stale(request))
-                                }
-                            }
-                        })
+                    let data_table = read_txn.open_table(DATA)?;
+                    match data_table.get(key)? {
+                        Some(entry) => {
+                            let data = entry.value();
+                            // NOTE: both readers _and_ a single writer can exist simultaneous
+                            let write_txn = self.0.begin_write()?;
+                            todo!("Update the last used time");
+                            Some(CacheCheck::Fresh(data))
+                        }
+                        None => None,
+                    }
                 }
-                BeforeRequest::Stale { request, .. } => Some(CacheCheck::Stale(request)),
-            },
+                BeforeRequest::Stale { request, .. } => {
+                    // NOTE: We're using comparing the headers of the original and `request`
+                    // requests as a proxy of `http-cache-semantics` trying to refresh our original
+                    // data vs just sending the request through unchanged
+                    if req.headers() == request.headers() {
+                        let data_table = read_txn.open_table(DATA)?;
+                        data_table.get(key)?.map(|e| {
+                            let data = e.value();
+                            CacheCheck::TryRefresh((request, data))
+                        })
+                    } else {
+                        Some(CacheCheck::Miss(request))
+                    }
+                }
+            }
         };
 
         Ok(maybe_check)
-    }
-
-    pub fn fetch_remote_meta(&self, key: &RemoteKey) -> anyhow::Result<Option<RemoteMeta>> {
-        todo!();
-    }
-
-    pub fn fetch_remote_cache(
-        &self,
-        key: &RemoteKey,
-    ) -> anyhow::Result<Option<(RemoteMeta, ImageData)>> {
-        let read_txn = self.0.begin_read()?;
-        // let meta_table = read_txn.open_table(METADATA_TABLE)?;
-        // let maybe_meta = meta_table.get(key)?.map(|entry| entry.value());
-        // TODO: check the probe against the stored meta:
-        //
-        // - If the cache is fresh then return the meta and image data
-        // - If the cache is stale and there's and e-tag then send the etag with the request to
-        //   potentially skip transferring the body
-        // - Otherwise fetch the image from source (either local or remote) and store relevant info
-        //
-        // Notably we should ignore caching images from local sources, but I'm not sure how
-        // accurately we can determine that (although it's probably easy to get good enough to
-        // work)
-        todo!();
     }
 
     pub fn run_garbage_collector(&self) -> anyhow::Result<()> {
@@ -195,5 +185,6 @@ impl Cache {
 
 pub enum CacheCheck {
     Fresh(ImageData),
-    Stale(request::Parts),
+    TryRefresh((request::Parts, ImageData)),
+    Miss(request::Parts),
 }

@@ -185,9 +185,21 @@ impl FromStr for StandardRequest {
     }
 }
 
+impl From<&StandardRequest> for request::Parts {
+    fn from(req: &StandardRequest) -> Self {
+        let mut parts = request::Request::builder().method(req.method())
+            .uri(req.uri())
+            .body(()).unwrap()
+            .into_parts().0;
+        parts.headers = req.headers().to_owned();
+        parts
+    }
+}
+
 impl From<&StandardRequest> for ureq::Request {
-    fn from(standard_req: &StandardRequest) -> Self {
-        ureq::get(&standard_req.url.to_string())
+    fn from(req: &StandardRequest) -> Self {
+        let parts: request::Parts = req.into();
+        parts.into()
     }
 }
 
