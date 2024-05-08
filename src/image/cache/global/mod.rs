@@ -13,6 +13,8 @@ use redb::{AccessGuard, Database, TableDefinition};
 
 mod redb_impls;
 
+// TODO: does storing a counter on the remotemeta help in terms of being able to keep track of a
+// value's consistency between txns?
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data except when necessary
 const META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
@@ -133,7 +135,15 @@ impl Cache {
         Self(db)
     }
 
-    pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
+    pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<CacheCheck> {
+        let check = self.check_remote_cache_inner(key)?.unwrap_or_else(|| {
+            let req: StandardRequest = key.into();
+            CacheCheck::Miss((&req).into())
+        });
+        Ok(check)
+    }
+
+    pub fn check_remote_cache_inner(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
         // TODO: avoid re-doing this
         let req: StandardRequest = key.into();
         let read_txn = self.0.begin_read()?;
@@ -159,13 +169,14 @@ impl Cache {
                     // requests as a proxy of `http-cache-semantics` trying to refresh our original
                     // data vs just sending the request through unchanged
                     if req.headers() == request.headers() {
+                        // No change to our usual headers means this is a new request
+                        Some(CacheCheck::Miss(request))
+                    } else {
                         let data_table = read_txn.open_table(DATA)?;
                         data_table.get(key)?.map(|e| {
                             let data = e.value();
                             CacheCheck::TryRefresh((request, data))
                         })
-                    } else {
-                        Some(CacheCheck::Miss(request))
                     }
                 }
             }

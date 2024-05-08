@@ -261,6 +261,9 @@ pub enum SlowL1Cont {
     FetchRemote(ureq::Request),
 }
 
+// TODO: expose the cache through a channel and have a cache manager thread that handles requests
+// through a pool of workers.
+
 // TODO: need to be able to pass in a fake time source, so that we can reasonably test this
 pub struct LayeredCache {
     per_session: session::Cache,
@@ -310,13 +313,11 @@ impl LayeredCache {
         let image_date = match cont {
             SlowL1Cont::CheckRemoteCache(remote) => match &self.global {
                 Some(global) => match global.check_remote_cache(&remote)? {
-                    // TODO: update the per-session cache
-                    // TODO: update the LRU time
-                    Some(global::CacheCheck::Fresh(image_data)) => image_data,
-                    Some(global::CacheCheck::Stale(req_parts)) => {
-                        self.slow_l1_cont(SlowL1Cont::FetchRemote(req_parts.into()))?
+                    global::CacheCheck::Fresh(image_data) => image_data,
+                    global::CacheCheck::TryRefresh((req_parts, image_data)) => {
+                        todo!();
                     }
-                    None => self.slow_l1_cont(SlowL1Cont::FetchRemote(remote.into()))?,
+                    global::CacheCheck::Miss(req_parts) => self.slow_l1_cont(SlowL1Cont::FetchRemote(req_parts.into()))?,
                 },
                 None => self.slow_l1_cont(SlowL1Cont::FetchRemote(remote.into()))?,
             },
