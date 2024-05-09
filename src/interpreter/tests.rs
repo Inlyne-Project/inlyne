@@ -119,7 +119,7 @@ impl InterpreterOpts {
         let surface_format = TextureFormat::Bgra8UnormSrgb;
         let hidpi_scale = 1.0;
         let image_cache = ImageCache::default();
-        let window = Arc::new(parking_lot::Mutex::new(DummyWindow(counter)));
+        let window = Arc::new(Mutex::new(DummyWindow(counter)));
         let interpreter = HtmlInterpreter::new_with_interactor(
             Arc::clone(&element_queue),
             theme,

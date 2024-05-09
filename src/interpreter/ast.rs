@@ -52,12 +52,11 @@ impl InheritedState {
     fn set_align(&mut self, align: Option<Align>) {
         self.text_options.align = align.or(self.text_options.align);
     }
-    fn set_align_from_attributes(&mut self, attributes: Attributes) {
+    fn set_align_from_attributes(&mut self, attributes: &[Attr]) {
         self.set_align(attributes.iter().find_map(|attr| attr.to_align()));
     }
 }
 
-type Attributes<'a> = &'a [Attr];
 #[derive(Copy, Clone)]
 pub struct Input<'a>(&'a [HirNode]);
 impl<'a> Input<'a> {
@@ -151,12 +150,13 @@ impl AstOpts {
 
 pub struct Ast {
     pub opts: AstOpts,
+    pub elements: Arc<Mutex<Vec<Element>>>,
 }
 impl Ast {
-    pub fn new(opts: AstOpts) -> Self {
-        Self { opts }
+    pub fn new(opts: AstOpts, elements: Arc<Mutex<Vec<Element>>>) -> Self {
+        Self { opts, elements }
     }
-    pub fn interpret(&self, hir: Hir) -> Vec<Element> {
+    pub fn interpret(&self, hir: Hir) {
         let nodes = hir.content();
         let root = nodes.first().unwrap().content.clone();
         let state =
@@ -188,8 +188,10 @@ impl Ast {
                     None
                 }
             })
-            .flatten()
-            .collect()
+            .for_each(|part| {
+                self.elements.lock().extend(part);
+                self.opts.window.lock().request_redraw();
+            })
     }
 }
 
@@ -254,7 +256,7 @@ trait Process {
     );
     fn process_content<'a>(
         _global: &Static,
-        _element: Self::Context<'a>,
+        _element: Self::Context<'_>,
         _state: State,
         _input: impl IntoIterator<Item = &'a TextOrHirNode>,
         _output: &mut impl OutputStream<Output = Element>,
@@ -378,7 +380,13 @@ impl Process for FlowProcess {
             TagName::Anchor => {
                 for attr in attributes {
                     match attr {
-                        Attr::Href(link) => state.text_options.link = Some(link.as_str().into()),
+                        Attr::Href(link) => {
+                            let link = percent_decode_str(link)
+                                .decode_utf8()
+                                .expect("Should be valid when link is Utf8")
+                                .into();
+                            state.text_options.link = Some(link);
+                        }
                         Attr::Anchor(a) => {
                             let a = percent_decode_str(a)
                                 .decode_utf8()
@@ -571,7 +579,7 @@ impl Process for FlowProcess {
 
     fn process_content<'a>(
         global: &Static,
-        element: Self::Context<'a>,
+        element: Self::Context<'_>,
         state: State,
         content: impl IntoIterator<Item = &'a TextOrHirNode>,
         output: &mut impl OutputStream<Output = Element>,
@@ -1011,7 +1019,7 @@ impl Process for TableCellProcess {
         (table, is_header): Self::Context<'_>,
         mut state: State,
         node: &HirNode,
-        output: &mut impl OutputStream<Output = Element>,
+        _output: &mut impl OutputStream<Output = Element>,
     ) {
         let row = table
             .rows

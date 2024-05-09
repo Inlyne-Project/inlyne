@@ -86,8 +86,7 @@ impl WindowInteractor for LiveWindow {
 }
 
 pub struct HtmlInterpreter {
-    element_queue: Arc<Mutex<Vec<Element>>>,
-    window: Arc<parking_lot::Mutex<dyn WindowInteractor + Send>>,
+    window: Arc<Mutex<dyn WindowInteractor + Send>>,
     theme: Theme,
     ast: Ast,
 }
@@ -129,25 +128,23 @@ impl HtmlInterpreter {
         surface_format: TextureFormat,
         hidpi_scale: f32,
         image_cache: ImageCache,
-        window: Arc<parking_lot::Mutex<dyn WindowInteractor + Send>>,
+        window: Arc<Mutex<dyn WindowInteractor + Send>>,
         color_scheme: Option<ResolvedTheme>,
     ) -> Self {
-        let ast = Ast::new(AstOpts {
-            anchorizer: Default::default(),
-            theme: theme.clone(),
-            surface_format,
-            hidpi_scale,
-            image_cache,
-            window: Arc::clone(&window),
-            color_scheme,
-        });
-
-        Self {
+        let ast = Ast::new(
+            AstOpts {
+                anchorizer: Default::default(),
+                theme: theme.clone(),
+                surface_format,
+                hidpi_scale,
+                image_cache,
+                window: Arc::clone(&window),
+                color_scheme,
+            },
             element_queue,
-            theme,
-            window,
-            ast,
-        }
+        );
+
+        Self { theme, window, ast }
     }
 
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
@@ -175,7 +172,7 @@ impl HtmlInterpreter {
             assert!(input.is_empty());
             tok.end();
 
-            *self.element_queue.lock() = self.ast.interpret(std::mem::take(&mut tok.sink));
+            self.ast.interpret(std::mem::take(&mut tok.sink));
             self.window.lock().finished_single_doc();
         }
     }

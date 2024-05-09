@@ -237,33 +237,26 @@ impl Inlyne {
         renderer: &mut Renderer,
         elements: &mut Vec<Positioned<Element>>,
     ) {
-        let queue = {
-            element_queue
-                .try_lock()
-                .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
-        };
-        if let Some(queue) = queue {
-            let positioning_start = Instant::now();
+        let positioning_start = Instant::now();
 
-            for element in queue {
-                // Position element and add it to elements
-                let mut positioned_element = Positioned::new(element);
-                renderer
-                    .positioner
-                    .position(
-                        &mut renderer.text_system,
-                        &mut positioned_element,
-                        renderer.zoom,
-                    )
-                    .unwrap();
-                renderer.positioner.reserved_height +=
-                    DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
-                        + positioned_element.bounds.as_ref().unwrap().size.1;
-                elements.push(positioned_element);
-            }
-
-            histogram!(HistTag::Positioner).record(positioning_start.elapsed());
+        for element in element_queue.lock().drain(..) {
+            // Position element and add it to elements
+            let mut positioned_element = Positioned::new(element);
+            renderer
+                .positioner
+                .position(
+                    &mut renderer.text_system,
+                    &mut positioned_element,
+                    renderer.zoom,
+                )
+                .unwrap();
+            renderer.positioner.reserved_height +=
+                DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
+                    + positioned_element.bounds.as_ref().unwrap().size.1;
+            elements.push(positioned_element);
         }
+
+        histogram!(HistTag::Positioner).record(positioning_start.elapsed());
     }
 
     fn load_file(&mut self, contents: String) {

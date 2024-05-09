@@ -85,9 +85,7 @@ impl Hir {
     fn process_end_tag(&mut self, tag: Tag) {
         let tag_name = match TagName::try_from(&tag.name) {
             Ok(name) => name,
-            Err(name) => {
-                return;
-            }
+            Err(_) => return,
         };
         if tag_name.is_void() {
             return;
