@@ -1,14 +1,10 @@
-use std::cmp;
 use std::io;
 use std::time::Instant;
 
 use crate::metrics::{histogram, HistTag};
 use crate::utils::usize_in_mib;
 
-use image::codecs::{
-    gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder, tiff::TiffDecoder, webp::WebPDecoder,
-};
-use image::{ColorType, GenericImageView, ImageDecoder, ImageFormat, ImageResult};
+use image::GenericImageView;
 use lz4_flex::frame::{BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
 pub fn lz4_compress<R: io::Read>(reader: &mut R) -> anyhow::Result<Vec<u8>> {
@@ -36,159 +32,6 @@ pub fn lz4_decompress(blob: &[u8], size: usize) -> anyhow::Result<Vec<u8>> {
 pub type ImageParts = (Vec<u8>, (u32, u32));
 
 pub fn decode_and_compress(contents: &[u8]) -> anyhow::Result<ImageParts> {
-    // We can stream decoding some formats although decoding may still load everything into memory
-    // at once depending on how the decoder behaves
-    let maybe_streamed = match image::guess_format(contents)? {
-        ImageFormat::Png => stream_decode_and_compress(contents, PngDecoder::new)?,
-        ImageFormat::Jpeg => stream_decode_and_compress(contents, JpegDecoder::new)?,
-        ImageFormat::Gif => stream_decode_and_compress(contents, GifDecoder::new)?,
-        ImageFormat::Tiff => stream_decode_and_compress(contents, TiffDecoder::new)?,
-        ImageFormat::WebP => stream_decode_and_compress(contents, WebPDecoder::new)?,
-        _ => None,
-    };
-
-    match maybe_streamed {
-        Some(streamed) => Ok(streamed),
-        None => fallback_decode_and_compress(contents),
-    }
-}
-
-fn stream_decode_and_compress<'img, Dec>(
-    contents: &'img [u8],
-    decoder_constructor: fn(io::Cursor<&'img [u8]>) -> ImageResult<Dec>,
-) -> anyhow::Result<Option<ImageParts>>
-where
-    Dec: ImageDecoder<'img>,
-{
-    let dec = decoder_constructor(io::Cursor::new(contents))?;
-
-    let total_size = dec.total_bytes();
-    let dimensions = dec.dimensions();
-    let start = Instant::now();
-
-    let Some(mut adapter) = Rgba8Adapter::new(dec) else {
-        return Ok(None);
-    };
-
-    let maybe_image_parts = lz4_compress(&mut adapter).ok().map(|lz4_blob| {
-        tracing::debug!(
-            "Streaming image decode & compression:\n\
-            - Full {:.2} MiB\n\
-            - Compressed {:.2} MiB\n\
-            - Time {:.2?}",
-            usize_in_mib(total_size as usize),
-            usize_in_mib(lz4_blob.len()),
-            start.elapsed(),
-        );
-
-        (lz4_blob, dimensions)
-    });
-    Ok(maybe_image_parts)
-}
-
-/// An adapter that can do a streaming transformation from some pixel formats to RGBA8
-enum Rgba8Adapter<'img> {
-    Rgba8(Box<dyn io::Read + 'img>),
-    Rgb8 {
-        source: Box<dyn io::Read + 'img>,
-        scratch: Vec<u8>,
-    },
-}
-
-impl<'img> Rgba8Adapter<'img> {
-    fn new<Dec: ImageDecoder<'img>>(dec: Dec) -> Option<Self> {
-        let adapter = match dec.color_type() {
-            ColorType::Rgba8 => {
-                // TODO: Need to figure out a workaround for streaming or eat the memory usage
-                #[allow(deprecated)]
-                Self::Rgba8(Box::new(dec.into_reader().ok()?))
-            }
-            ColorType::Rgb8 => Self::Rgb8 {
-                // TODO: Need to figure out a workaround for streaming or eat the memory usage
-                #[allow(deprecated)]
-                source: Box::new(dec.into_reader().ok()?),
-                scratch: Vec::new(),
-            },
-            _ => return None,
-        };
-
-        Some(adapter)
-    }
-}
-
-impl<'img> io::Read for Rgba8Adapter<'img> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        // TODO: can also do 16 bit adapters, but how to do them efficiently?
-        match self {
-            // Already the format we want, so just forward the data
-            Self::Rgba8(inner) => inner.read(buf),
-            // Transformation simply adds in a u8::MAX alpha channel
-            // [r1, g1, b1, r2, g2, b2, ...] => [r1, g1, b1, u8::MAX, r2, g2, b2, u8::MAX, ...]
-            //
-            // The actual implementation
-            // 1. Copies any left-over data from the scratch buffer to the output buffer
-            // 2. Performs a `.read()` on the underlying source to fill the scratch buffer
-            // 3. Does a pass backwards over the buffer to shift each pixel to its final position
-            //    including the u8::MAX alpha channel
-            // 4. Copies data from the scratch buffer to the output buffer
-            // 5. Trims the scratch buffer to hold the left-over data
-            //
-            // This appears to be roughly just as fast as loading the full image into memory as an
-            // `image::DynamicImage` and then converting `.into_rgba8()` when testing with ~55 MiB
-            // of raw image data
-            Self::Rgb8 { source, scratch } => {
-                // Step 1.
-                if scratch.len() > buf.len() {
-                    buf.copy_from_slice(&scratch[..buf.len()]);
-                    scratch.copy_within(buf.len().., 0);
-                    scratch.truncate(scratch.len() - buf.len());
-                    return Ok(buf.len());
-                }
-
-                let (left, right) = buf.split_at_mut(scratch.len());
-
-                left.copy_from_slice(scratch);
-
-                // Step 2.
-                let num_pixels = right.len() / 3 + 1;
-                scratch.resize(num_pixels * 4, 0);
-                let n = source.read(&mut scratch[..num_pixels * 3])?;
-                if n == 0 {
-                    scratch.clear();
-                    return Ok(left.len());
-                }
-
-                // Step 3.
-                let bytes_transformed = n * 4 / 3;
-                let mut rgb_end = n - 1;
-                let mut rgba_end = bytes_transformed - 1;
-                loop {
-                    scratch[rgba_end] = u8::MAX;
-                    scratch[rgba_end - 1] = scratch[rgb_end];
-                    scratch[rgba_end - 2] = scratch[rgb_end - 1];
-                    scratch[rgba_end - 3] = scratch[rgb_end - 2];
-
-                    rgba_end = match rgba_end.checked_sub(4) {
-                        Some(n) => n,
-                        None => break,
-                    };
-                    rgb_end -= 3;
-                }
-
-                // Step 4.
-                right.copy_from_slice(&scratch[..right.len()]);
-
-                // Step 5.
-                scratch.copy_within(right.len().., 0);
-                scratch.truncate(scratch.len() - right.len());
-
-                Ok(left.len() + cmp::min(right.len(), bytes_transformed))
-            }
-        }
-    }
-}
-
-fn fallback_decode_and_compress(contents: &[u8]) -> anyhow::Result<(Vec<u8>, (u32, u32))> {
     let image = image::load_from_memory(contents)?;
     let dimensions = image.dimensions();
     let image_data = image.into_rgba8().into_raw();
