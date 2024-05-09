@@ -15,8 +15,9 @@ use crate::Element;
 use comrak::Anchorizer;
 use glyphon::FamilyOwned;
 use parking_lot::Mutex;
-use std::borrow::Cow;
+use percent_encoding::percent_decode_str;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use wgpu::TextureFormat;
 
@@ -40,6 +41,7 @@ struct InheritedState {
     text_options: TextOptions,
     span: Span,
 }
+
 impl InheritedState {
     fn with_span_color(span_color: [f32; 4]) -> Self {
         Self {
@@ -56,8 +58,15 @@ impl InheritedState {
 }
 
 type Attributes<'a> = &'a [Attr];
-pub type Input<'a> = &'a [HirNode];
-type State<'a> = Cow<'a, InheritedState>;
+#[derive(Copy, Clone)]
+pub struct Input<'a>(&'a [HirNode]);
+impl<'a> Input<'a> {
+    fn get(&self, index: usize) -> &'a HirNode {
+        self.0
+            .get(index)
+            .expect("Input should be called with an valid index")
+    }
+}
 type Opts<'a> = &'a AstOpts;
 
 trait OutputStream {
@@ -100,15 +109,15 @@ impl<T> OutputStream for Dummy<T> {
 }
 trait Push {
     fn push_spacer(&mut self);
-    fn push_text_box(&mut self, text_box: &mut TextBox, opts: Opts, state: &State);
+    fn push_text_box(&mut self, global: &Static, element: &mut TextBox, state: State);
 }
 impl<T: OutputStream<Output = Element>> Push for T {
     fn push_spacer(&mut self) {
         self.push(Spacer::invisible())
     }
-    fn push_text_box(&mut self, text_box: &mut TextBox, opts: Opts, state: &State) {
-        let mut tb = std::mem::replace(text_box, TextBox::new(vec![], opts.hidpi_scale));
-        text_box.indent = state.global_indent;
+    fn push_text_box(&mut self, global: &Static, element: &mut TextBox, state: State) {
+        let mut tb = std::mem::replace(element, TextBox::new(vec![], global.opts.hidpi_scale));
+        element.indent = state.global_indent;
 
         if !tb.texts.is_empty() {
             let content = tb.texts.iter().any(|text| !text.text.is_empty());
@@ -118,7 +127,7 @@ impl<T: OutputStream<Output = Element>> Push for T {
                 self.push(tb);
             }
         } else {
-            text_box.is_checkbox = tb.is_checkbox;
+            element.is_checkbox = tb.is_checkbox;
         }
     }
 }
@@ -150,23 +159,30 @@ impl Ast {
     pub fn interpret(&self, hir: Hir) -> Vec<Element> {
         let nodes = hir.content();
         let root = nodes.first().unwrap().content.clone();
-        let state = State::Owned(InheritedState::with_span_color(
-            self.opts.native_color(self.opts.theme.code_color),
-        ));
+        let state =
+            InheritedState::with_span_color(self.opts.native_color(self.opts.theme.code_color));
+
+        let input = Input(&nodes);
+
+        let global = Static {
+            opts: &self.opts,
+            input,
+        };
+
         root.into_iter()
             .filter_map(|ton| {
                 if let TextOrHirNode::Hir(node) = ton {
                     let mut out = vec![];
                     let mut tb = TextBox::new(vec![], self.opts.hidpi_scale);
+                    let state = State::Borrowed(&state);
                     FlowProcess::process(
-                        &nodes,
-                        &mut out,
-                        &self.opts,
+                        &global,
                         &mut tb,
-                        FlowProcess::get_node(&nodes, node),
-                        state.clone(),
+                        state.borrow(),
+                        global.input.get(node),
+                        &mut out,
                     );
-                    out.push_text_box(&mut tb, &self.opts, &state);
+                    out.push_text_box(&global, &mut tb, state);
                     Some(out)
                 } else {
                     None
@@ -177,74 +193,121 @@ impl Ast {
     }
 }
 
-macro_rules! out {
-    () => {&mut impl OutputStream<Output=Element>};
+struct Static<'a> {
+    input: Input<'a>,
+    opts: Opts<'a>,
+}
+
+enum State<'a> {
+    Owned(InheritedState),
+    Borrowed(&'a InheritedState),
+}
+impl Deref for State<'_> {
+    type Target = InheritedState;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            State::Owned(ref inner) => inner,
+            State::Borrowed(inner) => inner,
+        }
+    }
+}
+impl DerefMut for State<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.promote();
+        match self {
+            State::Owned(inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+}
+impl<'a> State<'a> {
+    fn borrow(&'a self) -> Self {
+        match self {
+            State::Owned(ref inner) => State::Borrowed(inner),
+            State::Borrowed(inner) => State::Borrowed(inner),
+        }
+    }
+    /// Creates Owned variant
+    fn promote(&mut self) {
+        if let State::Borrowed(inner) = self {
+            *self = State::Owned(inner.to_owned());
+        }
+    }
+}
+impl Clone for State<'_> {
+    fn clone(&self) -> Self {
+        match self {
+            State::Owned(inner) => State::Owned(inner.clone()),
+            State::Borrowed(inner) => State::Owned((*inner).clone()),
+        }
+    }
 }
 
 trait Process {
     type Context<'a>;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     );
     fn process_content<'a>(
-        _input: Input,
-        _output: out!(),
-        _opts: Opts,
-        _context: Self::Context<'_>,
-        _content: impl IntoIterator<Item = &'a TextOrHirNode>,
+        _global: &Static,
+        _element: Self::Context<'a>,
         _state: State,
+        _input: impl IntoIterator<Item = &'a TextOrHirNode>,
+        _output: &mut impl OutputStream<Output = Element>,
     ) {
         unimplemented!()
     }
-
-    fn process_node<T, N>(input: Input, node: &HirNode, mut text_fn: T, mut node_fn: N)
+    fn process_with<'a, I, N, T>(global: &Static, content: I, mut node_fn: N, mut text_fn: T)
     where
-        T: FnMut(&String),
+        I: IntoIterator<Item = &'a TextOrHirNode>,
         N: FnMut(&HirNode),
+        T: FnMut(&String),
     {
-        node.content.iter().for_each(|node| match node {
-            TextOrHirNode::Text(text) => text_fn(text),
-            TextOrHirNode::Hir(node) => node_fn(Self::get_node(input, *node)),
-        })
+        for ton in content {
+            match ton {
+                TextOrHirNode::Text(str) => text_fn(str),
+                TextOrHirNode::Hir(node) => node_fn(global.input.get(*node)),
+            }
+        }
     }
-    fn get_node(input: Input, index: usize) -> &HirNode {
-        input.get(index).unwrap()
-    }
-    fn text(text_box: &mut TextBox, mut string: &str, opts: Opts, mut state: State) {
-        let text_native_color = opts.native_color(opts.theme.text_color);
+    fn text(global: &Static, element: &mut TextBox, state: State, mut string: &str) {
+        let text_native_color = global.opts.native_color(global.opts.theme.text_color);
         if string.trim().is_empty() {
             if state.text_options.pre_formatted {
-                text_box.texts.push(Text::new(
+                element.texts.push(Text::new(
                     "\n".to_string(),
-                    opts.hidpi_scale,
+                    global.opts.hidpi_scale,
                     text_native_color,
                 ));
             }
-            if let Some(last_text) = text_box.texts.last() {
+            if let Some(last_text) = element.texts.last() {
                 if let Some(last_char) = last_text.text.chars().last() {
                     if !last_char.is_whitespace() {
-                        text_box.texts.push(Text::new(
+                        element.texts.push(Text::new(
                             " ".to_string(),
-                            opts.hidpi_scale,
+                            global.opts.hidpi_scale,
                             text_native_color,
                         ));
                     }
                 }
             }
         } else {
-            if text_box.texts.is_empty() && !state.text_options.pre_formatted {
+            if element.texts.is_empty() && !state.text_options.pre_formatted {
                 string = string.trim_start();
             }
 
-            let mut text = Text::new(string.to_string(), opts.hidpi_scale, text_native_color);
+            let mut text = Text::new(
+                string.to_string(),
+                global.opts.hidpi_scale,
+                text_native_color,
+            );
 
             if state.text_options.block_quote >= 1 {
-                text_box.set_quote_block(state.text_options.block_quote as usize);
+                element.set_quote_block(state.text_options.block_quote as usize);
             }
             if state.text_options.code {
                 text = text
@@ -260,9 +323,9 @@ trait Process {
                     text = text.make_underlined(true);
                 }
             }
-            if let Some(link) = state.to_mut().text_options.link.take() {
+            if let Some(ref link) = state.text_options.link {
                 text = text.with_link(link.to_string());
-                text = text.with_color(opts.native_color(opts.theme.link_color));
+                text = text.with_color(global.opts.native_color(global.opts.theme.link_color));
             }
             if state.text_options.bold {
                 text = text.make_bold(true);
@@ -278,9 +341,9 @@ trait Process {
             }
 
             if state.text_options.small {
-                text_box.font_size = 12.;
+                element.font_size = 12.;
             }
-            text_box.texts.push(text);
+            element.texts.push(text);
         }
     }
 }
@@ -289,159 +352,129 @@ struct FlowProcess;
 impl Process for FlowProcess {
     type Context<'a> = &'a mut TextBox;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         let attributes = &node.attributes;
         match node.tag {
             TagName::Paragraph => {
-                state.to_mut().set_align_from_attributes(attributes);
-                context.set_align_or_default(state.text_options.align);
+                state.set_align_from_attributes(attributes);
+                element.set_align_or_default(state.text_options.align);
 
                 FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
+                    global,
+                    element,
+                    state.borrow(),
                     &node.content,
-                    state.clone(),
+                    output,
                 );
 
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state);
                 output.push_spacer();
             }
             TagName::Anchor => {
                 for attr in attributes {
                     match attr {
-                        Attr::Href(link) => {
-                            state.to_mut().text_options.link = Some(link.to_owned())
+                        Attr::Href(link) => state.text_options.link = Some(link.as_str().into()),
+                        Attr::Anchor(a) => {
+                            let a = percent_decode_str(a)
+                                .decode_utf8()
+                                .expect("Should be valid when link is Utf8")
+                                .into_owned();
+                            element.set_anchor(a.to_owned());
                         }
-                        Attr::Anchor(a) => context.set_anchor(a.to_owned()),
                         _ => {}
                     }
                 }
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Div => {
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state.borrow());
 
-                state.to_mut().set_align_from_attributes(attributes);
-                context.set_align_or_default(state.text_options.align);
+                state.set_align_from_attributes(attributes);
+                element.set_align_or_default(state.text_options.align);
 
                 FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
+                    global,
+                    element,
+                    state.borrow(),
                     &node.content,
-                    state.clone(),
+                    output,
                 );
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state);
             }
             TagName::BlockQuote => {
-                output.push_text_box(context, opts, &state);
-                state.to_mut().text_options.block_quote += 1;
-                state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
-
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                output.push_text_box(global, element, state.borrow());
+                state.text_options.block_quote += 1;
+                state.global_indent += DEFAULT_MARGIN / 2.;
 
                 let indent = state.global_indent;
 
-                output.push_text_box(context, opts, &state);
+                FlowProcess::process_content(
+                    global,
+                    element,
+                    state.borrow(),
+                    &node.content,
+                    output,
+                );
+                output.push_text_box(global, element, state);
 
                 if indent == DEFAULT_MARGIN / 2. {
                     output.push_spacer();
                 }
             }
             TagName::BoldOrStrong => {
-                state.to_mut().text_options.bold = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.bold = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
-            TagName::Break => output.push_text_box(context, opts, &state),
+            TagName::Break => output.push_text_box(global, element, state),
             TagName::Code => {
-                state.to_mut().text_options.code = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.code = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Details => {
-                DetailsProcess::process(input, output, opts, (), node, state);
+                DetailsProcess::process(global, (), state, node, output);
             }
             TagName::Summary => tracing::warn!("Summary can only be in an Details element"),
             TagName::Section => {}
             TagName::EmphasisOrItalic => {
-                state.to_mut().text_options.italic = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.italic = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Header(header) => {
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state.borrow());
                 output.push_spacer();
 
-                state.to_mut().set_align_from_attributes(attributes);
-                context.set_align_or_default(state.text_options.align);
+                state.set_align_from_attributes(attributes);
+                element.set_align_or_default(state.text_options.align);
 
-                state.to_mut().text_options.bold = true;
-                context.font_size *= header.size_multiplier();
+                state.text_options.bold = true;
+                element.font_size *= header.size_multiplier();
 
                 if header == HeaderType::H1 {
-                    state.to_mut().text_options.underline = true;
+                    state.text_options.underline = true;
                 }
                 FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
+                    global,
+                    element,
+                    state.borrow(),
                     &node.content,
-                    state.clone(),
+                    output,
                 );
 
-                let anchor = context.texts.iter().flat_map(|t| t.text.chars()).collect();
-                let anchor = opts.anchorizer.lock().anchorize(anchor);
-                context.set_anchor(format!("#{anchor}"));
-                output.push_text_box(context, opts, &state);
+                let anchor = element.texts.iter().flat_map(|t| t.text.chars()).collect();
+                let anchor = global.opts.anchorizer.lock().anchorize(anchor);
+                element.set_anchor(format!("#{anchor}"));
+                output.push_text_box(global, element, state);
                 output.push_spacer();
             }
             TagName::HorizontalRuler => output.push(Spacer::visible()),
-            TagName::Picture => PictureProcess::process(input, output, opts, (), node, state),
+            TagName::Picture => PictureProcess::process(global, (), state, node, output),
             TagName::Source => tracing::warn!("Source tag can only be inside an Picture."),
-            TagName::Image => ImageProcess::process(input, output, opts, None, node, state),
+            TagName::Image => ImageProcess::process(global, None, state, node, output),
             TagName::Input => {
                 let mut is_checkbox = false;
                 let mut is_checked = false;
@@ -453,60 +486,45 @@ impl Process for FlowProcess {
                     }
                 }
                 if is_checkbox {
-                    context.set_checkbox(is_checked);
+                    element.set_checkbox(is_checked);
                 }
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::ListItem => tracing::warn!("ListItem can only be in an List element"),
             TagName::OrderedList => {
-                OrderedListProcess::process(input, output, opts, context, node, state.clone());
+                OrderedListProcess::process(global, element, state, node, output)
             }
             TagName::UnorderedList => {
-                UnorderedListProcess::process(input, output, opts, context, node, state.clone());
+                UnorderedListProcess::process(global, element, state, node, output)
             }
             TagName::PreformattedText => {
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state.borrow());
                 let style = attributes
                     .iter()
                     .find_map(|attr| attr.to_style())
                     .unwrap_or_default();
                 for style in style::Iter::new(&style) {
                     if let Style::BackgroundColor(color) = style {
-                        let native_color = opts.native_color(color);
-                        context.set_background_color(native_color);
+                        let native_color = global.opts.native_color(color);
+                        element.set_background_color(native_color);
                     }
                 }
-                state.to_mut().text_options.pre_formatted = true;
-                context.set_code_block(true);
+                state.text_options.pre_formatted = true;
+                element.set_code_block(true);
                 FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
+                    global,
+                    element,
+                    state.borrow(),
                     &node.content,
-                    state.clone(),
+                    output,
                 );
 
-                output.push_text_box(context, opts, &state);
+                output.push_text_box(global, element, state);
                 output.push_spacer();
             }
             TagName::Small => {
-                state.to_mut().text_options.small = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.small = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Span => {
                 let style_str = attributes
@@ -516,37 +534,21 @@ impl Process for FlowProcess {
                 for style in style::Iter::new(&style_str) {
                     match style {
                         Style::Color(color) => {
-                            state.to_mut().span.color = opts.native_color(color);
+                            state.span.color = global.opts.native_color(color);
                         }
-                        Style::FontWeight(weight) => state.to_mut().span.weight = weight,
-                        Style::FontStyle(style) => state.to_mut().span.style = style,
-                        Style::TextDecoration(decor) => state.to_mut().span.decor = decor,
+                        Style::FontWeight(weight) => state.span.weight = weight,
+                        Style::FontStyle(style) => state.span.style = style,
+                        Style::TextDecoration(decor) => state.span.decor = decor,
                         _ => {}
                     }
                 }
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Strikethrough => {
-                state.to_mut().text_options.strike_through = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.strike_through = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
-            TagName::Table => {
-                TableProcess::process(input, output, opts, (), node, state.clone());
-            }
+            TagName::Table => TableProcess::process(global, (), state, node, output),
             TagName::TableHead | TagName::TableBody => {
                 tracing::warn!("TableHead and TableBody can only be in an Table element");
             }
@@ -560,36 +562,31 @@ impl Process for FlowProcess {
                 tracing::warn!("TableDataCell can only be in an TableRow element");
             }
             TagName::Underline => {
-                state.to_mut().text_options.underline = true;
-                FlowProcess::process_content(
-                    input,
-                    output,
-                    opts,
-                    context,
-                    &node.content,
-                    state.clone(),
-                );
+                state.text_options.underline = true;
+                FlowProcess::process_content(global, element, state, &node.content, output);
             }
             TagName::Root => tracing::error!("Root element can't reach interpreter."),
         }
     }
 
     fn process_content<'a>(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        content: impl IntoIterator<Item = &'a TextOrHirNode>,
+        global: &Static,
+        element: Self::Context<'a>,
         state: State,
+        content: impl IntoIterator<Item = &'a TextOrHirNode>,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         for node in content {
             match node {
-                TextOrHirNode::Text(string) => {
-                    Self::text(context, string.as_str(), opts, state.clone())
-                }
+                TextOrHirNode::Text(string) => Self::text(global, element, state.borrow(), string),
                 TextOrHirNode::Hir(node_index) => {
-                    let node = Self::get_node(input, *node_index);
-                    Self::process(input, output, opts, context, node, state.clone());
+                    Self::process(
+                        global,
+                        element,
+                        state.borrow(),
+                        global.input.get(*node_index),
+                        output,
+                    );
                 }
             }
         }
@@ -600,52 +597,50 @@ struct DetailsProcess;
 impl Process for DetailsProcess {
     type Context<'a> = ();
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        _context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        _element: Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        let mut section = Section::bare(opts.hidpi_scale);
+        let mut section = Section::bare(global.opts.hidpi_scale);
         *section.hidden.get_mut() = true;
 
         let mut content = node.content.iter();
-        let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
 
         let Some(first) = node.content.first() else {
             return;
         };
         match first {
-            TextOrHirNode::Hir(index) if Self::get_node(input, *index).tag == TagName::Summary => {
+            TextOrHirNode::Hir(index) if global.input.get(*index).tag == TagName::Summary => {
                 content.next();
 
-                let summary = Self::get_node(input, *index);
+                let summary = global.input.get(*index);
 
                 FlowProcess::process_content(
-                    input,
-                    &mut Dummy::new(),
-                    opts,
+                    global,
                     &mut tb,
-                    summary.content.iter(),
-                    state.clone(),
+                    state.borrow(),
+                    &summary.content,
+                    &mut Dummy::new(),
                 );
 
                 *section.summary = Some(Positioned::new(tb));
             }
             _ => {
-                let mut tb = TextBox::new(vec![], opts.hidpi_scale);
-                Self::text(&mut tb, "Details", opts, state.clone());
+                let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
+                Self::text(global, &mut tb, state.borrow(), "Details");
                 *section.summary = Some(Positioned::new(Element::TextBox(tb)))
             }
         }
 
         let mut section_content = vec![];
         let s = &mut section_content.map(Positioned::new);
-        let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
 
-        FlowProcess::process_content(input, s, opts, &mut tb, content, state.clone());
-        s.push_text_box(&mut tb, opts, &state);
+        FlowProcess::process_content(global, &mut tb, state.borrow(), content, s);
+        s.push_text_box(global, &mut tb, state);
         section.elements = section_content;
         output.push(section)
     }
@@ -655,12 +650,11 @@ struct OrderedListProcess;
 impl Process for OrderedListProcess {
     type Context<'a> = &'a mut TextBox;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         let mut index = 1;
         for attr in &node.attributes {
@@ -668,27 +662,26 @@ impl Process for OrderedListProcess {
                 index = *start;
             }
         }
-        output.push_text_box(context, opts, &state);
-        state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
+        output.push_text_box(global, element, state.borrow());
+        state.global_indent += DEFAULT_MARGIN / 2.;
 
-        Self::process_node(
-            input,
-            node,
-            |_| {},
+        Self::process_with(
+            global,
+            &node.content,
             |node| match node.tag {
                 TagName::ListItem => {
                     ListItemProcess::process(
-                        input,
-                        output,
-                        opts,
-                        (context, Some(index)),
+                        global,
+                        (element, Some(index)),
+                        state.borrow(),
                         node,
-                        state.clone(),
+                        output,
                     );
                     index += 1;
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
             },
+            |_| {},
         );
         if state.global_indent == DEFAULT_MARGIN / 2. {
             output.push_spacer();
@@ -699,33 +692,25 @@ struct UnorderedListProcess;
 impl Process for UnorderedListProcess {
     type Context<'a> = &'a mut TextBox;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        output.push_text_box(context, opts, &state);
-        state.to_mut().global_indent += DEFAULT_MARGIN / 2.;
+        output.push_text_box(global, element, state.borrow());
+        state.global_indent += DEFAULT_MARGIN / 2.;
 
-        Self::process_node(
-            input,
-            node,
-            |_| {},
+        Self::process_with(
+            global,
+            &node.content,
             |node| match node.tag {
                 TagName::ListItem => {
-                    ListItemProcess::process(
-                        input,
-                        output,
-                        opts,
-                        (context, None),
-                        node,
-                        state.clone(),
-                    );
+                    ListItemProcess::process(global, (element, None), state.borrow(), node, output);
                 }
                 _ => tracing::warn!("Only ListItems can be inside an List"),
             },
+            |_| {},
         );
         if state.global_indent == DEFAULT_MARGIN / 2. {
             output.push_spacer();
@@ -736,19 +721,18 @@ struct ListItemProcess;
 impl Process for ListItemProcess {
     type Context<'a> = (&'a mut TextBox, Option<usize>);
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        (context, list_prefix): Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        (element, prefix): Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         let anchor = node.attributes.iter().find_map(|attr| attr.to_anchor());
         if let Some(anchor) = anchor {
-            context.set_anchor(anchor)
+            element.set_anchor(anchor)
         }
         let first_child_is_checkbox = if let Some(TextOrHirNode::Hir(node)) = node.content.first() {
-            let node = Self::get_node(input, *node);
+            let node = global.input.get(*node);
             if node.tag == TagName::Input {
                 node.attributes
                     .iter()
@@ -761,27 +745,32 @@ impl Process for ListItemProcess {
         };
 
         if !first_child_is_checkbox {
-            let prefix = match list_prefix {
+            let prefix = match prefix {
                 Some(num) => format!("{num}. "),
                 None => String::from("· "),
             };
-            context.texts.push(
+            element.texts.push(
                 Text::new(
                     prefix,
-                    opts.hidpi_scale,
-                    opts.native_color(opts.theme.text_color),
+                    global.opts.hidpi_scale,
+                    global.opts.native_color(global.opts.theme.text_color),
                 )
                 .make_bold(true),
             )
         }
-        FlowProcess::process_content(input, output, opts, context, &node.content, state.clone());
-        output.push_text_box(context, opts, &state)
+        FlowProcess::process_content(global, element, state.borrow(), &node.content, output);
+        output.push_text_box(global, element, state);
     }
 }
 
 struct ImageProcess;
 impl ImageProcess {
-    fn push_image_from_picture(output: out!(), picture: Picture, opts: Opts, mut state: State) {
+    fn push_image_from_picture(
+        opts: Opts,
+        state: State,
+        output: &mut impl OutputStream<Output = Element>,
+        picture: Picture,
+    ) {
         let align = picture.inner.align;
         let src = picture.resolve_src(opts.color_scheme).to_owned();
         let align = align.unwrap_or_default();
@@ -796,33 +785,32 @@ impl ImageProcess {
         }
         .with_align(align);
 
-        if let Some(ref link) = state.to_mut().text_options.link {
-            image.set_link(link.clone())
+        if let Some(ref link) = state.text_options.link {
+            image.set_link(link.to_string())
         }
         if let Some(size) = picture.inner.size {
             image = image.with_size(size);
         }
 
         output.push(image);
-        //Self::push_spacer(output, );
+        output.push_spacer()
     }
 }
 impl Process for ImageProcess {
     type Context<'a> = Option<Builder>;
     fn process(
-        _input: Input,
-        output: out!(),
-        opts: Opts,
-        mut context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        mut element: Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        if context.is_none() {
-            context = Some(Picture::builder());
+        if element.is_none() {
+            element = Some(Picture::builder());
         }
-        let mut builder = context.unwrap();
+        let mut builder = element.unwrap();
 
-        state.to_mut().set_align_from_attributes(&node.attributes);
+        state.set_align_from_attributes(&node.attributes);
         if let Some(align) = state.text_options.align {
             builder.set_align(align);
         }
@@ -838,7 +826,7 @@ impl Process for ImageProcess {
         }
 
         match builder.try_finish() {
-            Ok(pic) => Self::push_image_from_picture(output, pic, opts, state.clone()),
+            Ok(pic) => Self::push_image_from_picture(global.opts, state, output, pic),
             Err(err) => tracing::warn!("Invalid <img>: {err}"),
         }
     }
@@ -847,12 +835,11 @@ struct SourceProcess;
 impl Process for SourceProcess {
     type Context<'a> = &'a mut Builder;
     fn process(
-        _input: Input,
-        _output: out!(),
-        _opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        _global: &Static,
+        element: Self::Context<'_>,
         _state: State,
+        node: &HirNode,
+        _output: &mut impl OutputStream<Output = Element>,
     ) {
         let mut media = None;
         let mut src_set = None;
@@ -870,8 +857,8 @@ impl Process for SourceProcess {
         };
 
         match media {
-            PrefersColorScheme(ResolvedTheme::Dark) => context.set_dark_variant(src_set),
-            PrefersColorScheme(ResolvedTheme::Light) => context.set_light_variant(src_set),
+            PrefersColorScheme(ResolvedTheme::Dark) => element.set_dark_variant(src_set),
+            PrefersColorScheme(ResolvedTheme::Light) => element.set_light_variant(src_set),
         }
     }
 }
@@ -879,19 +866,18 @@ struct PictureProcess;
 impl Process for PictureProcess {
     type Context<'a> = ();
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        _context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        _element: Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         let mut builder = Picture::builder();
 
         let mut iter = node.content.iter().filter_map(|ton| match ton {
             TextOrHirNode::Text(_) => None,
             TextOrHirNode::Hir(node) => {
-                let node = Self::get_node(input, *node);
+                let node = global.input.get(*node);
                 match node.tag {
                     TagName::Image | TagName::Source => Some(node),
                     _ => None,
@@ -904,15 +890,16 @@ impl Process for PictureProcess {
         };
 
         for node in iter {
-            SourceProcess::process(input, output, opts, &mut builder, node, state.clone());
+            SourceProcess::process(global, &mut builder, state.borrow(), node, output);
+        }
+        let attrs = &node.attributes;
+        state.set_align_from_attributes(attrs);
+
+        if let Some(ref align) = state.text_options.align {
+            builder.set_align(*align);
         }
 
-        state.to_mut().set_align_from_attributes(&node.attributes);
-        if let Some(align) = state.text_options.align {
-            builder.set_align(align);
-        }
-
-        ImageProcess::process(input, output, opts, Some(builder), last, state.clone())
+        ImageProcess::process(global, Some(builder), state, last, output)
     }
 }
 
@@ -920,30 +907,29 @@ struct TableProcess;
 impl Process for TableProcess {
     type Context<'a> = ();
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        _context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        _element: Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
         let mut table = Table::new();
-        Self::process_node(
-            input,
-            node,
-            |_| {},
+        Self::process_with(
+            global,
+            &node.content,
             |node| {
                 match node.tag {
                     TagName::TableHead | TagName::TableBody => {
-                        TableHeadProcess::process(input, output, opts, &mut table, node, state.clone());
+                        TableHeadProcess::process(global, &mut table, state.borrow(), node, output);
                     }
                     TagName::TableRow => {
                         table.rows.push(vec![]);
-                        TableRowProcess::process(input, output, opts, &mut table, node, state.clone())
+                        TableRowProcess::process(global, &mut table, state.borrow(), node, output)
                     }
                     _ => tracing::warn!("Only TableHead, TableBody, TableRow and TableFoot can be inside an table, found: {:?}", node.tag),
                 }
             },
+            |_| {},
         );
         output.push_spacer();
         output.push(table);
@@ -955,27 +941,26 @@ struct TableHeadProcess;
 impl Process for TableHeadProcess {
     type Context<'a> = &'a mut Table;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        Self::process_node(
-            input,
-            node,
-            |_| {},
+        Self::process_with(
+            global,
+            &node.content,
             |node| match node.tag {
                 TagName::TableRow => {
-                    context.rows.push(vec![]);
-                    TableRowProcess::process(input, output, opts, context, node, state.clone())
+                    element.rows.push(vec![]);
+                    TableRowProcess::process(global, element, state.borrow(), node, output)
                 }
                 _ => tracing::warn!(
                     "Only TableRows can be inside an TableHead or TableBody, found {:?}",
                     node.tag
                 ),
             },
+            |_| {},
         );
     }
 }
@@ -985,38 +970,32 @@ struct TableRowProcess;
 impl Process for TableRowProcess {
     type Context<'a> = &'a mut Table;
     fn process(
-        input: Input,
-        output: out!(),
-        opts: Opts,
-        context: Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        element: Self::Context<'_>,
         state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        Self::process_node(
-            input,
-            node,
-            |_| {},
+        Self::process_with(
+            global,
+            &node.content,
             |node| {
                 let mut state = state.clone();
-                state.to_mut().set_align_from_attributes(&node.attributes);
+                state.set_align_from_attributes(&node.attributes);
                 match node.tag {
                     TagName::TableHeader => {
-                        TableCellProcess::process(input, output, opts, (context, true), node, state)
+                        TableCellProcess::process(global, (element, true), state, node, output)
                     }
-                    TagName::TableDataCell => TableCellProcess::process(
-                        input,
-                        output,
-                        opts,
-                        (context, false),
-                        node,
-                        state,
-                    ),
+                    TagName::TableDataCell => {
+                        TableCellProcess::process(global, (element, false), state, node, output)
+                    }
                     _ => tracing::warn!(
                         "Only TableHeader and TableDataCell can be inside an TableRow, found: {:?}",
                         node.tag
                     ),
                 }
             },
+            |_| {},
         );
     }
 }
@@ -1028,32 +1007,29 @@ impl Process for TableCellProcess {
     /// (Table, IsHeader)
     type Context<'a> = (&'a mut Table, bool);
     fn process(
-        input: Input,
-        _output: out!(),
-        opts: Opts,
-        (context, header): Self::Context<'_>,
-        node: &HirNode,
+        global: &Static,
+        (table, is_header): Self::Context<'_>,
         mut state: State,
+        node: &HirNode,
+        output: &mut impl OutputStream<Output = Element>,
     ) {
-        let row = context
+        let row = table
             .rows
             .last_mut()
             .expect("There should be at least one row.");
-        // TODO allow anything inside tables not only text.
-        if header {
-            state.to_mut().text_options.bold = true;
+        if is_header {
+            state.text_options.bold = true;
         }
 
-        let mut tb = TextBox::new(vec![], opts.hidpi_scale);
+        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
         tb.set_align_or_default(state.text_options.align);
 
         FlowProcess::process_content(
-            input,
-            &mut Dummy::new(),
-            opts,
+            global,
             &mut tb,
+            state,
             &node.content,
-            state.clone(),
+            &mut Dummy::new(), // TODO allow anything inside tables not only text.
         );
 
         row.push(tb);
