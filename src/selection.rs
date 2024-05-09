@@ -10,7 +10,7 @@ pub enum SelectionMode {
     Line,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum SelectionKind {
     Drag {
         start: Point,
@@ -25,13 +25,16 @@ pub enum SelectionKind {
         position: Point,
         time: Instant,
     },
+    #[default]
     None,
 }
 
+#[derive(Default)]
 pub struct Selection {
     pub selection: SelectionKind,
     pub text: String,
 }
+
 impl Selection {
     pub const fn new() -> Self {
         Self {
