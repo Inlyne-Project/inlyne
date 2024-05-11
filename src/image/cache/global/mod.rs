@@ -13,8 +13,12 @@ use redb::{AccessGuard, Database, TableDefinition};
 
 mod redb_impls;
 
-// TODO: does storing a counter on the remotemeta help in terms of being able to keep track of a
-// value's consistency between txns?
+// TODO: corrupt DB can panic. Should we switch to just storing blobs of bytes and handle fallible
+// parsing of the data externally? If the data failed to parse then that indicates the DB is
+// corrupt and should be totally reset per:
+// https://github.com/cberner/redb/issues/802#issuecomment-2093364141
+// TODO: store a counter to act as a generation, so that we can keep track of the consistency of
+// the value between txns
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data except when necessary
 const META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
@@ -138,7 +142,8 @@ impl Cache {
     pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<CacheCheck> {
         let check = self.check_remote_cache_inner(key)?.unwrap_or_else(|| {
             let req: StandardRequest = key.into();
-            CacheCheck::Miss((&req).into())
+            let parts = (&req).into();
+            CacheCont::Miss(parts).into()
         });
         Ok(check)
     }
@@ -170,12 +175,12 @@ impl Cache {
                     // data vs just sending the request through unchanged
                     if req.headers() == request.headers() {
                         // No change to our usual headers means this is a new request
-                        Some(CacheCheck::Miss(request))
+                        Some(CacheCont::Miss(request).into())
                     } else {
                         let data_table = read_txn.open_table(DATA)?;
                         data_table.get(key)?.map(|e| {
                             let data = e.value();
-                            CacheCheck::TryRefresh((request, data))
+                            CacheCont::TryRefresh((request, data)).into()
                         })
                     }
                 }
@@ -194,8 +199,26 @@ impl Cache {
     }
 }
 
+#[must_use]
 pub enum CacheCheck {
     Fresh(ImageData),
+    Cont(CacheCont),
+}
+
+impl From<ImageData> for CacheCheck {
+    fn from(data: ImageData) -> Self {
+        Self::Fresh(data)
+    }
+}
+
+impl From<CacheCont> for CacheCheck {
+    fn from(cont: CacheCont) -> Self {
+        Self::Cont(cont)
+    }
+}
+
+#[must_use]
+pub enum CacheCont {
     TryRefresh((request::Parts, ImageData)),
     Miss(request::Parts),
 }

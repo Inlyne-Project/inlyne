@@ -54,12 +54,13 @@
 //! images often enough to fully saturate the cache to the size limit. Inactive users can have a
 //! smaller cache as only the entries that are within the global TTL will be retained
 
-use std::{path::PathBuf, str::FromStr, sync::OnceLock, time::SystemTime};
+use std::{path::{Path, PathBuf}, str::FromStr, sync::{Arc, OnceLock}, time::{Instant, SystemTime}};
 
-use crate::image::ImageData;
+use crate::{HistTag, image::ImageData};
 
 use http::{header, request, HeaderMap};
 use http_cache_semantics::{BeforeRequest, CachePolicy, RequestLike};
+use metrics::histogram;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -234,18 +235,117 @@ impl RequestLike for StandardRequest {
     }
 }
 
+#[derive(Clone)]
+pub struct LayeredCache(Arc<Inner>);
+
+// TODO: expose the cache through a channel and have a cache manager thread that handles requests
+
+// TODO: need to be able to pass in a fake time source, so that we can reasonably test this
+pub struct Inner {
+    per_session: session::Cache,
+    // No global cache if we can't create one at the expected location
+    global: Option<global::Cache>,
+}
+
+impl LayeredCache {
+    pub fn load() -> anyhow::Result<Self> {
+        let global = match global::Cache::load() {
+            Ok(global) => Some(global),
+            Err(err) => {
+                tracing::warn!(
+                    "Failed loading persistent image cache: {err}\nFalling back to in-memory cache"
+                );
+                None
+            }
+        };
+        Ok(Self::new(global))
+    }
+
+    /// Create a new cache in-memory
+    #[cfg(test)]
+    pub fn in_memory() -> Self {
+        Self::new(Some(global::Cache::in_memory()))
+    }
+
+    fn new(global: Option<global::Cache>) -> Self {
+        let per_session = Default::default();
+        let inner = Inner { per_session, global };
+        Self(Arc::new(inner))
+    }
+
+    pub fn fetch(&self, key: Key) -> anyhow::Result<L1Check> {
+        let cache_l1_check = match key {
+            // Local images are exclusively handled by the per-session cache
+            Key::Local(local) => match self.0.per_session.fetch_local_cached(&local) {
+                Some(image_data) => image_data.into(),
+                None => L1Cont { cache: self.clone(), kind: L1ContKind::FetchLocal(local) }.into(),
+            },
+            Key::Remote(remote) => match self.0.per_session.check_remote_cache(&remote) {
+                Some(session::RemoteEntry::Fresh(image_data)) => image_data.into(),
+                _ => L1Cont { cache: self.clone(), kind: L1ContKind::CheckL2(remote) }.into(),
+            },
+        };
+
+        Ok(cache_l1_check)
+    }
+
+    fn fetch_local_image(&self, path: PathBuf) -> anyhow::Result<ImageData> {
+        todo!();
+    }
+
+    fn l2_check(&self, key: &RemoteKey) -> anyhow::Result<global::CacheCheck> {
+        if let Some(global) = &self.0.global {
+            global.check_remote_cache(&key)
+        } else {
+            let req: StandardRequest = key.into();
+            let parts = (&req).into();
+            Ok(global::CacheCont::Miss(parts).into())
+        }
+    }
+
+    fn l2_cont(&self, cont: global::CacheCont) -> anyhow::Result<ImageData> {
+        let data = match cont {
+            global::CacheCont::Miss(req_parts) => self.fetch_remote_image(req_parts.into())?,
+            global::CacheCont::TryRefresh(_) => todo!(),
+        };
+
+        // TODO: store data in l2
+
+        Ok(data)
+    }
+
+    // TODO: extract out most of this image loading logic to share with fetching local images
+    fn fetch_remote_image(&self, req: ureq::Request) -> anyhow::Result<ImageData> {
+        let start = Instant::now();
+        let url = req.url().to_owned();
+
+        let image_data = if let Ok(bytes) = super::http_call_req(req) {
+            bytes
+        } else {
+            tracing::warn!("Request for image {url} failed");
+            let image =
+                ImageData::load(include_bytes!("../../../assets/img/broken.png"), false)
+                    .unwrap();
+            return Ok(image);
+        };
+
+        let image = if let Ok(image) = ImageData::load(&image_data, true) {
+            image
+        } else {
+            todo!("Handle svg stuff. Need to store additional context to render it");
+        };
+
+        histogram!(HistTag::ImageLoad).record(start.elapsed());
+        Ok(image)
+    }
+}
+
 #[must_use]
 pub enum L1Check {
     // We are done 🥳🎉
     Fini(ImageData),
-    // Time to follow up
-    Cont(SlowL1Cont),
-}
-
-impl From<SlowL1Cont> for L1Check {
-    fn from(cont: SlowL1Cont) -> Self {
-        Self::Cont(cont)
-    }
+    // Needs follow-up
+    Cont(L1Cont),
 }
 
 impl From<ImageData> for L1Check {
@@ -254,86 +354,44 @@ impl From<ImageData> for L1Check {
     }
 }
 
+impl From<L1Cont> for L1Check {
+    fn from(cont: L1Cont) -> Self {
+        Self::Cont(cont)
+    }
+}
+
 #[must_use]
-pub enum SlowL1Cont {
-    CheckRemoteCache(RemoteKey),
+pub struct L1Cont {
+    cache: LayeredCache,
+    kind: L1ContKind,
+}
+
+enum L1ContKind {
+    CheckL2(RemoteKey),
     FetchLocal(PathBuf),
-    FetchRemote(ureq::Request),
 }
 
-// TODO: expose the cache through a channel and have a cache manager thread that handles requests
-// through a pool of workers.
-
-// TODO: need to be able to pass in a fake time source, so that we can reasonably test this
-pub struct LayeredCache {
-    per_session: session::Cache,
-    // No global cache if we can't create one at the expected location
-    global: Option<global::Cache>,
-}
-
-impl LayeredCache {
-    pub fn load() -> anyhow::Result<Self> {
-        let cache = match global::Cache::load() {
-            Ok(global) => Some(global).into(),
-            Err(err) => {
-                tracing::warn!(
-                    "Failed loading persistent image cache: {err}\nFalling back to in-memory cache"
-                );
-                None.into()
-            }
-        };
-        Ok(cache)
-    }
-
-    /// Create a new cache in-memory
-    #[cfg(test)]
-    pub fn in_memory() -> Self {
-        Some(global::Cache::in_memory()).into()
-    }
-
-    pub fn quick_l1_check(&self, key: Key) -> anyhow::Result<L1Check> {
-        let cache_l1_check = match key {
-            // Local images are exclusively handled by the per-session cache
-            Key::Local(local) => match self.per_session.fetch_local_cached(&local) {
-                Some(image_data) => image_data.into(),
-                None => SlowL1Cont::FetchLocal(local).into(),
-            },
-            Key::Remote(remote) => match self.per_session.check_remote_cache(&remote) {
-                Some(session::RemoteEntry::Fresh(image_data)) => image_data.into(),
-                _ => SlowL1Cont::CheckRemoteCache(remote).into(),
-            },
-        };
-
-        Ok(cache_l1_check)
-    }
-
-    // TODO: split up the layers in here so that it's clearer when/where different layers should be
-    //       updated
-    pub fn slow_l1_cont(&self, cont: SlowL1Cont) -> anyhow::Result<ImageData> {
-        let image_date = match cont {
-            SlowL1Cont::CheckRemoteCache(remote) => match &self.global {
-                Some(global) => match global.check_remote_cache(&remote)? {
+impl L1Cont {
+    pub fn finish(self) -> anyhow::Result<ImageData> {
+        let Self { cache, kind } = self;
+        let image_date = match kind {
+            L1ContKind::CheckL2(remote) => {
+                match cache.l2_check(&remote)? {
                     global::CacheCheck::Fresh(image_data) => image_data,
-                    global::CacheCheck::TryRefresh((req_parts, image_data)) => {
-                        todo!();
-                    }
-                    global::CacheCheck::Miss(req_parts) => self.slow_l1_cont(SlowL1Cont::FetchRemote(req_parts.into()))?,
-                },
-                None => self.slow_l1_cont(SlowL1Cont::FetchRemote(remote.into()))?,
-            },
-            SlowL1Cont::FetchLocal(_) => todo!(),
-            SlowL1Cont::FetchRemote(_) => todo!(),
+                    global::CacheCheck::Cont(cont) => cache.l2_cont(cont)?,
+                }
+
+                // TODO: store in l1
+            }
+            L1ContKind::FetchLocal(path) => {
+                let data = cache.fetch_local_image(path)?;
+
+                // TODO: store in l1
+
+                data
+            }
         };
 
         Ok(image_date)
-    }
-}
-
-impl From<Option<global::Cache>> for LayeredCache {
-    fn from(global: Option<global::Cache>) -> Self {
-        Self {
-            per_session: Default::default(),
-            global,
-        }
     }
 }

@@ -386,9 +386,15 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
         " https://github.com/Inlyne-Project/inlyne"
     );
 
+
+    let req = ureq::get(url).set("User-Agent", USER_AGENT);
+    http_call_req(req)
+}
+
+pub fn http_call_req(req: ureq::Request) -> anyhow::Result<Vec<u8>> {
     const LIMIT: usize = 20 * 1_024 * 1_024;
 
-    let resp = ureq::get(url).set("User-Agent", USER_AGENT).call()?;
+    let resp = req.call()?;
     let len = resp
         .header("Content-Length")
         .and_then(|len| len.parse::<usize>().ok());

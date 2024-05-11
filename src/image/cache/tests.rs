@@ -125,6 +125,9 @@ fn sanity() {
     todo!();
 }
 
+// TODO: add a cache builder that can configure various sizes along with allowing storing locally
+// hosted files. something like `.allow_local_urls().cache_size_limit(...).entry_size_limit(...)`
+
 #[test]
 fn mutli_client_mash() {
     // TODO: This test is a stress-test verifying various assertions while having multiple
@@ -151,9 +154,6 @@ fn mutli_client_mash() {
     // - The requests to the cache may serve stale content (as long as it's still fresh according
     //   to its cache policy), but it should always match the forward progress of the image changes
     //   decided as the source of truth
-    // - Immutable images should be requested at most _M_ number of times because the "worst case"
-    //   scenario is all of the clients simultaneously fetching and storing the value in the global
-    //   cache
     //
     // The source of truth can store all of the relevant info needed to verify the above and it's
     // shared by all of the clients and the image server
