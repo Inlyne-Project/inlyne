@@ -386,7 +386,6 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
         " https://github.com/Inlyne-Project/inlyne"
     );
 
-
     let req = ureq::get(url).set("User-Agent", USER_AGENT);
     http_call_req(req)
 }

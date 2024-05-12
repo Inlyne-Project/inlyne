@@ -54,12 +54,19 @@
 //! images often enough to fully saturate the cache to the size limit. Inactive users can have a
 //! smaller cache as only the entries that are within the global TTL will be retained
 
-use std::{path::{Path, PathBuf}, str::FromStr, sync::{Arc, OnceLock}, time::{Instant, SystemTime}};
+use std::{
+    io,
+    path::PathBuf,
+    str::FromStr,
+    sync::{Arc, OnceLock},
+    time::{Instant, SystemTime},
+};
 
-use crate::{HistTag, image::ImageData};
+use crate::{image::ImageData, HistTag};
 
 use http::{header, request, HeaderMap};
-use http_cache_semantics::{BeforeRequest, CachePolicy, RequestLike};
+use http_cache_semantics::RequestLike;
+use lz4_flex::frame::FrameEncoder;
 use metrics::histogram;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -141,6 +148,33 @@ impl From<Url> for Key {
     }
 }
 
+#[derive(Debug)]
+pub enum StoredImage {
+    /// Pre-baked image data ready to be served
+    PreDecoded(ImageData),
+    /// Compressed SVG text
+    ///
+    /// SVGs get stored as the original text and rendered on demand instead of being pre-rendered
+    /// because the rendering for the same SVG can change depending on different dpi or font info
+    CompressedSvg(Vec<u8>),
+}
+
+impl StoredImage {
+    pub fn from_svg(svg: &str) -> Self {
+        let mut input = io::Cursor::new(svg.as_bytes());
+        let mut compressor = FrameEncoder::new(Vec::new());
+        io::copy(&mut input, &mut compressor).expect("in-memory I/O failed");
+        let output = compressor.finish().unwrap();
+        Self::CompressedSvg(output)
+    }
+}
+
+impl From<ImageData> for StoredImage {
+    fn from(data: ImageData) -> Self {
+        Self::PreDecoded(data)
+    }
+}
+
 trait TimeSource {
     fn now(&self) -> SystemTime;
 }
@@ -188,10 +222,13 @@ impl FromStr for StandardRequest {
 
 impl From<&StandardRequest> for request::Parts {
     fn from(req: &StandardRequest) -> Self {
-        let mut parts = request::Request::builder().method(req.method())
+        let mut parts = request::Request::builder()
+            .method(req.method())
             .uri(req.uri())
-            .body(()).unwrap()
-            .into_parts().0;
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
         parts.headers = req.headers().to_owned();
         parts
     }
@@ -269,7 +306,10 @@ impl LayeredCache {
 
     fn new(global: Option<global::Cache>) -> Self {
         let per_session = Default::default();
-        let inner = Inner { per_session, global };
+        let inner = Inner {
+            per_session,
+            global,
+        };
         Self(Arc::new(inner))
     }
 
@@ -278,18 +318,26 @@ impl LayeredCache {
             // Local images are exclusively handled by the per-session cache
             Key::Local(local) => match self.0.per_session.fetch_local_cached(&local) {
                 Some(image_data) => image_data.into(),
-                None => L1Cont { cache: self.clone(), kind: L1ContKind::FetchLocal(local) }.into(),
+                None => L1Cont {
+                    cache: self.clone(),
+                    kind: L1ContKind::FetchLocal(local),
+                }
+                .into(),
             },
             Key::Remote(remote) => match self.0.per_session.check_remote_cache(&remote) {
                 Some(session::RemoteEntry::Fresh(image_data)) => image_data.into(),
-                _ => L1Cont { cache: self.clone(), kind: L1ContKind::CheckL2(remote) }.into(),
+                _ => L1Cont {
+                    cache: self.clone(),
+                    kind: L1ContKind::CheckL2(remote),
+                }
+                .into(),
             },
         };
 
         Ok(cache_l1_check)
     }
 
-    fn fetch_local_image(&self, path: PathBuf) -> anyhow::Result<ImageData> {
+    fn fetch_local_image(&self, path: PathBuf) -> anyhow::Result<StoredImage> {
         todo!();
     }
 
@@ -303,7 +351,7 @@ impl LayeredCache {
         }
     }
 
-    fn l2_cont(&self, cont: global::CacheCont) -> anyhow::Result<ImageData> {
+    fn l2_cont(&self, cont: global::CacheCont) -> anyhow::Result<StoredImage> {
         let data = match cont {
             global::CacheCont::Miss(req_parts) => self.fetch_remote_image(req_parts.into())?,
             global::CacheCont::TryRefresh(_) => todo!(),
@@ -315,7 +363,8 @@ impl LayeredCache {
     }
 
     // TODO: extract out most of this image loading logic to share with fetching local images
-    fn fetch_remote_image(&self, req: ureq::Request) -> anyhow::Result<ImageData> {
+    // TODO: expose image loading failures in a less opaque way
+    fn fetch_remote_image(&self, req: ureq::Request) -> anyhow::Result<StoredImage> {
         let start = Instant::now();
         let url = req.url().to_owned();
 
@@ -324,15 +373,16 @@ impl LayeredCache {
         } else {
             tracing::warn!("Request for image {url} failed");
             let image =
-                ImageData::load(include_bytes!("../../../assets/img/broken.png"), false)
-                    .unwrap();
-            return Ok(image);
+                ImageData::load(include_bytes!("../../../assets/img/broken.png"), false).unwrap();
+            return Ok(image.into());
         };
 
         let image = if let Ok(image) = ImageData::load(&image_data, true) {
-            image
+            image.into()
         } else {
-            todo!("Handle svg stuff. Need to store additional context to render it");
+            // TODO: SVG rendering will change based on the dpi and font info available. Just store
+            // the compressed SVG text and render on demand. It'll likely be smaller that way
+            todo!("Handle SVG stuff");
         };
 
         histogram!(HistTag::ImageLoad).record(start.elapsed());
@@ -372,13 +422,13 @@ enum L1ContKind {
 }
 
 impl L1Cont {
-    pub fn finish(self) -> anyhow::Result<ImageData> {
+    pub fn finish(self) -> anyhow::Result<StoredImage> {
         let Self { cache, kind } = self;
         let image_date = match kind {
             L1ContKind::CheckL2(remote) => {
                 match cache.l2_check(&remote)? {
                     global::CacheCheck::Fresh(image_data) => image_data,
-                    global::CacheCheck::Cont(cont) => cache.l2_cont(cont)?,
+                    global::CacheCheck::Cont(cont) => cache.l2_cont(cont)?.into(),
                 }
 
                 // TODO: store in l1

@@ -8,7 +8,10 @@
 // - That there's correct isolation even when a bunch of simultaneous sessions are hammering the
 //   cache including garbage collection
 
-use std::{sync::Arc, time::{Duration, SystemTime}};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use http::{HeaderMap, HeaderValue};
 use parking_lot::RwLock;
@@ -72,9 +75,7 @@ impl Headers {
 
 impl From<Headers> for HeaderMap {
     fn from(headers: Headers) -> Self {
-        let Headers {
-            max_age,
-        } = headers;
+        let Headers { max_age } = headers;
 
         let mut map = HeaderMap::new();
 
@@ -106,7 +107,8 @@ impl Sample {
             Self::Img1 => include_bytes!("../../../assets/test_data/bun_logo.png").as_slice(),
             Self::Img2 => include_bytes!("../../../assets/test_data/rgba8.jpg").as_slice(),
             Self::Img3 => include_bytes!("../../../assets/test_data/rgba8.png").as_slice(),
-        }.into()
+        }
+        .into()
     }
 
     fn post_decode(self) -> ImageData {

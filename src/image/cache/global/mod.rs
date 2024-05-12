@@ -1,6 +1,6 @@
 use std::{fmt, fs, path::PathBuf, time::SystemTime};
 
-use super::{Key, RemoteKey, StandardRequest};
+use super::{Key, RemoteKey, StandardRequest, StoredImage};
 use crate::{
     image::ImageData,
     utils::{self, inlyne_cache_dir},
@@ -22,7 +22,7 @@ mod redb_impls;
 // Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
 // image data except when necessary
 const META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
-const DATA: TableDefinition<RemoteKey, ImageData> = TableDefinition::new("image-data");
+const DATA: TableDefinition<RemoteKey, StoredImage> = TableDefinition::new("image-data");
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -161,10 +161,12 @@ impl Cache {
                     match data_table.get(key)? {
                         Some(entry) => {
                             let data = entry.value();
-                            // NOTE: both readers _and_ a single writer can exist simultaneous
+                            // NOTE: both readers _and_ a single writer can exist simultaneous, so
+                            // it's fine to start a write txn even though we already have a read
+                            // txn open
                             let write_txn = self.0.begin_write()?;
                             todo!("Update the last used time");
-                            Some(CacheCheck::Fresh(data))
+                            Some(CacheCheck::Fresh(data.into()))
                         }
                         None => None,
                     }
@@ -184,7 +186,7 @@ impl Cache {
                         })
                     }
                 }
-            }
+            },
         };
 
         Ok(maybe_check)
@@ -201,13 +203,13 @@ impl Cache {
 
 #[must_use]
 pub enum CacheCheck {
-    Fresh(ImageData),
+    Fresh(StoredImage),
     Cont(CacheCont),
 }
 
 impl From<ImageData> for CacheCheck {
     fn from(data: ImageData) -> Self {
-        Self::Fresh(data)
+        Self::Fresh(data.into())
     }
 }
 
@@ -219,6 +221,6 @@ impl From<CacheCont> for CacheCheck {
 
 #[must_use]
 pub enum CacheCont {
-    TryRefresh((request::Parts, ImageData)),
+    TryRefresh((request::Parts, StoredImage)),
     Miss(request::Parts),
 }

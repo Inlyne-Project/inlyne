@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::image::{
-    cache::{global::RemoteMeta, RemoteKey},
+    cache::{global::RemoteMeta, RemoteKey, StoredImage},
     ImageData,
 };
 
@@ -219,5 +219,54 @@ impl redb::Value for ImageData {
         Self: 'a,
     {
         bincode::deserialize::<ImageDataRef>(data).unwrap().into()
+    }
+}
+
+// Same deal as `ImageDataRef`. More proxying
+#[derive(Deserialize, Serialize)]
+pub enum StoredImageRef<'a> {
+    #[serde(borrow)]
+    PreDecoded(ImageDataRef<'a>),
+    #[serde(borrow)]
+    CompressedSvg(&'a [u8]),
+}
+
+impl<'a> From<StoredImageRef<'a>> for StoredImage {
+    fn from(stored_ref: StoredImageRef<'a>) -> Self {
+        match stored_ref {
+            StoredImageRef::PreDecoded(image_ref) => Self::PreDecoded(image_ref.into()),
+            StoredImageRef::CompressedSvg(bytes) => Self::CompressedSvg(bytes.into()),
+        }
+    }
+}
+
+impl<'a> From<&'a StoredImage> for StoredImageRef<'a> {
+    fn from(stored: &'a StoredImage) -> Self {
+        match &stored {
+            StoredImage::PreDecoded(image) => Self::PreDecoded(image.into()),
+            StoredImage::CompressedSvg(bytes) => Self::CompressedSvg(bytes),
+        }
+    }
+}
+
+impl redb::Value for StoredImage {
+    types!();
+    fn_fixed_width!(None);
+    fn_type_name!("StoredImage");
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'a,
+        Self: 'b,
+    {
+        let stored_ref: StoredImageRef = value.into();
+        bincode::serialize(&stored_ref).unwrap()
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        bincode::deserialize::<StoredImageRef>(data).unwrap().into()
     }
 }
