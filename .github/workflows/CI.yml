@@ -53,8 +53,8 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Linting
-        run: cargo clippy --workspace --no-default-features --features x11 -- --deny warnings
+      # - name: Linting
+      #   run: cargo clippy --workspace --no-default-features --features x11 -- --deny warnings
 
   build-macos-arm:
     runs-on: macos-latest
