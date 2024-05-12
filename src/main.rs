@@ -624,7 +624,7 @@ impl Inlyne {
                 Event::MainEventsCleared => {
                     // We lazily store the size and only reposition elements and request a redraw when
                     // we receive a `MainEventsCleared`.  This prevents us from clogging up the queue
-                    // with a bunch of costly resizes. (https://github.com/trimental/inlyne/issues/25)
+                    // with a bunch of costly resizes. (https://github.com/Inlyne-Project/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
                         if size.width > 0 && size.height > 0 {
                             self.renderer.config.width = size.width;
