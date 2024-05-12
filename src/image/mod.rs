@@ -385,7 +385,7 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
     const USER_AGENT: &str = concat!(
         "inlyne ",
         env!("CARGO_PKG_VERSION"),
-        " https://github.com/trimental/inlyne"
+        " https://github.com/Inlyne-Project/inlyne"
     );
 
     const LIMIT: usize = 20 * 1_024 * 1_024;
