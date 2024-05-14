@@ -115,7 +115,7 @@ impl HtmlInterpreter {
             surface_format,
             hidpi_scale,
             image_cache,
-            Arc::new(parking_lot::Mutex::new(live_window)),
+            Arc::new(Mutex::new(live_window)),
             color_scheme,
         )
     }
