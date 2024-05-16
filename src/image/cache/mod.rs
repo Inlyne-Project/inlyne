@@ -57,21 +57,19 @@
 use std::{
     io,
     path::PathBuf,
-    str::FromStr,
-    sync::{Arc, OnceLock},
+    sync::Arc,
     time::{Instant, SystemTime},
 };
 
 use crate::{image::ImageData, HistTag};
 
-use http::{header, request, HeaderMap};
-use http_cache_semantics::RequestLike;
 use lz4_flex::frame::FrameEncoder;
 use metrics::histogram;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 mod global;
+mod request;
 mod session;
 #[cfg(test)]
 mod tests;
@@ -80,6 +78,7 @@ pub use global::{
     run_garbage_collector as run_global_garbage_collector, stats as global_stats,
     Stats as GlobalStats, StatsInner as GlobalStatsInner,
 };
+use request::StandardRequest;
 
 // TODO: spawn a cache worker when creating the cache and return a handle that can communicate with
 // it? Each request can be pushed to a thread-pool that shares the cache?
@@ -95,6 +94,12 @@ pub struct RemoteKey(String);
 pub enum Key {
     Remote(RemoteKey),
     Local(PathBuf),
+}
+
+impl From<RemoteKey> for Key {
+    fn from(v: RemoteKey) -> Self {
+        Self::Remote(v)
+    }
 }
 
 impl TryFrom<&[u8]> for RemoteKey {
@@ -126,9 +131,12 @@ impl From<RemoteKey> for ureq::Request {
 }
 
 impl Key {
-    fn from_abs_path(path: PathBuf) -> anyhow::Result<Self> {
-        // TODO: check that it's absolute
-        Ok(Self::Local(path))
+    fn from_abs_path(path: PathBuf) -> Option<Self> {
+        if path.is_absolute() {
+            Some(Self::Local(path))
+        } else {
+            None
+        }
     }
 
     fn from_url(url: &str) -> anyhow::Result<Self> {
@@ -141,7 +149,7 @@ impl From<Url> for Key {
     fn from(url: Url) -> Self {
         if url.scheme() == "file" {
             let path = url.to_file_path().unwrap();
-            Self::from_abs_path(path).unwrap()
+            Self::from_abs_path(path).expect("URLs are _always_ absolute paths")
         } else {
             Self::Remote(url.into())
         }
@@ -155,17 +163,23 @@ pub enum StoredImage {
     /// Compressed SVG text
     ///
     /// SVGs get stored as the original text and rendered on demand instead of being pre-rendered
-    /// because the rendering for the same SVG can change depending on different dpi or font info
+    /// because the rendering for the same SVG can change depending on different dpi or font info.
+    /// This will likely be smaller anyways
     CompressedSvg(Vec<u8>),
 }
 
 impl StoredImage {
     pub fn from_svg(svg: &str) -> Self {
         let mut input = io::Cursor::new(svg.as_bytes());
+        // TODO: upstream a helper function that does this
         let mut compressor = FrameEncoder::new(Vec::new());
         io::copy(&mut input, &mut compressor).expect("in-memory I/O failed");
         let output = compressor.finish().unwrap();
         Self::CompressedSvg(output)
+    }
+
+    fn render(&self, ctx: &SvgContext) -> ImageData {
+        todo!();
     }
 }
 
@@ -175,7 +189,7 @@ impl From<ImageData> for StoredImage {
     }
 }
 
-trait TimeSource {
+pub trait TimeSource: 'static {
     fn now(&self) -> SystemTime;
 }
 
@@ -197,95 +211,29 @@ fn cache_options() -> http_cache_semantics::CacheOptions {
     }
 }
 
-/// Represents the very basic request parts that we always use
-#[derive(Clone, Debug)]
-struct StandardRequest {
-    url: http::Uri,
-}
-
-impl From<&RemoteKey> for StandardRequest {
-    fn from(key: &RemoteKey) -> Self {
-        key.0
-            .parse()
-            .expect("Remote key should always be a valid url")
-    }
-}
-
-impl FromStr for StandardRequest {
-    type Err = http::uri::InvalidUri;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let url = s.parse()?;
-        Ok(Self { url })
-    }
-}
-
-impl From<&StandardRequest> for request::Parts {
-    fn from(req: &StandardRequest) -> Self {
-        let mut parts = request::Request::builder()
-            .method(req.method())
-            .uri(req.uri())
-            .body(())
-            .unwrap()
-            .into_parts()
-            .0;
-        parts.headers = req.headers().to_owned();
-        parts
-    }
-}
-
-impl From<&StandardRequest> for ureq::Request {
-    fn from(req: &StandardRequest) -> Self {
-        let parts: request::Parts = req.into();
-        parts.into()
-    }
-}
-
-impl RequestLike for StandardRequest {
-    fn uri(&self) -> http::Uri {
-        self.url.clone()
-    }
-
-    fn method(&self) -> &http::Method {
-        &http::Method::GET
-    }
-
-    fn headers(&self) -> &'static http::HeaderMap {
-        static HEADERS: OnceLock<HeaderMap> = OnceLock::new();
-        const DESCRIPTIVE_USER_AGENT: &str = concat!(
-            "inlyne ",
-            env!("CARGO_PKG_VERSION"),
-            " https://github.com/trimental/inlyne"
-        );
-        HEADERS.get_or_init(|| {
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                header::USER_AGENT,
-                header::HeaderValue::from_static(DESCRIPTIVE_USER_AGENT),
-            );
-            headers
-        })
-    }
-
-    fn is_same_uri(&self, other: &http::Uri) -> bool {
-        &self.url == other
-    }
-}
-
 #[derive(Clone)]
 pub struct LayeredCache(Arc<Inner>);
 
 // TODO: expose the cache through a channel and have a cache manager thread that handles requests
 
-// TODO: need to be able to pass in a fake time source, so that we can reasonably test this
 pub struct Inner {
     per_session: session::Cache,
     // No global cache if we can't create one at the expected location
     global: Option<global::Cache>,
+    time: Box<dyn TimeSource>,
+    svg_ctx: SvgContext,
+}
+
+struct SvgContext {
+    dpi: f32,
 }
 
 impl LayeredCache {
-    pub fn load() -> anyhow::Result<Self> {
+    pub fn load(svg_ctx: SvgContext) -> anyhow::Result<Self> {
+        Self::load_with_time(SystemTimeSource, svg_ctx)
+    }
+
+    pub fn load_with_time<Time>(time: Time, svg_ctx: SvgContext) -> anyhow::Result<Self> where Time: TimeSource {
         let global = match global::Cache::load() {
             Ok(global) => Some(global),
             Err(err) => {
@@ -295,25 +243,30 @@ impl LayeredCache {
                 None
             }
         };
-        Ok(Self::new(global))
+        Ok(Self::new(global, time, svg_ctx))
     }
 
     /// Create a new cache in-memory
     #[cfg(test)]
-    pub fn in_memory() -> Self {
-        Self::new(Some(global::Cache::in_memory()))
+    pub fn in_memory_with_time<Time>(time: Time, svg_ctx: SvgContext) -> Self where Time: TimeSource {
+        Self::new(Some(global::Cache::in_memory()), time, svg_ctx)
     }
 
-    fn new(global: Option<global::Cache>) -> Self {
-        let per_session = Default::default();
+    fn new<Time>(global: Option<global::Cache>, time: Time, svg_ctx: SvgContext) -> Self
+    where
+        Time: TimeSource,
+    {
         let inner = Inner {
-            per_session,
+            per_session: Default::default(),
             global,
+            time: Box::new(time),
+            svg_ctx,
         };
         Self(Arc::new(inner))
     }
 
-    pub fn fetch(&self, key: Key) -> anyhow::Result<L1Check> {
+    pub fn fetch<K: Into<Key>>(&self, key: K) -> anyhow::Result<L1Check> {
+        let key = key.into();
         let cache_l1_check = match key {
             // Local images are exclusively handled by the per-session cache
             Key::Local(local) => match self.0.per_session.fetch_local_cached(&local) {
@@ -337,6 +290,7 @@ impl LayeredCache {
         Ok(cache_l1_check)
     }
 
+    // TODO: move to `session` since that's the only layer that handles local images?
     fn fetch_local_image(&self, path: PathBuf) -> anyhow::Result<StoredImage> {
         todo!();
     }
@@ -380,8 +334,6 @@ impl LayeredCache {
         let image = if let Ok(image) = ImageData::load(&image_data, true) {
             image.into()
         } else {
-            // TODO: SVG rendering will change based on the dpi and font info available. Just store
-            // the compressed SVG text and render on demand. It'll likely be smaller that way
             todo!("Handle SVG stuff");
         };
 
@@ -422,19 +374,21 @@ enum L1ContKind {
 }
 
 impl L1Cont {
-    pub fn finish(self) -> anyhow::Result<StoredImage> {
+    pub fn finish(self) -> anyhow::Result<ImageData> {
         let Self { cache, kind } = self;
         let image_date = match kind {
             L1ContKind::CheckL2(remote) => {
-                match cache.l2_check(&remote)? {
+                let data = match cache.l2_check(&remote)? {
                     global::CacheCheck::Fresh(image_data) => image_data,
                     global::CacheCheck::Cont(cont) => cache.l2_cont(cont)?.into(),
-                }
+                }.render(&cache.0.svg_ctx);
 
                 // TODO: store in l1
+
+                data
             }
             L1ContKind::FetchLocal(path) => {
-                let data = cache.fetch_local_image(path)?;
+                let data = cache.fetch_local_image(path)?.render(&cache.0.svg_ctx);
 
                 // TODO: store in l1
 

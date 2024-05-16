@@ -61,7 +61,7 @@ impl ImageSize {
     }
 }
 
-#[derive(SmartDebug, Clone)]
+#[derive(SmartDebug, Clone, PartialEq, Eq)]
 pub struct ImageData {
     #[debug(wrapper = DebugBytesPrefix)]
     pub lz4_blob: Arc<[u8]>,
@@ -379,6 +379,8 @@ impl Image {
     }
 }
 
+// TODO: move to `cache` since it's an internal implementation detail that isn't needed anywhere
+// else
 pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
     const USER_AGENT: &str = concat!(
         "inlyne ",

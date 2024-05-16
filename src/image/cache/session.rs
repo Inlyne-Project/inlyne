@@ -5,14 +5,12 @@ use std::{
     time::SystemTime,
 };
 
+use super::{RemoteKey, StandardRequest};
 use crate::image::ImageData;
 
 use http::request;
 use http_cache_semantics::{BeforeRequest, CachePolicy};
 use parking_lot::RwLock;
-use url::Url;
-
-use super::{RemoteKey, StandardRequest};
 
 #[derive(Default)]
 pub struct Cache {
@@ -21,10 +19,6 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn in_memory() -> Self {
-        Self::default()
-    }
-
     pub fn fetch_local_cached(&self, local: &Path) -> Option<ImageData> {
         let Some(m_time) = fs::metadata(local).and_then(|meta| meta.modified()).ok()
         // Fallback to always refetching when we can't read the mtime

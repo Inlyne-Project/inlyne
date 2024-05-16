@@ -1,6 +1,6 @@
 use std::{fmt, fs, path::PathBuf, time::SystemTime};
 
-use super::{Key, RemoteKey, StandardRequest, StoredImage};
+use super::{RemoteKey, StandardRequest, StoredImage};
 use crate::{
     image::ImageData,
     utils::{self, inlyne_cache_dir},
@@ -9,7 +9,7 @@ use crate::{
 use anyhow::Context;
 use http::request;
 use http_cache_semantics::{BeforeRequest, CachePolicy, RequestLike};
-use redb::{AccessGuard, Database, TableDefinition};
+use redb::{Database, TableDefinition};
 
 mod redb_impls;
 
