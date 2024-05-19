@@ -55,8 +55,9 @@
 //! smaller cache as only the entries that are within the global TTL will be retained
 
 use std::{
+    fs::File,
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Instant, SystemTime},
 };
@@ -178,8 +179,11 @@ impl StoredImage {
         Self::CompressedSvg(output)
     }
 
-    fn render(&self, ctx: &SvgContext) -> ImageData {
-        todo!();
+    fn render(self, ctx: &SvgContext) -> ImageData {
+        match self {
+            Self::PreDecoded(data) => data,
+            Self::CompressedSvg(compressed) => todo!(),
+        }
     }
 }
 
@@ -230,10 +234,6 @@ struct SvgContext {
 
 impl LayeredCache {
     pub fn load(svg_ctx: SvgContext) -> anyhow::Result<Self> {
-        Self::load_with_time(SystemTimeSource, svg_ctx)
-    }
-
-    pub fn load_with_time<Time>(time: Time, svg_ctx: SvgContext) -> anyhow::Result<Self> where Time: TimeSource {
         let global = match global::Cache::load() {
             Ok(global) => Some(global),
             Err(err) => {
@@ -243,12 +243,20 @@ impl LayeredCache {
                 None
             }
         };
-        Ok(Self::new(global, time, svg_ctx))
+        Ok(Self::new(global, SystemTimeSource, svg_ctx))
+    }
+
+    #[cfg(test)]
+    pub fn from_file_with_time<T>(path: &Path, time: T, svg_ctx: SvgContext) -> anyhow::Result<Self>
+    where T: TimeSource {
+        let file = File::open(path)?;
+        let global = global::Cache::load_from_file(file)?;
+        Ok(Self::new(Some(global), SystemTimeSource, svg_ctx))
     }
 
     /// Create a new cache in-memory
     #[cfg(test)]
-    pub fn in_memory_with_time<Time>(time: Time, svg_ctx: SvgContext) -> Self where Time: TimeSource {
+    pub fn in_memory_with_time<T>(time: T, svg_ctx: SvgContext) -> Self where T: TimeSource {
         Self::new(Some(global::Cache::in_memory()), time, svg_ctx)
     }
 
@@ -305,7 +313,7 @@ impl LayeredCache {
         }
     }
 
-    fn l2_cont(&self, cont: global::CacheCont) -> anyhow::Result<StoredImage> {
+    fn l2_cont(&self, cont: global::CacheCont) -> anyhow::Result<ImageResult<StoredImage>> {
         let data = match cont {
             global::CacheCont::Miss(req_parts) => self.fetch_remote_image(req_parts.into())?,
             global::CacheCont::TryRefresh(_) => todo!(),
@@ -318,7 +326,7 @@ impl LayeredCache {
 
     // TODO: extract out most of this image loading logic to share with fetching local images
     // TODO: expose image loading failures in a less opaque way
-    fn fetch_remote_image(&self, req: ureq::Request) -> anyhow::Result<StoredImage> {
+    fn fetch_remote_image(&self, req: ureq::Request) -> anyhow::Result<ImageResult<StoredImage>> {
         let start = Instant::now();
         let url = req.url().to_owned();
 
@@ -326,9 +334,9 @@ impl LayeredCache {
             bytes
         } else {
             tracing::warn!("Request for image {url} failed");
-            let image =
-                ImageData::load(include_bytes!("../../../assets/img/broken.png"), false).unwrap();
-            return Ok(image.into());
+            // let image =
+            //     ImageData::load(include_bytes!("../../../assets/img/broken.png"), false).unwrap();
+            return Ok(Err(ImageError::ReqFailed));
         };
 
         let image = if let Ok(image) = ImageData::load(&image_data, true) {
@@ -338,7 +346,7 @@ impl LayeredCache {
         };
 
         histogram!(HistTag::ImageLoad).record(start.elapsed());
-        Ok(image)
+        Ok(Ok(image))
     }
 }
 
@@ -374,13 +382,17 @@ enum L1ContKind {
 }
 
 impl L1Cont {
-    pub fn finish(self) -> anyhow::Result<ImageData> {
+    // TODO(cosmic): refactor sometime. These types are starting to suck
+    pub fn finish(self) -> anyhow::Result<ImageResult<ImageData>> {
         let Self { cache, kind } = self;
         let image_date = match kind {
             L1ContKind::CheckL2(remote) => {
-                let data = match cache.l2_check(&remote)? {
+                let data: ImageData = match cache.l2_check(&remote)? {
                     global::CacheCheck::Fresh(image_data) => image_data,
-                    global::CacheCheck::Cont(cont) => cache.l2_cont(cont)?.into(),
+                    global::CacheCheck::Cont(cont) => match cache.l2_cont(cont)? {
+                        Ok(image) => image,
+                        Err(e) => return Ok(Err(e)),
+                    }
                 }.render(&cache.0.svg_ctx);
 
                 // TODO: store in l1
@@ -396,6 +408,13 @@ impl L1Cont {
             }
         };
 
-        Ok(image_date)
+        Ok(Ok(image_date))
     }
+}
+
+type ImageResult<T> = Result<T, ImageError>;
+
+#[derive(Debug)]
+pub enum ImageError {
+    ReqFailed,
 }

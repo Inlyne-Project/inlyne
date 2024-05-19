@@ -123,9 +123,10 @@ impl Cache {
     }
 
     pub fn load_from_file(file: fs::File) -> anyhow::Result<Self> {
-        let db = Database::builder()
+        let mut db = Database::builder()
             .create_file(file)
             .context("Failed creating database")?;
+        Self::create_schema(&mut db)?;
         Ok(Self(db))
     }
 
@@ -133,10 +134,19 @@ impl Cache {
     pub fn in_memory() -> Self {
         use redb::backends::InMemoryBackend;
         let backend = InMemoryBackend::new();
-        let db = Database::builder()
+        let mut db = Database::builder()
             .create_with_backend(backend)
             .expect("In-memory backend should be infallible");
+        Self::create_schema(&mut db).expect("Fresh in-memory DB");
         Self(db)
+    }
+
+    fn create_schema(db: &mut Database) -> anyhow::Result<()> {
+        let write_txn = db.begin_write()?;
+        write_txn.open_table(META)?;
+        write_txn.open_table(DATA)?;
+        write_txn.commit()?;
+        Ok(())
     }
 
     pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<CacheCheck> {

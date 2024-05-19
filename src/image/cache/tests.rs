@@ -9,12 +9,13 @@
 //   cache including garbage collection
 
 use std::{
+    path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
 use super::{L1Check, LayeredCache, RemoteKey, TimeSource, SvgContext};
-use crate::{image::ImageData, test_utils::HttpServer};
+use crate::{image::{cache::ImageError, ImageData}, test_utils::HttpServer};
 
 use html5ever::tendril::fmt::Slice;
 use http::{HeaderMap, HeaderValue};
@@ -300,10 +301,12 @@ impl Sample {
     }
 }
 
-fn cache_with_fake_time() -> (LayeredCache, FakeTimeSource) {
-    let shared_time = FakeTimeSource::default();
-    let cache = LayeredCache::in_memory_with_time(shared_time.clone(), SvgContext { dpi: 1.0 });
-    (cache, shared_time)
+fn file_cache(time: FakeTimeSource, path: &Path) -> LayeredCache {
+    todo!();
+}
+
+fn in_memory_cache(time: FakeTimeSource) -> LayeredCache {
+    LayeredCache::in_memory_with_time(time, SvgContext { dpi: 1.0 })
 }
 
 fn image_server(images: Vec<RemoteImage>) -> HttpServer {
@@ -327,6 +330,7 @@ fn image_server(images: Vec<RemoteImage>) -> HttpServer {
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
+// Ensures that we can fetch a remote image from each layer of the cache
 #[test]
 fn sanity() {
     let image = SamplePng::Bun.into();
@@ -334,17 +338,30 @@ fn sanity() {
     // TODO: path to the image
     let remote_image = RemoteImage::from_sample(cache_control, "/sample.png", image);
     let server = image_server(vec![remote_image]);
-
-    let (cache, shared_time) = cache_with_fake_time();
-
     let url = server.url().to_owned() + "/sample.png";
-    let remote_key: RemoteKey = url.as_str().into();
-    let data = match cache.fetch(remote_key).unwrap() {
-        L1Check::Fini(data) => data,
-        L1Check::Cont(cont) => cont.finish().unwrap(),
-    };
+    let image_key: RemoteKey = url.as_str().into();
 
-    assert_eq!(data, image.post_decode());
+    let shared_time = FakeTimeSource::default();
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("test.db");
+    let cache = in_memory_cache(shared_time.clone());
+
+    // Fetch from remote and populate the cache
+    let data = match cache.fetch(image_key.clone()).unwrap() {
+        L1Check::Fini(data) => data,
+        L1Check::Cont(cont) => cont.finish().unwrap().unwrap(),
+    };
+    assert_eq!(data, image.post_decode(), "Bad initial fetch");
+
+    // Shutdown the server and ensure requests fail
+    drop(server);
+    let fresh_cache = in_memory_cache(shared_time.clone());
+    match fresh_cache.fetch(image_key.clone()).unwrap() {
+        L1Check::Fini(_) => panic!("L1 shouldn't be populated on a fresh cache"),
+        // TODO: allow for inspecting image loading failures instead of returning them from the
+        // cache (and we don't want to cache the failures which we're currently doing)
+        L1Check::Cont(cont) => ImageError::ReqFailed = cont.finish().unwrap().unwrap_err(),
+    }
 }
 
 // TODO: add a cache builder that can configure various sizes along with allowing storing locally
