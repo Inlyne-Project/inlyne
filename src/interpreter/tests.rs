@@ -11,7 +11,7 @@ use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
 use crate::image::{Image, ImageData};
 use crate::opts::ResolvedTheme;
-use crate::test_utils::{init_test_log, mock_file_server, File, HttpServer};
+use crate::test_utils::{log, server};
 use crate::utils::Align;
 use crate::{Element, ImageCache};
 
@@ -198,7 +198,7 @@ macro_rules! snapshot_interpreted_elements {
         $(
             #[test]
             fn $test_name() {
-                $crate::test_utils::init_test_log();
+                $crate::test_utils::log::init();
 
                 let text = $md_text;
                 let opts = $opts;
@@ -417,12 +417,12 @@ snapshot_interpreted_elements!(
 
 #[test]
 fn centered_image_with_size_align_and_link() {
-    init_test_log();
+    log::init();
 
     let logo = include_bytes!("../../assets/test_data/bun_logo.png");
     let logo_path = "/bun_logo.png";
-    let files = vec![File::new(logo_path, "image/png", logo)];
-    let (_server, server_url) = mock_file_server(files);
+    let files = vec![server::File::new(logo_path, "image/png", logo)];
+    let (_server, server_url) = server::mock_file_server(files);
     let logo_url = server_url + logo_path;
 
     let text = format!(
@@ -443,11 +443,11 @@ fn centered_image_with_size_align_and_link() {
 
 #[test]
 fn image_loading_fails_gracefully() {
-    init_test_log();
+    log::init();
 
     let json = r#"{"im": "not an image"}"#;
     let json_path = "/snapshot.png";
-    let (_server, server_url) = mock_file_server(vec![File::new(
+    let (_server, server_url) = server::mock_file_server(vec![server::File::new(
         json_path,
         "application/json",
         json.as_bytes(),
@@ -489,7 +489,7 @@ fn picture_dark_light() {
     const B64_SINGLE_PIXEL_WEBP_999: &[u8] = b"UklGRhoAAABXRUJQVlA4TA4AAAAvAAAAAM1VICICzYyIBA==";
     const B64_SINGLE_PIXEL_WEBP_FFF: &[u8] = b"UklGRhoAAABXRUJQVlA4TA4AAAAvAAAAAM1VICIC/Y+IBA==";
 
-    init_test_log();
+    log::init();
 
     let light_path = "/light.webp";
     let dark_path = "/dark.webp";
@@ -503,10 +503,10 @@ fn picture_dark_light() {
     .into_iter()
     .map(|(path, b64_bytes)| {
         let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
-        File::new(path, webp_mime, &bytes)
+        server::File::new(path, webp_mime, &bytes)
     })
     .collect();
-    let (_server, server_url) = mock_file_server(files);
+    let (_server, server_url) = server::mock_file_server(files);
     let dark_url = format!("{server_url}{dark_path}");
     let light_url = format!("{server_url}{light_path}");
     let default_url = format!("{server_url}{default_path}");
@@ -557,10 +557,10 @@ fn picture_dark_light() {
 
 #[test]
 fn custom_user_agent() {
-    init_test_log();
+    log::init();
 
     let (send_ua, recv_ua) = mpsc::channel();
-    let send_ua_server = HttpServer::spawn(send_ua, |send_ua, req| {
+    let send_ua_server = server::HttpServer::spawn(send_ua, |send_ua, req| {
         let ua = req
             .headers()
             .iter()

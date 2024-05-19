@@ -9,7 +9,7 @@ use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::history::History;
 use crate::opts::config::{self, FontOptions, LinesToScroll};
 use crate::opts::{Cli, Opts, ResolvedTheme, ThemeType};
-use crate::test_utils::init_test_log;
+use crate::test_utils::log;
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
     std::iter::once("inlyne")
@@ -57,14 +57,14 @@ impl ResolvedTheme {
 
 #[test]
 fn debug_assert() {
-    init_test_log();
+    log::init();
 
     Cli::command().debug_assert();
 }
 
 #[test]
 fn defaults() {
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -84,7 +84,7 @@ fn defaults() {
 
 #[test]
 fn config_overrides_default() {
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -155,7 +155,7 @@ fn config_overrides_default() {
 
 #[test]
 fn from_cli() {
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -203,7 +203,7 @@ fn from_cli() {
 
 #[test]
 fn cli_kitchen_sink() {
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -234,7 +234,7 @@ fn cli_kitchen_sink() {
 
 #[test]
 fn builtin_syntax_theme() {
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -271,7 +271,7 @@ fn custom_syntax_theme() {
         config
     }
 
-    init_test_log();
+    log::init();
 
     let (_tmp, md_file) = temp_md_file();
 
@@ -306,7 +306,7 @@ fn custom_syntax_theme() {
 
 #[test]
 fn missing_file_arg() {
-    init_test_log();
+    log::init();
 
     // A file arg should be required
     assert!(Cli::try_parse_from(gen_args(Vec::new())).is_err());

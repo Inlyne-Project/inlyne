@@ -100,7 +100,7 @@ macro_rules! gen_watcher_test {
         $(
             #[test]
             fn $test_name() {
-                $crate::test_utils::init_test_log();
+                $crate::test_utils::log::init();
 
                 // Give the test a few chances
                 let mut last_panic = None;
