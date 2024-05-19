@@ -6,7 +6,7 @@ macro_rules! snapshot_config_parse_error {
         $(
             #[test]
             fn $test_name() {
-                $crate::test_utils::init_test_log();
+                $crate::test_utils::log::init();
 
                 let err = $crate::opts::Config::load_from_str($config_text).unwrap_err();
 
@@ -49,7 +49,7 @@ macro_rules! snapshot_keycombo_conflict_err {
         $(
             #[test]
             fn $test_name() {
-                $crate::test_utils::init_test_log();
+                $crate::test_utils::log::init();
 
                 let err = keycombo_conflict_from_config($config_text).unwrap();
 

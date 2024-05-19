@@ -2,7 +2,7 @@ use std::path::Path;
 use std::{fmt, fs};
 
 use super::{ImageData, Px};
-use crate::test_utils::init_test_log;
+use crate::test_utils::log;
 
 #[test]
 fn px_parsing() {
@@ -32,7 +32,7 @@ fn check(input_path: &Path) {
 
 #[test]
 fn source_image_variety() {
-    init_test_log();
+    log::init();
 
     for file in [
         "rgb8.gif",

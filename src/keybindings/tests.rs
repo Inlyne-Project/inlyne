@@ -1,13 +1,13 @@
 use super::action::{Action, VertDirection};
 use super::{KeyCombos, Keybindings, ModifiedKey};
 use crate::opts::Config;
-use crate::test_utils::init_test_log;
+use crate::test_utils::log;
 
 use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
 
 #[test]
 fn sanity() {
-    init_test_log();
+    log::init();
 
     let config = r#"
 [keybindings]
