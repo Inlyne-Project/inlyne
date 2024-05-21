@@ -73,7 +73,7 @@ pub struct ImageData {
 }
 
 impl ImageData {
-    fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
+    pub fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
         let (lz4_blob, dimensions) = decode::decode_and_compress(bytes)?;
         Ok(Self {
             lz4_blob,
