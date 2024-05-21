@@ -1886,6 +1886,7 @@ dependencies = [
  "metrics-util",
  "notify",
  "notify-debouncer-full",
+ "once_cell",
  "open",
  "parking_lot",
  "pollster",

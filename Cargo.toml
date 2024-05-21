@@ -61,6 +61,7 @@ lz4_flex = "0.11.3"
 metrics = "0.22.3"
 # File event notifications for the live reloading feature
 notify = "6.1.1"
+once_cell = "1.19.0"
 # Used to open external links like in the user's browser
 open = "5.1.3"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
