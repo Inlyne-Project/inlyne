@@ -129,6 +129,7 @@ impl Opts {
 
         set_render_element_bounds(render_element_bounds);
 
+        let history = History::new(&file_path)?;
         let resolved_theme = args_theme
             .or(config_theme)
             .and_then(ResolvedTheme::new)
@@ -157,7 +158,7 @@ impl Opts {
         };
 
         Ok(Self {
-            history: History::new(&file_path),
+            history,
             theme,
             scale,
             page_width,

@@ -31,7 +31,7 @@ fn temp_md_file() -> (NamedTempFile, String) {
 impl Opts {
     fn mostly_default(file_path: impl AsRef<Path>) -> Self {
         Self {
-            history: History::new(file_path.as_ref()),
+            history: History::new(file_path.as_ref()).unwrap(),
             theme: ResolvedTheme::Light.as_theme(),
             scale: None,
             page_width: None,
