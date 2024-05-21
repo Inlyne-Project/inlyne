@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct History {
     history: Vec<PathBuf>,
@@ -7,12 +9,14 @@ pub struct History {
 }
 
 impl History {
-    pub fn new(path: &Path) -> Self {
-        let canonicalized = path.canonicalize().unwrap();
-        Self {
+    pub fn new(path: &Path) -> anyhow::Result<Self> {
+        let canonicalized = path
+            .canonicalize()
+            .with_context(|| format!("Unable to canonicalize {}", path.display()))?;
+        Ok(Self {
             history: vec![canonicalized],
             index: 0,
-        }
+        })
     }
 
     pub fn get_path(&self) -> &Path {
@@ -71,7 +75,7 @@ mod tests {
         fs::write(&fork1, "b").unwrap();
         fs::write(&fork2, "c").unwrap();
 
-        let mut hist = History::new(&root);
+        let mut hist = History::new(&root).unwrap();
         assert_eq!(hist.get_path(), root);
         assert_eq!(hist.previous(), None);
 
