@@ -560,14 +560,19 @@ fn custom_user_agent() {
     log::init();
 
     let (send_ua, recv_ua) = mpsc::channel();
-    let send_ua_server = server::HttpServer::spawn(send_ua, |send_ua, req| {
+    let state = server::State::new().send(send_ua);
+    let send_ua_server = server::spawn(state, |state, req, _req_url| {
         let ua = req
             .headers()
             .iter()
             .find_map(|Header { field, value }| field.equiv("user-agent").then(|| value.as_str()))
             .unwrap_or("<not_set>")
             .to_owned();
-        let _ = send_ua.send(ua);
+        let _ = state
+            .send
+            .as_ref()
+            .unwrap()
+            .send(server::FromServer::UserAgent(Some(ua)));
         let sample_body = include_bytes!("../../assets/test_data/bun_logo.png");
         Response::from_data(sample_body).boxed()
     });
@@ -576,6 +581,8 @@ fn custom_user_agent() {
     let text = format!(r"![Show me the UA]({server_url})");
     let _ = interpret_md(&text);
 
-    let user_agent = recv_ua.recv().unwrap();
+    let server::FromServer::UserAgent(Some(user_agent)) = recv_ua.recv().unwrap() else {
+        panic!();
+    };
     insta::assert_snapshot!(user_agent, @"inlyne 0.4.1 https://github.com/Inlyne-Project/inlyne");
 }

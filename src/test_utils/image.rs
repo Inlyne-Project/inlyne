@@ -87,39 +87,59 @@ pub enum SampleWebp {
 
 impl Sample {
     pub fn pre_decode(self) -> Vec<u8> {
-        // TODO: swap these out for b64 encoded strings?
         match self {
-            // TODO: move these includes to somewhere central?
             Self::Jpg(jpg) => match jpg {
                 SampleJpg::Rgb8 => include_bytes!("../../assets/test_data/rgb8.jpg").as_slice(),
                 SampleJpg::Rgb8a => include_bytes!("../../assets/test_data/rgba8.jpg").as_slice(),
             },
             Self::Gif(gif) => match gif {
-                SampleGif::AtuinDemo => include_bytes!("../../assets/test_data/atuin_demo.gif").as_slice(),
-                SampleGif::Rgb8 => todo!(),
-                SampleGif::Rgba8 => todo!(),
-            }
+                SampleGif::AtuinDemo => {
+                    include_bytes!("../../assets/test_data/atuin_demo.gif").as_slice()
+                }
+                SampleGif::Rgb8 => include_bytes!("../../assets/test_data/rgb8.gif").as_slice(),
+                SampleGif::Rgba8 => include_bytes!("../../assets/test_data/rgba8.gif").as_slice(),
+            },
             Self::Png(png) => match png {
-                SamplePng::Ariadne => include_bytes!("../../assets/test_data/ariadne_example.png").as_slice(),
+                SamplePng::Ariadne => {
+                    include_bytes!("../../assets/test_data/ariadne_example.png").as_slice()
+                }
                 SamplePng::Bun => include_bytes!("../../assets/test_data/bun_logo.png").as_slice(),
-                SamplePng::Rgb8 => todo!(),
-                SamplePng::Rgba8 => todo!(),
+                SamplePng::Rgb8 => include_bytes!("../../assets/test_data/rgb8.png").as_slice(),
+                SamplePng::Rgba8 => include_bytes!("../../assets/test_data/rgba8.png").as_slice(),
             },
             Self::Qoi(qoi) => match qoi {
-                SampleQoi::Rgb8 => todo!(),
-                SampleQoi::Rgba8 => todo!(),
-            }
+                SampleQoi::Rgb8 => include_bytes!("../../assets/test_data/rgb8.qoi").as_slice(),
+                SampleQoi::Rgba8 => include_bytes!("../../assets/test_data/rgba8.qoi").as_slice(),
+            },
             Self::Svg(svg) => match svg {
-                SampleSvg::Corro => todo!(),
-                SampleSvg::Cargo => todo!(),
-                SampleSvg::Repology => todo!(),
+                SampleSvg::Corro => include_bytes!("../../assets/test_data/corro.svg"),
+                SampleSvg::Cargo => {
+                    include_bytes!("../../assets/test_data/sample_cargo_badge.svg").as_slice()
+                }
+                SampleSvg::Repology => {
+                    include_bytes!("../../assets/test_data/sample_repology_badge.svg").as_slice()
+                }
+            },
+            Self::Webp(SampleWebp::CargoPublicApi) => {
+                include_bytes!("../../assets/test_data/cargo_public_api.webp").as_slice()
             }
-            Self::Webp(SampleWebp::CargoPublicApi) => todo!(),
         }
         .into()
     }
 
+    // TODO: adapt this to work with svg images too
     pub fn post_decode(self) -> ImageData {
         ImageData::load(&self.pre_decode(), true).unwrap()
+    }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            Sample::Gif(_) => "image/gif",
+            Sample::Jpg(_) => "image/jpeg",
+            Sample::Png(_) => "image/png",
+            Sample::Qoi(_) => "image/qoi",
+            Sample::Svg(_) => "image/svg+xml",
+            Sample::Webp(_) => "image/webp",
+        }
     }
 }
