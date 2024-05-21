@@ -255,7 +255,7 @@ impl From<ThemeDefaults> for EmbeddedThemeName {
             ThemeDefaults::OneHalfLight => Self::OneHalfLight,
             ThemeDefaults::SolarizedDark => Self::SolarizedDark,
             ThemeDefaults::SolarizedLight => Self::SolarizedLight,
-            ThemeDefaults::SublimeSnazzy => Self::SubmlimeSnazzy,
+            ThemeDefaults::SublimeSnazzy => Self::SublimeSnazzy,
             ThemeDefaults::TwoDark => Self::TwoDark,
             ThemeDefaults::VisualStudioDarkPlus => Self::VisualStudioDarkPlus,
             ThemeDefaults::Zenburn => Self::Zenburn,
