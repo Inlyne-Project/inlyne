@@ -8,5 +8,5 @@ publish = false
 
 [dependencies]
 clap = { version = "4.5.4", features = ["cargo", "derive"] }
-clap_complete = "4.5.1"
-serde = { version = "1.0.197", features = ["derive"] }
+clap_complete = "4.5.2"
+serde = { version = "1.0.202", features = ["derive"] }
