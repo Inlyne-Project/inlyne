@@ -31,10 +31,10 @@ wayland = ["copypasta/wayland", "winit/wayland"]
 [dependencies]
 # `anstream` and `anstyle` are both terminal helper crates used for our custom
 # panic hook (and already used by `clap`, so it's a "free" dependency)
-anstream = "0.6.13"
-anstyle = "1.0.6"
+anstream = "0.6.14"
+anstyle = "1.0.7"
 # Easier error handling
-anyhow = "1.0.81"
+anyhow = "1.0.86"
 # System preferred color scheme detection
 dark-light = "1.1.1"
 # System specific directories
@@ -62,9 +62,9 @@ metrics = "0.22.3"
 # File event notifications for the live reloading feature
 notify = "6.1.1"
 # Used to open external links like in the user's browser
-open = "5.1.2"
+open = "5.1.3"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
-parking_lot = "0.12.1"
+parking_lot = "0.12.2"
 # Dead simple way to handle some async operations
 pollster = "0.3.0"
 # Used to get a handle to the display, so that we can setup a clipboard
@@ -79,9 +79,9 @@ smart-debug = "0.0.3"
 syntect = "5.2.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
-taffy = "0.3.18"
+taffy = "0.3.19"
 # For parsing our config file
-toml = "0.8.12"
+toml = "0.8.13"
 # In application tracing (aka logging on steroids)
 tracing = "0.1.40"
 # Extra syntax and theme definitions for `syntect`
@@ -89,13 +89,13 @@ two-face = "0.4.0"
 # More text hashing...
 twox-hash = "1.6.3"
 # HTTP client for requesting images from urls
-ureq = "2.9.6"
+ureq = "2.9.7"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
-version = "1.15.0"
+version = "1.16.0"
 features = ["derive"]
 
 # Command line arg parsing
@@ -141,7 +141,7 @@ default-features = false
 
 # For dealing with both TOML and YAML
 [dependencies.serde]
-version = "1.0.197"
+version = "1.0.202"
 features = ["derive"]
 
 # Common dep used by `html5ever`
@@ -161,11 +161,11 @@ default-features = false
 
 [dev-dependencies]
 # Succinct and more readable binary blobs
-base64 = "0.22.0"
+base64 = "0.22.1"
 # Used to update file's modified time for tests
 filetime = "0.2.23"
 # Snapshot testing
-insta = "1.38.0"
+insta = "1.39.0"
 # Assertions displayed as diffs which is immensely helpful for some of our large
 # values
 pretty_assertions = "1.4.0"
