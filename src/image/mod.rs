@@ -21,10 +21,7 @@ use crate::utils::{usize_in_mib, Align, Point, Size};
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
-use resvg::{
-    tiny_skia,
-    usvg::{self, TreeParsing, TreeTextToPath},
-};
+use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
@@ -269,13 +266,12 @@ impl Image {
                     )
                     .unwrap(),
                 );
-                tree.convert_text(&fontdb);
-                let rtree = resvg::Tree::from_usvg(&tree);
+                tree.postprocess(Default::default(), &fontdb);
                 let mut pixmap =
-                    tiny_skia::Pixmap::new(rtree.size.width() as u32, rtree.size.height() as u32)
+                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
                         .context("Couldn't create svg pixmap")
                         .unwrap();
-                rtree.render(tiny_skia::Transform::default(), &mut pixmap.as_mut());
+                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")

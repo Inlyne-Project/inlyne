@@ -70,7 +70,7 @@ pollster = "0.3.0"
 # Used to get a handle to the display, so that we can setup a clipboard
 raw-window-handle = "0.5.2"
 # SVG rendering
-resvg = "0.37.0"
+resvg = "0.39.0"
 # Parses the optional YAML frontmatter (replace with just a yaml parser)
 serde_yaml = "0.9.34"
 # Easy `Debug` formatting changes used to keep snapshot tests more succinct
@@ -105,7 +105,7 @@ features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
 [dependencies.comrak]
-version = "0.22.0"
+version = "0.24.1"
 default-features = false
 features = ["shortcodes", "syntect"]
 
