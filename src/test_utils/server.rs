@@ -25,10 +25,6 @@ static META_SERVER: Lazy<MetaServer> = Lazy::new(|| {
 pub fn spawn(state: State, handler_fn: HandlerFn) -> MiniServerHandle {
     let mini_server = MiniServer { handler_fn, state };
     let mut meta = META_SERVER.slots.write();
-    if meta.is_empty() {
-        let server = Server::http("127.0.0.1:0").unwrap();
-        spawn_router(server);
-    }
     let index = meta.len();
     meta.push(Some(mini_server));
 
