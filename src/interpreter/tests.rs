@@ -11,6 +11,7 @@ use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
 use crate::image::{Image, ImageData};
 use crate::opts::ResolvedTheme;
+use crate::test_utils::image::{Sample, SamplePng};
 use crate::test_utils::{log, server};
 use crate::utils::Align;
 use crate::{Element, ImageCache};
@@ -419,9 +420,13 @@ snapshot_interpreted_elements!(
 fn centered_image_with_size_align_and_link() {
     log::init();
 
-    let logo = include_bytes!("../../assets/test_data/bun_logo.png");
+    let logo: Sample = SamplePng::Bun.into();
     let logo_path = "/bun_logo.png";
-    let files = vec![server::File::new(logo_path, "image/png", logo)];
+    let files = vec![server::File::new(
+        logo_path,
+        logo.content_type(),
+        &logo.pre_decode(),
+    )];
     let (_server, server_url) = server::mock_file_server(files);
     let logo_url = server_url + logo_path;
 
@@ -562,18 +567,15 @@ fn custom_user_agent() {
     let (send_ua, recv_ua) = mpsc::channel();
     let state = server::State::new().send(send_ua);
     let send_ua_server = server::spawn(state, |state, req, _req_url| {
-        let ua = req
-            .headers()
-            .iter()
-            .find_map(|Header { field, value }| field.equiv("user-agent").then(|| value.as_str()))
-            .unwrap_or("<not_set>")
-            .to_owned();
+        let maybe_ua = req.headers().iter().find_map(|Header { field, value }| {
+            field.equiv("user-agent").then(|| value.as_str().to_owned())
+        });
         let _ = state
             .send
             .as_ref()
             .unwrap()
-            .send(server::FromServer::UserAgent(Some(ua)));
-        let sample_body = include_bytes!("../../assets/test_data/bun_logo.png");
+            .send(server::FromServer::UserAgent(maybe_ua));
+        let sample_body = Sample::Png(SamplePng::Bun).pre_decode();
         Response::from_data(sample_body).boxed()
     });
     let server_url = send_ua_server.url();
