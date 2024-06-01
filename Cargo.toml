@@ -50,7 +50,7 @@ html-escape = "0.2.13"
 # Parsing the HTML document that the markdown+html was converted into
 html5ever = "0.27.0"
 # Provides some extra helpers that we use for our custom panic hook
-human-panic = "1.2.3"
+human-panic = "2.0.0"
 # Generic image decoding
 image = "0.25.1"
 # 2D GPU graphics rendering
