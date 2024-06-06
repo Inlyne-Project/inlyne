@@ -736,6 +736,7 @@ impl Renderer {
         elements: &mut [Positioned<Element>],
         selection: &mut Selection,
     ) -> anyhow::Result<()> {
+        selection.text.clear();
         let frame = self
             .surface
             .get_current_texture()
