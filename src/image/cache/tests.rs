@@ -1,24 +1,27 @@
 // TODO: test:
 //
+// - Local image
 // - E-tag match and miss
 // - That LRU time appears to get updated right
-// - That both cache layers appear to work right (selectively wipe the cache layers and sources to
-//   check)
 // - Local image cache appearing to work right
 // - That there's correct isolation even when a bunch of simultaneous sessions are hammering the
 //   cache including garbage collection
+// - Iterate over all the images then snapshot what the stats look like
 
 use std::{
+    fs,
     path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
-use super::{L1Check, LayeredCache, RemoteKey, TimeSource, SvgContext};
-use crate::{image::{cache::ImageError, ImageData}, test_utils::HttpServer};
+use super::{L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource};
+use crate::{
+    image::{cache::ImageError, ImageData},
+    test_utils::{self, HttpServer},
+};
 
-use html5ever::tendril::fmt::Slice;
-use http::{HeaderMap, HeaderValue};
+use http::{header, HeaderMap, HeaderValue};
 use parking_lot::RwLock;
 use tiny_http::{Header, Method, Response, ResponseBox};
 
@@ -62,15 +65,33 @@ impl RemoteImage {
         Self::new(cache_control, path, sample.into(), sample.pre_decode())
     }
 
-    fn new(cache_control: CacheControl, path: &'static str, content_type: ContentType, body: Vec<u8>) -> Self {
-        Self { cache_control, path, content_type, body }
+    fn new(
+        cache_control: CacheControl,
+        path: &'static str,
+        content_type: ContentType,
+        body: Vec<u8>,
+    ) -> Self {
+        Self {
+            cache_control,
+            path,
+            content_type,
+            body,
+        }
     }
 }
 
 impl From<RemoteImage> for ResponseBox {
     fn from(image: RemoteImage) -> Self {
-        let RemoteImage { cache_control, path: _, content_type, body } = image;
-        Response::from_data(body).with_header(cache_control).with_header(content_type).boxed()
+        let RemoteImage {
+            cache_control,
+            path: _,
+            content_type,
+            body,
+        } = image;
+        Response::from_data(body)
+            .with_header(cache_control)
+            .with_header(content_type)
+            .boxed()
     }
 }
 
@@ -112,7 +133,9 @@ impl From<Sample> for ContentType {
 
 impl From<ContentType> for Header {
     fn from(content_ty: ContentType) -> Self {
-        Header::from_bytes(http::header::CONTENT_TYPE.as_str().as_bytes(), content_ty.to_str().as_bytes()).unwrap()
+        let header_name = header::CONTENT_TYPE.as_str().as_bytes();
+        let content_ty = content_ty.to_str().as_bytes();
+        Header::from_bytes(header_name, content_ty).unwrap()
     }
 }
 
@@ -159,18 +182,17 @@ impl CacheControl {
 impl From<CacheControl> for Header {
     fn from(cache_control: CacheControl) -> Self {
         let value = cache_control.to_header_value().unwrap();
-        Self::from_bytes(http::header::CACHE_CONTROL.as_str(), value).unwrap()
+        Self::from_bytes(header::CACHE_CONTROL.as_str(), value).unwrap()
     }
 }
 
 impl From<CacheControl> for HeaderMap {
     fn from(cache_control: CacheControl) -> Self {
-        let CacheControl { immutable, max_age } = cache_control;
-
         let mut map = HeaderMap::new();
 
         if let Some(value) = cache_control.to_header_value() {
-            map.insert(http::header::CACHE_CONTROL, HeaderValue::from_str(&value).unwrap());
+            let value = HeaderValue::from_str(&value).unwrap();
+            map.insert(header::CACHE_CONTROL, value);
         }
 
         map
@@ -269,28 +291,36 @@ impl Sample {
             // TODO: move these includes to somewhere central?
             Self::Jpg(jpg) => match jpg {
                 SampleJpg::Rgb8 => include_bytes!("../../../assets/test_data/rgb8.jpg").as_slice(),
-                SampleJpg::Rgb8a => include_bytes!("../../../assets/test_data/rgba8.jpg").as_slice(),
+                SampleJpg::Rgb8a => {
+                    include_bytes!("../../../assets/test_data/rgba8.jpg").as_slice()
+                }
             },
             Self::Gif(gif) => match gif {
-                SampleGif::AtuinDemo => include_bytes!("../../../assets/test_data/atuin_demo.gif").as_slice(),
+                SampleGif::AtuinDemo => {
+                    include_bytes!("../../../assets/test_data/atuin_demo.gif").as_slice()
+                }
                 SampleGif::Rgb8 => todo!(),
                 SampleGif::Rgba8 => todo!(),
-            }
+            },
             Self::Png(png) => match png {
-                SamplePng::Ariadne => include_bytes!("../../../assets/test_data/ariadne_example.png").as_slice(),
-                SamplePng::Bun => include_bytes!("../../../assets/test_data/bun_logo.png").as_slice(),
+                SamplePng::Ariadne => {
+                    include_bytes!("../../../assets/test_data/ariadne_example.png").as_slice()
+                }
+                SamplePng::Bun => {
+                    include_bytes!("../../../assets/test_data/bun_logo.png").as_slice()
+                }
                 SamplePng::Rgb8 => todo!(),
                 SamplePng::Rgba8 => todo!(),
             },
             Self::Qoi(qoi) => match qoi {
                 SampleQoi::Rgb8 => todo!(),
                 SampleQoi::Rgba8 => todo!(),
-            }
+            },
             Self::Svg(svg) => match svg {
                 SampleSvg::Corro => todo!(),
                 SampleSvg::Cargo => todo!(),
                 SampleSvg::Repology => todo!(),
-            }
+            },
             Self::Webp(SampleWebp::CargoPublicApi) => todo!(),
         }
         .into()
@@ -301,12 +331,15 @@ impl Sample {
     }
 }
 
-fn file_cache(time: FakeTimeSource, path: &Path) -> LayeredCache {
-    todo!();
+const DUMMY_SVG_CTX: SvgContext = SvgContext { dpi: 1.0 };
+
+fn file_cache(time: FakeTimeSource, path: &Path) -> LayeredCacheWorker {
+    LayeredCache::new_with_time(time, DUMMY_SVG_CTX).unwrap().from_file(path).unwrap()
 }
 
-fn in_memory_cache(time: FakeTimeSource) -> LayeredCache {
-    LayeredCache::in_memory_with_time(time, SvgContext { dpi: 1.0 })
+// TODO: add another option that has an in-memory global db
+fn in_memory_cache(time: FakeTimeSource) -> LayeredCacheWorker {
+    LayeredCache::new_with_time(time, DUMMY_SVG_CTX).unwrap().in_memory()
 }
 
 fn image_server(images: Vec<RemoteImage>) -> HttpServer {
@@ -330,38 +363,59 @@ fn image_server(images: Vec<RemoteImage>) -> HttpServer {
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
+// TODO: helper function that fetches the image and returns an enum indicating it's source
+
 // Ensures that we can fetch a remote image from each layer of the cache
 #[test]
-fn sanity() {
-    let image = SamplePng::Bun.into();
-    let cache_control = CacheControl::new().max_age(ONE_DAY);
-    // TODO: path to the image
+fn layers() {
+    test_utils::init_test_log();
+
+    // Setup server
+    let image: Sample = SamplePng::Bun.into();
+    let expected_data = image.post_decode();
+    let cache_control = CacheControl::new().immutable();
     let remote_image = RemoteImage::from_sample(cache_control, "/sample.png", image);
     let server = image_server(vec![remote_image]);
     let url = server.url().to_owned() + "/sample.png";
-    let image_key: RemoteKey = url.as_str().into();
+    let image_key = RemoteKey::new_unchecked(url);
 
+    // Setup cache
     let shared_time = FakeTimeSource::default();
-    let tmp_dir = tempfile::tempdir().unwrap();
+    let tmp_dir = tempfile::Builder::new().prefix("inlyne-test-").tempdir().unwrap();
     let db_path = tmp_dir.path().join("test.db");
-    let cache = in_memory_cache(shared_time.clone());
+    let mut cache = file_cache(shared_time.clone(), &db_path);
 
-    // Fetch from remote and populate the cache
-    let data = match cache.fetch(image_key.clone()).unwrap() {
-        L1Check::Fini(data) => data,
-        L1Check::Cont(cont) => cont.finish().unwrap().unwrap(),
+    // Fetch from remote and populate all the cache layers in the process
+    let L1Check::Cont(cont) = cache.fetch(image_key.clone()).unwrap() else {
+        panic!("L1 shouldn't be populated on a fresh cache");
     };
-    assert_eq!(data, image.post_decode(), "Bad initial fetch");
+    let pair = cont.finish().unwrap().unwrap();
+    cache = pair.0;
+    let data = pair.1;
+    assert_eq!(data, expected_data, "Bad initial fetch");
 
-    // Shutdown the server and ensure requests fail
+    // Shutdown the server and ensure that requests now fail
     drop(server);
-    let fresh_cache = in_memory_cache(shared_time.clone());
-    match fresh_cache.fetch(image_key.clone()).unwrap() {
-        L1Check::Fini(_) => panic!("L1 shouldn't be populated on a fresh cache"),
-        // TODO: allow for inspecting image loading failures instead of returning them from the
-        // cache (and we don't want to cache the failures which we're currently doing)
-        L1Check::Cont(cont) => ImageError::ReqFailed = cont.finish().unwrap().unwrap_err(),
-    }
+    let throwaway_cache = in_memory_cache(shared_time.clone());
+    let L1Check::Cont(cont) = throwaway_cache.fetch(image_key.clone()).unwrap() else {
+        panic!("L1 shouldn't be populated on a fresh cache");
+    };
+    let err = cont.finish().unwrap().unwrap_err();
+    assert_eq!(err, ImageError::ReqFailed, "Server should be shut down");
+
+    // Fetch from l1
+    let L1Check::Fini(data) = cache.fetch(image_key.clone()).unwrap() else {
+        panic!("L1 should be populated");
+    };
+    assert_eq!(data, expected_data, "Invalid L1 image");
+
+    // Fetch from l2
+    let fresh_l1_cache = file_cache(shared_time.clone(), &db_path);
+    let L1Check::Cont(cont) = fresh_l1_cache.fetch(image_key.clone()).unwrap() else {
+        panic!("L1 shouldn't be populated on a fresh cache");
+    };
+    let data = cont.finish().unwrap().expect("L2 is populated").1;
+    assert_eq!(data, expected_data, "Invalid L2 image");
 }
 
 // TODO: add a cache builder that can configure various sizes along with allowing storing locally
@@ -369,6 +423,8 @@ fn sanity() {
 
 #[test]
 fn mutli_client_mash() {
+    test_utils::init_test_log();
+
     // TODO: This test is a stress-test verifying various assertions while having multiple
     // simulated clients simultaneously blasting away at the same global cache. The test goes
     // roughly as follows:
@@ -396,5 +452,5 @@ fn mutli_client_mash() {
     //
     // The source of truth can store all of the relevant info needed to verify the above and it's
     // shared by all of the clients and the image server
-    todo!();
+    // todo!();
 }

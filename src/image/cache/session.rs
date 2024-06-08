@@ -53,6 +53,15 @@ impl Cache {
             }
         })
     }
+
+    pub fn insert_local(&self, path: PathBuf, data: ImageData) {
+        todo!();
+    }
+
+    pub fn insert_remote(&self, remote: RemoteKey, val: (CachePolicy, ImageData)) {
+        let mut remote_cache = self.remote.write();
+        remote_cache.insert(remote, val);
+    }
 }
 
 pub enum RemoteEntry {

@@ -75,7 +75,9 @@ pollster = "0.3.0"
 raw-window-handle = "0.5.2"
 # SVG rendering
 resvg = "0.39.0"
-# Parses the optional YAML frontmatter (replace with just a yaml parser)
+# Sqlite DB for our image cache
+rusqlite = { version = "0.31.0", features = ["bundled"] }
+# Parses the optional YAML frontmatter (TODO: replace with just a yaml parser)
 serde_yaml = "0.9.34"
 # Easy `Debug` formatting changes used to keep snapshot tests more succinct
 smart-debug = "0.0.3"

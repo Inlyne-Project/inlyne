@@ -8,10 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::{
-    fs,
-    io::{self, Read},
-};
+use std::{fs, io};
 
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
@@ -389,21 +386,7 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
     );
 
     let req = ureq::get(url).set("User-Agent", USER_AGENT);
-    http_call_req(req)
-}
-
-pub fn http_call_req(req: ureq::Request) -> anyhow::Result<Vec<u8>> {
-    const LIMIT: usize = 20 * 1_024 * 1_024;
-
-    let resp = req.call()?;
-    let len = resp
-        .header("Content-Length")
-        .and_then(|len| len.parse::<usize>().ok());
-    let mut body = Vec::with_capacity(len.unwrap_or(0).clamp(0, LIMIT));
-    resp.into_reader()
-        .take(u64::try_from(LIMIT).unwrap())
-        .read_to_end(&mut body)?;
-    Ok(body)
+    cache::request::http_call_req(req).map(|(_, body)| body)
 }
 
 #[repr(C)]

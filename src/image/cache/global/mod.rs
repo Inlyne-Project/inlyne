@@ -1,6 +1,10 @@
-use std::{fmt, fs, path::PathBuf, time::SystemTime};
+use std::{
+    fmt, fs,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
-use super::{RemoteKey, StandardRequest, StoredImage};
+use super::{RemoteKey, StableImage, StandardRequest};
 use crate::{
     image::ImageData,
     utils::{self, inlyne_cache_dir},
@@ -9,20 +13,10 @@ use crate::{
 use anyhow::Context;
 use http::request;
 use http_cache_semantics::{BeforeRequest, CachePolicy, RequestLike};
-use redb::{Database, TableDefinition};
+use serde::{Deserialize, Serialize};
 
-mod redb_impls;
-
-// TODO: corrupt DB can panic. Should we switch to just storing blobs of bytes and handle fallible
-// parsing of the data externally? If the data failed to parse then that indicates the DB is
-// corrupt and should be totally reset per:
-// https://github.com/cberner/redb/issues/802#issuecomment-2093364141
-// TODO: store a counter to act as a generation, so that we can keep track of the consistency of
-// the value between txns
-// Access to metadata should be fast, so we keep it in a separate table to avoid loading bulky
-// image data except when necessary
-const META: TableDefinition<RemoteKey, RemoteMeta> = TableDefinition::new("remote-meta");
-const DATA: TableDefinition<RemoteKey, StoredImage> = TableDefinition::new("image-data");
+mod db;
+mod wrappers;
 
 // The database is currently externally versioned meaning that we switch to an entirely new file
 // when we bump the version
@@ -30,7 +24,7 @@ const DATA: TableDefinition<RemoteKey, StoredImage> = TableDefinition::new("imag
 const VERSION: u32 = 0;
 
 fn db_name() -> String {
-    format!("image-cache-v{VERSION}.redb")
+    format!("image-cache-v{VERSION}.db3")
 }
 
 fn db_path() -> anyhow::Result<PathBuf> {
@@ -94,8 +88,15 @@ impl Stats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RemoteMeta {
+    /// A generation used to uniquely identify this cache entry
+    ///
+    /// We use generations  to keep track of the consistency of a cache entry between different
+    /// tranactions. If we increment the generation every time we invalidate the entry in some way
+    /// (e.g. changing the stored image) then we're able to keep track of if we're still referring
+    /// to the same image in siturations like iniital validation/revalidation/etc.
+    pub generation: u32,
     pub last_used: SystemTime,
     pub policy: CachePolicy,
 }
@@ -105,50 +106,26 @@ pub fn run_garbage_collector() -> anyhow::Result<()> {
     cache.run_garbage_collector()
 }
 
-pub struct Cache(Database);
+pub struct Cache(db::Db);
 
 impl Cache {
     pub fn load() -> anyhow::Result<Self> {
-        let cache_dir = inlyne_cache_dir().context("Unable to locate cache dir")?;
-        fs::create_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to create cache dir at: {}", cache_dir.display()))?;
-        let db_path = db_path()?;
-        let file = fs::File::options()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(&db_path)
-            .with_context(|| format!("Failed to create database at: {}", db_path.display()))?;
-        Self::load_from_file(file)
+        let db = db::Db::load()?;
+        Ok(Self(db))
     }
 
-    pub fn load_from_file(file: fs::File) -> anyhow::Result<Self> {
-        let mut db = Database::builder()
-            .create_file(file)
-            .context("Failed creating database")?;
-        Self::create_schema(&mut db)?;
+    pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+        let db = db::Db::load_from_file(path)?;
         Ok(Self(db))
     }
 
     #[cfg(test)]
-    pub fn in_memory() -> Self {
-        use redb::backends::InMemoryBackend;
-        let backend = InMemoryBackend::new();
-        let mut db = Database::builder()
-            .create_with_backend(backend)
-            .expect("In-memory backend should be infallible");
-        Self::create_schema(&mut db).expect("Fresh in-memory DB");
+    pub fn load_in_memory() -> Self {
+        let db = db::Db::load_in_memory().expect("Fresh in-memory DB");
         Self(db)
     }
 
-    fn create_schema(db: &mut Database) -> anyhow::Result<()> {
-        let write_txn = db.begin_write()?;
-        write_txn.open_table(META)?;
-        write_txn.open_table(DATA)?;
-        write_txn.commit()?;
-        Ok(())
-    }
-
+    // TODO: rename to remove `remote_` since it's always remote now
     pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<CacheCheck> {
         let check = self.check_remote_cache_inner(key)?.unwrap_or_else(|| {
             let req: StandardRequest = key.into();
@@ -158,26 +135,19 @@ impl Cache {
         Ok(check)
     }
 
+    // TODO: rename to remove `remote_` since it's always remote now
     pub fn check_remote_cache_inner(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
-        // TODO: avoid re-doing this
         let req: StandardRequest = key.into();
-        let read_txn = self.0.begin_read()?;
-        let meta_table = read_txn.open_table(META)?;
-        let maybe_check = match meta_table.get(key)?.map(|e| e.value()) {
+        let maybe_meta = match self.0.get_meta(key)? {
             None => None,
             Some(meta) => match meta.policy.before_request(&req, SystemTime::now()) {
                 BeforeRequest::Fresh(_) => {
-                    let data_table = read_txn.open_table(DATA)?;
-                    match data_table.get(key)? {
-                        Some(entry) => {
-                            let data = entry.value();
-                            // NOTE: both readers _and_ a single writer can exist simultaneous, so
-                            // it's fine to start a write txn even though we already have a read
-                            // txn open
-                            let write_txn = self.0.begin_write()?;
-                            todo!("Update the last used time");
-                            Some(CacheCheck::Fresh(data.into()))
-                        }
+                    let gen = meta.generation;
+                    match self.0.get_data(key, gen)? {
+                        Some(image) => {
+                            self.0.refresh_last_used(key, gen)?;
+                            Some(CacheCheck::Fresh((meta.policy, image.into())))
+                         },
                         None => None,
                     }
                 }
@@ -189,17 +159,19 @@ impl Cache {
                         // No change to our usual headers means this is a new request
                         Some(CacheCont::Miss(request).into())
                     } else {
-                        let data_table = read_txn.open_table(DATA)?;
-                        data_table.get(key)?.map(|e| {
-                            let data = e.value();
-                            CacheCont::TryRefresh((request, data)).into()
+                        self.0.get_data(key, meta.generation)?.map(|image| {
+                            CacheCont::TryRefresh((request, image)).into()
                         })
                     }
                 }
             },
         };
 
-        Ok(maybe_check)
+        Ok(maybe_meta)
+    }
+
+    pub fn insert(&mut self, key: &RemoteKey, policy: &CachePolicy, image: StableImage) -> anyhow::Result<()> {
+        self.0.insert(key, policy, image)
     }
 
     pub fn run_garbage_collector(&self) -> anyhow::Result<()> {
@@ -213,14 +185,8 @@ impl Cache {
 
 #[must_use]
 pub enum CacheCheck {
-    Fresh(StoredImage),
+    Fresh((CachePolicy, StableImage)),
     Cont(CacheCont),
-}
-
-impl From<ImageData> for CacheCheck {
-    fn from(data: ImageData) -> Self {
-        Self::Fresh(data.into())
-    }
 }
 
 impl From<CacheCont> for CacheCheck {
@@ -231,6 +197,6 @@ impl From<CacheCont> for CacheCheck {
 
 #[must_use]
 pub enum CacheCont {
-    TryRefresh((request::Parts, StoredImage)),
+    TryRefresh((request::Parts, StableImage)),
     Miss(request::Parts),
 }
