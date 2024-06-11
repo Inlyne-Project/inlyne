@@ -1697,7 +1697,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
 dependencies = [
- "hashbrown 0.14.3",
+ "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -1949,6 +1949,7 @@ dependencies = [
  "pollster",
  "pretty_assertions",
  "raw-window-handle",
+ "redb",
  "resvg",
  "rusqlite",
  "serde",
@@ -3464,6 +3465,15 @@ checksum = "af4749db2bd1c853db31a7ae5ee2fc6c30bbddce353ea8fedf673fed187c68c7"
 dependencies = [
  "bytemuck",
  "font-types",
+]
+
+[[package]]
+name = "redb"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6dd20d3cdeb9c7d2366a0b16b93b35b75aec15309fbeb7ce477138c9f68c8c0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
