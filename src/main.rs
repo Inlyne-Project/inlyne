@@ -516,6 +516,7 @@ impl Inlyne {
                                 };
                             } else {
                                 self.selection.add_position(mouse_position);
+                                self.window.request_redraw()
                             }
                             mouse_down = true;
                         }
