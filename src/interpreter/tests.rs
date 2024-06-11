@@ -11,12 +11,8 @@ use super::{HtmlInterpreter, ImageCallback, WindowInteractor};
 use crate::color::{Theme, ThemeDefaults};
 use crate::image::{Image, ImageData};
 use crate::opts::ResolvedTheme;
-<<<<<<< HEAD
 use crate::test_utils::image::{Sample, SamplePng};
 use crate::test_utils::{log, server};
-=======
-use crate::test_utils::{init_test_log, mock_file_server, File};
->>>>>>> 800f703 (refactor(tests): Drop wiremock (#320))
 use crate::utils::Align;
 use crate::{Element, ImageCache};
 
@@ -426,17 +422,12 @@ fn centered_image_with_size_align_and_link() {
 
     let logo: Sample = SamplePng::Bun.into();
     let logo_path = "/bun_logo.png";
-<<<<<<< HEAD
     let files = vec![server::File::new(
         logo_path,
         logo.content_type(),
         &logo.pre_decode(),
     )];
     let (_server, server_url) = server::mock_file_server(files);
-=======
-    let files = vec![File::new(logo_path, "image/png", logo)];
-    let (_server, server_url) = mock_file_server(files);
->>>>>>> 800f703 (refactor(tests): Drop wiremock (#320))
     let logo_url = server_url + logo_path;
 
     let text = format!(
@@ -461,11 +452,7 @@ fn image_loading_fails_gracefully() {
 
     let json = r#"{"im": "not an image"}"#;
     let json_path = "/snapshot.png";
-<<<<<<< HEAD
     let (_server, server_url) = server::mock_file_server(vec![server::File::new(
-=======
-    let (_server, server_url) = mock_file_server(vec![File::new(
->>>>>>> 800f703 (refactor(tests): Drop wiremock (#320))
         json_path,
         "application/json",
         json.as_bytes(),
@@ -521,17 +508,10 @@ fn picture_dark_light() {
     .into_iter()
     .map(|(path, b64_bytes)| {
         let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
-<<<<<<< HEAD
         server::File::new(path, webp_mime, &bytes)
     })
     .collect();
     let (_server, server_url) = server::mock_file_server(files);
-=======
-        File::new(path, webp_mime, &bytes)
-    })
-    .collect();
-    let (_server, server_url) = mock_file_server(files);
->>>>>>> 800f703 (refactor(tests): Drop wiremock (#320))
     let dark_url = format!("{server_url}{dark_path}");
     let light_url = format!("{server_url}{light_path}");
     let default_url = format!("{server_url}{default_path}");
