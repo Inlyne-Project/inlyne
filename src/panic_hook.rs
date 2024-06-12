@@ -201,3 +201,53 @@ Thank you kindly!"
 
     Some(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use human_panic::report::Method;
+
+    #[test]
+    fn snap_report() {
+        let mut report = Report::new(
+            Method::Panic,
+            "dummy explanation".into(),
+            "dummy cause".into(),
+        );
+        // Normalize some unstable values
+        report.backtrace = "\n[REDACTED: backtrace lines]".into();
+        report.operating_system = "[REDACTED]".into();
+        let report_path = report.persist().unwrap();
+
+        let contents = std::fs::read_to_string(&report_path).unwrap();
+        insta::assert_snapshot!(contents, @r###"
+        # Crash Report
+
+        | Name | `inlyne` |
+        | ---: | :--- |
+        | Version | `0.4.1` |
+        | Operating System | [REDACTED] |
+
+        `````text
+        Cause: dummy cause
+
+        Explanation:
+        dummy explanation
+        `````
+
+        <details>
+        <summary>(backtrace)</summary>
+
+        `````text
+        [REDACTED: backtrace lines]
+        `````
+
+        </details>
+
+        ---
+
+        <!-- Add any relevant info below vv -->
+        "###);
+    }
+}
