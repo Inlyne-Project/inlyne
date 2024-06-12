@@ -8,7 +8,7 @@ use tempfile::NamedTempFile;
 use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::history::History;
 use crate::opts::config::{self, FontOptions, LinesToScroll};
-use crate::opts::{Cli, Opts, ResolvedTheme, ThemeType};
+use crate::opts::{Cli, Opts, Position, ResolvedTheme, Size, ThemeType};
 use crate::test_utils::log;
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
@@ -310,4 +310,35 @@ fn missing_file_arg() {
 
     // A file arg should be required
     assert!(Cli::try_parse_from(gen_args(Vec::new())).is_err());
+}
+
+#[test]
+fn win_pos_and_size() {
+    log::init();
+
+    let (_tmp, md_file) = temp_md_file();
+
+    let args = gen_args(vec![
+        "--win-pos",
+        "100,200",
+        "--win-size",
+        "300x400",
+        &md_file,
+    ]);
+    assert_eq!(
+        Opts::parse_and_load_with_system_theme(
+            Cli::try_parse_from(args).unwrap().into_view().unwrap(),
+            config::Config::default(),
+            None,
+        )
+        .unwrap(),
+        Opts {
+            position: Some(Position { x: 100, y: 200 }),
+            size: Some(Size {
+                width: 300,
+                height: 400
+            }),
+            ..Opts::mostly_default(&md_file)
+        }
+    );
 }

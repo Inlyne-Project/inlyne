@@ -2,6 +2,7 @@ use clap::{
     builder::PossibleValue, command, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
 };
 use serde::Deserialize;
+use std::array;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -43,15 +44,15 @@ impl FromStr for Position {
     type Err = &'static str;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = input.split(',').collect();
-        if parts.len() != 2 {
+        let mut parts = input.split(',');
+        let [Some(x), Some(y), None] = array::from_fn(|_| parts.next()) else {
             return Err("Invalid format for Position: expected format <x>,<y>");
-        }
-        let x = parts[0]
-            .parse::<i32>()
+        };
+        let x = x
+            .parse()
             .map_err(|_| "Invalid x-coordinate: not a valid integer")?;
-        let y = parts[1]
-            .parse::<i32>()
+        let y = y
+            .parse()
             .map_err(|_| "Invalid y-coordinate: not a valid integer")?;
         Ok(Position { x, y })
     }
@@ -66,15 +67,15 @@ impl FromStr for Size {
     type Err = &'static str;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = input.split('x').collect();
-        if parts.len() != 2 {
+        let mut parts = input.split('x');
+        let [Some(width), Some(height), None] = array::from_fn(|_| parts.next()) else {
             return Err("Invalid format for Size: expected format <width>x<height>");
-        }
-        let width = parts[0]
-            .parse::<u32>()
+        };
+        let width = width
+            .parse()
             .map_err(|_| "Invalid width: not a valid integer")?;
-        let height = parts[1]
-            .parse::<u32>()
+        let height = height
+            .parse()
             .map_err(|_| "Invalid height: not a valid integer")?;
         Ok(Size { width, height })
     }

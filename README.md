@@ -1,7 +1,14 @@
 <h1 align="center">Inlyne - a GPU powered, browserless, markdown + html viewer</h1>
 
 <p align="center">
-<a href="https://crates.io/crates/inlyne" target="_blank"><img height=25 src="https://img.shields.io/crates/v/inlyne.svg" /></a>
+  <!-- Crates.io -->
+  <a href="https://crates.io/crates/inlyne">
+    <img src="https://img.shields.io/crates/v/inlyne.svg" alt="crates.io" />
+  </a>
+  <!-- Codecov.io -->
+  <a href="https://codecov.io/github/Inlyne-Project/inlyne">
+    <img src="https://codecov.io/github/Inlyne-Project/inlyne/graph/badge.svg?token=PAQUKH5JOV" alt="codecov.io" />
+  </a>
 </p>
 
 ```bash
