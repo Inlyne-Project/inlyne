@@ -83,7 +83,6 @@ serde_yaml = "0.9.34"
 smart-debug = "0.0.3"
 # Helps power our syntax highlighting
 syntect = "5.2.0"
-redb = "2.0.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
 taffy = "0.3.19"
