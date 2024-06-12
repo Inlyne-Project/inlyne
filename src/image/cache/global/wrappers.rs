@@ -3,7 +3,6 @@ use std::{
     time::{Duration, SystemTime, SystemTimeError},
 };
 
-use super::RemoteMeta;
 use crate::image::{cache::StableImage, ImageData};
 
 use anyhow::Context;

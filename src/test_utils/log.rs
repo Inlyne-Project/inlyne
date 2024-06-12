@@ -1,6 +1,3 @@
-use std::{sync::Arc, thread};
-
-use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
 use tracing_subscriber::prelude::*;
 
 pub fn init() {

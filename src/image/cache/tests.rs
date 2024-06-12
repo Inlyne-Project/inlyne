@@ -1,6 +1,5 @@
 // TODO: test:
 //
-// - Local image
 // - E-tag match and miss
 // - That LRU time appears to get updated right
 // - Local image cache appearing to work right
@@ -9,7 +8,6 @@
 // - Iterate over all the images then snapshot what the stats look like
 
 use std::{
-    fs,
     path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
@@ -17,13 +15,11 @@ use std::{
 
 use super::{L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource};
 use crate::{
-    image::{cache::ImageError, ImageData},
-    test_utils::{log, image, server},
+    image::{cache::ImageError},
+    test_utils::{log, image, server, temp},
 };
 
-use http::{header, HeaderMap, HeaderValue};
 use parking_lot::RwLock;
-use tiny_http::{Header, Method, Response, ResponseBox};
 
 #[derive(Clone)]
 struct FakeTimeSource(Arc<RwLock<SystemTime>>);
@@ -135,8 +131,8 @@ fn layers() {
 
     // Setup cache
     let shared_time = FakeTimeSource::default();
-    let tmp_dir = tempfile::Builder::new().prefix("inlyne-test-").tempdir().unwrap();
-    let db_path = tmp_dir.path().join("test.db");
+    let (_tmp_dir, tmp_path) = temp::dir();
+    let db_path = tmp_path.join("test.db");
     let mut cache = file_cache(shared_time.clone(), &db_path);
 
     // Fetch from remote and populate all the cache layers in the process
@@ -170,6 +166,12 @@ fn layers() {
     };
     let data = cont.finish().unwrap().expect("L2 is populated").1;
     assert_eq!(data, expected_data, "Invalid L2 image");
+}
+
+#[test]
+fn local_image() {
+    todo!();
+    // let key = Key::from_abs_path(path)
 }
 
 // TODO: add a cache builder that can configure various sizes along with allowing storing locally

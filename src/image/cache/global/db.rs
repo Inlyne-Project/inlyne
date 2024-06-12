@@ -1,13 +1,12 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{Duration, SystemTime},
+    time::{SystemTime},
 };
 
 use crate::{
     image::{
         cache::{global::RemoteMeta, RemoteKey, StableImage},
-        ImageData,
     },
     utils,
 };

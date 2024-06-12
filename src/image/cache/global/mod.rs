@@ -5,10 +5,7 @@ use std::{
 };
 
 use super::{RemoteKey, StableImage, StandardRequest};
-use crate::{
-    image::ImageData,
-    utils::{self, inlyne_cache_dir},
-};
+use crate::utils;
 
 use anyhow::Context;
 use http::request;
