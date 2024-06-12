@@ -1,5 +1,8 @@
-use std::{sync::mpsc::Sender, thread};
+use std::{sync::mpsc::Sender, time::Duration, thread};
 
+use super::image::Sample;
+
+use http::{header, HeaderMap, HeaderValue};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
@@ -116,37 +119,166 @@ pub enum FromServer {
 }
 
 /// Spin up a server, so we can test network requests without external services
-pub fn mock_file_server(files: Vec<File>) -> (MiniServerHandle, String) {
+pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
     let state = State { files, send: None };
-    let server = spawn(state, |state, req, req_url| match req.method() {
+    spawn(state, |state, req, req_url| match req.method() {
         Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
             Some(file) => {
-                let header = Header::from_bytes(b"Content-Type", file.mime.as_bytes()).unwrap();
-                Response::from_data(file.bytes.clone())
-                    .with_header(header)
-                    .boxed()
+                let mut resp = Response::from_data(file.bytes.clone())
+                    .with_header(file.mime);
+
+                if let Some(c_c) = &file.cache_control {
+                    resp = resp.with_header(c_c.to_owned());
+                }
+
+                resp.boxed()
             }
             None => Response::empty(404).boxed(),
         },
         _ => Response::empty(404).boxed(),
-    });
+    })
+}
 
-    let url = server.url().to_owned();
-    (server, url)
+#[derive(Clone, Debug, Default)]
+pub struct CacheControl {
+    immutable: bool,
+    max_age: Option<Duration>,
+}
+
+impl CacheControl {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn immutable(mut self) -> Self {
+        self.immutable = true;
+        self
+    }
+
+    pub fn max_age(mut self, age: Duration) -> Self {
+        self.max_age = Some(age);
+        self
+    }
+
+    fn to_header_value(&self) -> Option<String> {
+        let CacheControl { immutable, max_age } = self;
+        let mut cache_control = Vec::new();
+        if *immutable {
+            cache_control.push("immutable".to_owned());
+        }
+        if let Some(age) = max_age {
+            cache_control.push(format!("max-age={}", age.as_secs()));
+        }
+
+        if !cache_control.is_empty() {
+            let cc = cache_control.join(",");
+            cc.parse().ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl From<CacheControl> for Header {
+    fn from(cache_control: CacheControl) -> Self {
+        let value = cache_control.to_header_value().unwrap();
+        Self::from_bytes(header::CACHE_CONTROL.as_str(), value).unwrap()
+    }
+}
+
+impl From<CacheControl> for HeaderMap {
+    fn from(cache_control: CacheControl) -> Self {
+        let mut map = HeaderMap::new();
+
+        if let Some(value) = cache_control.to_header_value() {
+            let value = HeaderValue::from_str(&value).unwrap();
+            map.insert(header::CACHE_CONTROL, value);
+        }
+
+        map
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ContentType {
+    Gif,
+    Jpg,
+    Png,
+    Qoi,
+    Svg,
+    Webp,
+    Other(&'static str),
+}
+
+impl From<Sample> for ContentType {
+    fn from(sample: Sample) -> Self {
+        match sample {
+            Sample::Gif(_) => Self::Gif,
+            Sample::Jpg(_) => Self::Jpg,
+            Sample::Png(_) => Self::Png,
+            Sample::Qoi(_) => Self::Qoi,
+            Sample::Svg(_) => Self::Svg,
+            Sample::Webp(_) => Self::Webp,
+        }
+    }
+}
+
+
+impl ContentType {
+    fn to_str(self) -> &'static str {
+        match self {
+            Self::Gif => "image/gif",
+            Self::Jpg => "image/jpeg",
+            Self::Png => "image/png",
+            Self::Qoi => "image/qoi",
+            Self::Svg => "image/svg+xml",
+            Self::Webp => "image/webp",
+            Self::Other(other) => other,
+        }
+    }
+}
+
+impl From<ContentType> for Header {
+    fn from(content_ty: ContentType) -> Self {
+        let header_name = header::CONTENT_TYPE.as_str().as_bytes();
+        let content_ty = content_ty.to_str().as_bytes();
+        Header::from_bytes(header_name, content_ty).unwrap()
+    }
 }
 
 pub struct File {
     pub url_path: String,
-    pub mime: String,
+    pub mime: ContentType,
+    pub cache_control: Option<CacheControl>,
     pub bytes: Vec<u8>,
 }
 
 impl File {
-    pub fn new(url_path: &str, mime: &str, bytes: &[u8]) -> Self {
+    pub fn new(url_path: &str, mime: ContentType, cache_control: Option<CacheControl>, bytes: &[u8]) -> Self {
         Self {
-            url_path: url_path.to_owned(),
-            mime: mime.to_owned(),
-            bytes: bytes.to_owned(),
+            url_path: url_path.into(),
+            mime,
+            cache_control,
+            bytes: bytes.into()
         }
+    }
+}
+
+impl From<File> for ResponseBox {
+    fn from(file: File) -> Self {
+        let File {
+            url_path: _,
+            mime,
+            cache_control,
+            bytes,
+        } = file;
+
+        let mut resp = Response::from_data(bytes).with_header(mime);
+
+        if let Some(c_c) = cache_control {
+            resp = resp.with_header(c_c);
+        }
+
+        resp.boxed()
     }
 }

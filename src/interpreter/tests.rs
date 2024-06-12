@@ -424,11 +424,12 @@ fn centered_image_with_size_align_and_link() {
     let logo_path = "/bun_logo.png";
     let files = vec![server::File::new(
         logo_path,
-        logo.content_type(),
+        logo.into(),
+        None,
         &logo.pre_decode(),
     )];
-    let (_server, server_url) = server::mock_file_server(files);
-    let logo_url = server_url + logo_path;
+    let server = server::mock_file_server(files);
+    let logo_url = server.url().to_owned() + logo_path;
 
     let text = format!(
         r#"
@@ -452,12 +453,13 @@ fn image_loading_fails_gracefully() {
 
     let json = r#"{"im": "not an image"}"#;
     let json_path = "/snapshot.png";
-    let (_server, server_url) = server::mock_file_server(vec![server::File::new(
+    let server = server::mock_file_server(vec![server::File::new(
         json_path,
-        "application/json",
+        server::ContentType::Other("application/json"),
+        None,
         json.as_bytes(),
     )]);
-    let json_url = server_url + json_path;
+    let json_url = server.url().to_owned() + json_path;
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
@@ -499,7 +501,7 @@ fn picture_dark_light() {
     let light_path = "/light.webp";
     let dark_path = "/dark.webp";
     let default_path = "/default.webp";
-    let webp_mime = "image/webp";
+    let webp_mime = server::ContentType::Webp;
     let files = [
         (dark_path, B64_SINGLE_PIXEL_WEBP_FFF),
         (light_path, B64_SINGLE_PIXEL_WEBP_000),
@@ -508,10 +510,11 @@ fn picture_dark_light() {
     .into_iter()
     .map(|(path, b64_bytes)| {
         let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
-        server::File::new(path, webp_mime, &bytes)
+        server::File::new(path, webp_mime, None, &bytes)
     })
     .collect();
-    let (_server, server_url) = server::mock_file_server(files);
+    let server = server::mock_file_server(files);
+    let server_url = server.url();
     let dark_url = format!("{server_url}{dark_path}");
     let light_url = format!("{server_url}{light_path}");
     let default_url = format!("{server_url}{default_path}");

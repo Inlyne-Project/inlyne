@@ -1,5 +1,7 @@
 use crate::image::ImageData;
 
+use super::server::ContentType;
+
 #[derive(Clone, Copy)]
 pub enum Sample {
     Gif(SampleGif),

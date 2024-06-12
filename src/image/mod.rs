@@ -1,3 +1,4 @@
+pub mod cache;
 mod decode;
 #[cfg(test)]
 mod tests;
@@ -7,10 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::{
-    fs,
-    io::{self, Read},
-};
+use std::{fs, io};
 
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
@@ -60,20 +58,21 @@ impl ImageSize {
     }
 }
 
-#[derive(SmartDebug, Default, Clone)]
+#[derive(SmartDebug, Clone, PartialEq, Eq)]
 pub struct ImageData {
     #[debug(wrapper = DebugBytesPrefix)]
-    lz4_blob: Vec<u8>,
-    scale: bool,
+    pub lz4_blob: Arc<[u8]>,
+    pub scale: bool,
     #[debug(wrapper = DebugInline)]
-    dimensions: (u32, u32),
+    pub dimensions: (u32, u32),
 }
 
 impl ImageData {
+    // TODO: make sure we aren't accidentally going `Arc<[u8]>` -> `&[u8]` -> `Arc<[u8]>`
     pub fn load(bytes: &[u8], scale: bool) -> anyhow::Result<Self> {
         let (lz4_blob, dimensions) = decode::decode_and_compress(bytes)?;
         Ok(Self {
-            lz4_blob,
+            lz4_blob: lz4_blob.into(),
             scale,
             dimensions,
         })
@@ -99,7 +98,7 @@ impl ImageData {
 
         Self {
             dimensions,
-            lz4_blob,
+            lz4_blob: lz4_blob.into(),
             scale,
         }
     }
@@ -377,6 +376,8 @@ impl Image {
     }
 }
 
+// TODO: move to `cache` since it's an internal implementation detail that isn't needed anywhere
+// else
 pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
     const USER_AGENT: &str = concat!(
         "inlyne ",
@@ -384,17 +385,8 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
         " https://github.com/Inlyne-Project/inlyne"
     );
 
-    const LIMIT: usize = 20 * 1_024 * 1_024;
-
-    let resp = ureq::get(url).set("User-Agent", USER_AGENT).call()?;
-    let len = resp
-        .header("Content-Length")
-        .and_then(|len| len.parse::<usize>().ok());
-    let mut body = Vec::with_capacity(len.unwrap_or(0).clamp(0, LIMIT));
-    resp.into_reader()
-        .take(u64::try_from(LIMIT).unwrap())
-        .read_to_end(&mut body)?;
-    Ok(body)
+    let req = ureq::get(url).set("User-Agent", USER_AGENT);
+    cache::request::http_call_req(req).map(|(_, body)| body)
 }
 
 #[repr(C)]
