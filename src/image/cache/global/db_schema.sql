@@ -3,5 +3,5 @@ create table if not exists images (
     generation int not null,
     last_used int not null,
     policy blob not null,
-    data blob not null
+    image blob not null
 )

@@ -95,7 +95,7 @@ impl Db {
     ) -> anyhow::Result<Option<StableImage>> {
         let mut stmt = self
             .0
-            .prepare_cached("select data from images where url = ?1 and generation = ?2")?;
+            .prepare_cached("select image from images where url = ?1 and generation = ?2")?;
         let mut data_iter = stmt.query_map((&remote.0, generation), |row| {
             // TODO: fixup the error type here to be more sane
             let blah = row.get::<_, StableImageBytes>(0)?.try_into().map_err(|err| {
@@ -121,7 +121,7 @@ impl Db {
         };
         {
             let mut stmt = txn.prepare_cached(
-                "insert into images (url, generation, last_used, policy, data)
+                "insert into images (url, generation, last_used, policy, image)
                     values (?1, ?2, ?3, ?4, ?5)",
             )?;
             stmt.execute((url, next_gen, now, policy, image))?;
