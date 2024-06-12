@@ -68,6 +68,9 @@ use winit::event::{
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::window::{CursorIcon, Window, WindowBuilder};
 
+#[cfg(feature = "wayland")]
+use winit::platform::wayland::WindowBuilderExtWayland;
+
 pub enum InlyneEvent {
     LoadedImage(String, Arc<Mutex<Option<ImageData>>>),
     FileReload,
@@ -170,6 +173,10 @@ impl Inlyne {
             if let Some(ref size) = opts.size {
                 wb = wb.with_inner_size(winit::dpi::PhysicalSize::new(size.width, size.height))
             }
+            #[cfg(feature = "wayland")]
+            {
+                wb = wb.with_name("inlyne", "")
+            };
 
             Arc::new(wb.build(&event_loop).unwrap())
         };
