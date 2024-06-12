@@ -210,7 +210,7 @@ pub struct Shared {
     svg_ctx: SvgContext,
 }
 
-struct SvgContext {
+pub struct SvgContext {
     dpi: f32,
 }
 
