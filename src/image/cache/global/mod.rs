@@ -144,7 +144,7 @@ impl Cache {
                         Some(image) => {
                             self.0.refresh_last_used(key, gen)?;
                             Some(CacheCheck::Fresh((meta.policy, image.into())))
-                         },
+                        }
                         None => None,
                     }
                 }
@@ -156,9 +156,9 @@ impl Cache {
                         // No change to our usual headers means this is a new request
                         Some(CacheCont::Miss(request).into())
                     } else {
-                        self.0.get_data(key, meta.generation)?.map(|image| {
-                            CacheCont::TryRefresh((request, image)).into()
-                        })
+                        self.0
+                            .get_data(key, meta.generation)?
+                            .map(|image| CacheCont::TryRefresh((request, image)).into())
                     }
                 }
             },
@@ -167,7 +167,12 @@ impl Cache {
         Ok(maybe_meta)
     }
 
-    pub fn insert(&mut self, key: &RemoteKey, policy: &CachePolicy, image: StableImage) -> anyhow::Result<()> {
+    pub fn insert(
+        &mut self,
+        key: &RemoteKey,
+        policy: &CachePolicy,
+        image: StableImage,
+    ) -> anyhow::Result<()> {
         self.0.insert(key, policy, image)
     }
 

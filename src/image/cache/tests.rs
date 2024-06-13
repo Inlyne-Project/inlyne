@@ -8,15 +8,19 @@
 // - Iterate over all the images then snapshot what the stats look like
 
 use std::{
+    io,
     path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
-use super::{L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource};
+use super::{Key, L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource};
 use crate::{
-    image::{cache::ImageError},
-    test_utils::{log, image, server, temp},
+    image::cache::ImageError,
+    test_utils::{
+        image::{Sample, SampleGif, SamplePng},
+        log, server, temp,
+    },
 };
 
 use parking_lot::RwLock;
@@ -57,8 +61,17 @@ struct RemoteImage {
 }
 
 impl RemoteImage {
-    fn from_sample(cache_control: server::CacheControl, path: &'static str, sample: image::Sample) -> Self {
-        Self::new(cache_control, path, sample.into(), sample.pre_decode())
+    fn from_sample(
+        cache_control: server::CacheControl,
+        path: &'static str,
+        sample: Sample,
+    ) -> Self {
+        Self::new(
+            cache_control,
+            path,
+            sample.into(),
+            sample.pre_decode().into(),
+        )
     }
 
     fn new(
@@ -97,12 +110,17 @@ impl From<RemoteImage> for server::File {
 const DUMMY_SVG_CTX: SvgContext = SvgContext { dpi: 1.0 };
 
 fn file_cache(time: FakeTimeSource, path: &Path) -> LayeredCacheWorker {
-    LayeredCache::new_with_time(time, DUMMY_SVG_CTX).unwrap().from_file(path).unwrap()
+    LayeredCache::new_with_time(time, DUMMY_SVG_CTX)
+        .unwrap()
+        .from_file(path)
+        .unwrap()
 }
 
 // TODO: add another option that has an in-memory global db
 fn in_memory_cache(time: FakeTimeSource) -> LayeredCacheWorker {
-    LayeredCache::new_with_time(time, DUMMY_SVG_CTX).unwrap().in_memory()
+    LayeredCache::new_with_time(time, DUMMY_SVG_CTX)
+        .unwrap()
+        .in_memory()
 }
 
 fn image_server(images: Vec<RemoteImage>) -> server::MiniServerHandle {
@@ -117,11 +135,11 @@ const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 // Ensures that we can fetch a remote image from each layer of the cache
 #[test]
-fn layers() {
+fn remote_layers() {
     log::init();
 
     // Setup server
-    let image: image::Sample = image::SamplePng::Bun.into();
+    let image: Sample = SamplePng::Bun.into();
     let expected_data = image.post_decode();
     let cache_control = server::CacheControl::new().immutable();
     let remote_image = RemoteImage::from_sample(cache_control, "/sample.png", image);
@@ -169,9 +187,33 @@ fn layers() {
 }
 
 #[test]
-fn local_image() {
-    todo!();
-    // let key = Key::from_abs_path(path)
+fn local_layers() {
+    // Setup local image
+    let image: Sample = SampleGif::AtuinDemo.into();
+    let (mut image_file, image_path) = temp::file_with_suffix(image.suffix());
+    let image_bytes = image.pre_decode();
+    io::copy(&mut io::Cursor::new(image_bytes), &mut image_file).unwrap();
+    let key = Key::from_abs_path(image_path).expect("Path is internally canonicalized");
+    let expected_data = image.post_decode();
+
+    // Setup cache
+    let time = FakeTimeSource::default();
+    let mut cache = in_memory_cache(time);
+
+    // Fetch from source
+    let L1Check::Cont(cont) = cache.fetch(key.clone()).unwrap() else {
+        panic!("Empty cache");
+    };
+    let pair = cont.finish().unwrap().unwrap();
+    cache = pair.0;
+    let data = pair.1;
+    assert_eq!(data, expected_data);
+
+    // And now from L1
+    let L1Check::Fini(data) = cache.fetch(key).unwrap() else {
+        panic!("L1 should be populated");
+    };
+    assert_eq!(data, expected_data);
 }
 
 // TODO: add a cache builder that can configure various sizes along with allowing storing locally

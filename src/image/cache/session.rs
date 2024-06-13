@@ -5,7 +5,7 @@ use std::{
     time::SystemTime,
 };
 
-use super::{RemoteKey, StandardRequest};
+use super::{load_image, RemoteKey, StableImage, StandardRequest};
 use crate::image::ImageData;
 
 use http::request;
@@ -37,10 +37,11 @@ impl Cache {
         None
     }
 
-    pub fn fetch_local(local: &Path) -> anyhow::Result<ImageData> {
-        let contents = fs::read(local)?;
-        // TODO: need to try loading as an svg too to mimic current behavior
-        ImageData::load(&contents, true)
+    pub fn fetch_local(&self, path: &Path) -> anyhow::Result<(SystemTime, StableImage)> {
+        let contents = fs::read(path)?;
+        let m_time = fs::metadata(path)?.modified()?;
+        let image = load_image(&contents)?;
+        Ok((m_time, image))
     }
 
     pub fn check_remote_cache(&self, remote: &RemoteKey) -> Option<RemoteEntry> {
@@ -54,8 +55,9 @@ impl Cache {
         })
     }
 
-    pub fn insert_local(&self, path: PathBuf, data: ImageData) {
-        todo!();
+    pub fn insert_local(&self, path: PathBuf, val: (SystemTime, ImageData)) {
+        let mut local_cache = self.local.write();
+        local_cache.insert(path, val);
     }
 
     pub fn insert_remote(&self, remote: RemoteKey, val: (CachePolicy, ImageData)) {

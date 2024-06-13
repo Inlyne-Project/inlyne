@@ -7,7 +7,7 @@ use crate::image::{cache::StableImage, ImageData};
 
 use anyhow::Context;
 use http_cache_semantics::CachePolicy;
-use rusqlite::types::{FromSql, ToSql, ToSqlOutput, FromSqlResult, ValueRef, FromSqlError};
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 
 pub struct CachePolicyBytes(Vec<u8>);
 

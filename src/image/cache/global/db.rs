@@ -1,13 +1,11 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime},
+    time::SystemTime,
 };
 
 use crate::{
-    image::{
-        cache::{global::RemoteMeta, RemoteKey, StableImage},
-    },
+    image::cache::{global::RemoteMeta, RemoteKey, StableImage},
     utils,
 };
 
@@ -77,7 +75,9 @@ impl Db {
         let mut meta_iter = stmt.query_map([&remote.0], |row| {
             let generation = row.get(0)?;
             let last_used = row.get::<_, SystemTimeSecs>(1)?.into();
-            let policy = (&row.get::<_, CachePolicyBytes>(2)?).try_into().map_err(|err| FromSqlError::Other(Box::new(err)))?;
+            let policy = (&row.get::<_, CachePolicyBytes>(2)?)
+                .try_into()
+                .map_err(|err| FromSqlError::Other(Box::new(err)))?;
             Ok(RemoteMeta {
                 generation,
                 last_used,
@@ -97,16 +97,24 @@ impl Db {
             .prepare_cached("select image from images where url = ?1 and generation = ?2")?;
         let mut data_iter = stmt.query_map((&remote.0, generation), |row| {
             // TODO: fixup the error type here to be more sane
-            let blah = row.get::<_, StableImageBytes>(0)?.try_into().map_err(|err| {
-                tracing::warn!("Corrupt stable-image: {err}");
-                FromSqlError::InvalidType
-            })?;
+            let blah = row
+                .get::<_, StableImageBytes>(0)?
+                .try_into()
+                .map_err(|err| {
+                    tracing::warn!("Corrupt stable-image: {err}");
+                    FromSqlError::InvalidType
+                })?;
             Ok(blah)
         })?;
         data_iter.next().transpose().map_err(Into::into)
     }
 
-    pub fn insert(&mut self, remote: &RemoteKey, policy: &CachePolicy, image: StableImage) -> anyhow::Result<()> {
+    pub fn insert(
+        &mut self,
+        remote: &RemoteKey,
+        policy: &CachePolicy,
+        image: StableImage,
+    ) -> anyhow::Result<()> {
         let url = &remote.0;
         let now: SystemTimeSecs = SystemTime::now().try_into()?;
         let policy: CachePolicyBytes = policy.try_into()?;
@@ -129,7 +137,12 @@ impl Db {
         Ok(())
     }
 
-    pub fn refresh(&self, remote: &RemoteKey, generation: u32, policy: &CachePolicy) -> anyhow::Result<()> {
+    pub fn refresh(
+        &self,
+        remote: &RemoteKey,
+        generation: u32,
+        policy: &CachePolicy,
+    ) -> anyhow::Result<()> {
         todo!();
     }
 

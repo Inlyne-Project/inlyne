@@ -11,7 +11,11 @@ pub fn dir() -> (TempDir, PathBuf) {
 }
 
 pub fn file_with_suffix(suffix: &str) -> (NamedTempFile, PathBuf) {
-    let file = Builder::new().prefix(TEST_PREFIX).suffix(suffix).tempfile().unwrap();
+    let file = Builder::new()
+        .prefix(TEST_PREFIX)
+        .suffix(suffix)
+        .tempfile()
+        .unwrap();
     let path = file.path().canonicalize().unwrap();
     (file, path)
 }

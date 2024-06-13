@@ -55,7 +55,10 @@
 //! smaller cache as only the entries that are within the global TTL will be retained
 
 use std::{
-    fmt, io, path::PathBuf, sync::Arc, time::{Instant, SystemTime}
+    fmt, io,
+    path::PathBuf,
+    sync::Arc,
+    time::{Instant, SystemTime},
 };
 
 use crate::{image::ImageData, HistTag};
@@ -84,6 +87,15 @@ use request::StandardRequest;
 
 const MAX_CACHE_SIZE_BYTES: u64 = 256 * 1_024 * 1_024;
 const MAX_ENTRY_SIZE_BYTES: u64 = MAX_CACHE_SIZE_BYTES / 10;
+
+fn load_image(bytes: &[u8]) -> anyhow::Result<StableImage> {
+    let image = if let Ok(image) = ImageData::load(&bytes, true) {
+        image.into()
+    } else {
+        todo!("Handle SVG stuff");
+    };
+    Ok(image)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
@@ -226,10 +238,7 @@ impl LayeredCache {
     }
 
     #[cfg(test)]
-    pub fn new_with_time<T>(
-        time: T,
-        svg_ctx: SvgContext,
-    ) -> anyhow::Result<Self>
+    pub fn new_with_time<T>(time: T, svg_ctx: SvgContext) -> anyhow::Result<Self>
     where
         T: TimeSource,
     {
@@ -256,28 +265,20 @@ impl LayeredCache {
     }
 
     #[cfg(test)]
-    pub fn from_file(
-        &self,
-        path: &std::path::Path,
-    ) -> anyhow::Result<LayeredCacheWorker>
-    {
+    pub fn from_file(&self, path: &std::path::Path) -> anyhow::Result<LayeredCacheWorker> {
         let global = global::Cache::load_from_file(path)?;
         Ok(self.worker(Some(global)))
     }
 
     /// Create a new cache in-memory
     #[cfg(test)]
-    pub fn in_memory(&self) -> LayeredCacheWorker
-    {
+    pub fn in_memory(&self) -> LayeredCacheWorker {
         self.worker(None)
     }
 
     fn worker(&self, global: Option<global::Cache>) -> LayeredCacheWorker {
         let shared = Arc::clone(&self.0);
-        LayeredCacheWorker {
-            shared,
-            global,
-        }
+        LayeredCacheWorker { shared, global }
     }
 }
 
@@ -289,7 +290,7 @@ pub struct LayeredCacheWorker {
 
 impl fmt::Debug for LayeredCacheWorker {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("LayeredCacheWorker")
+        f.write_str("LayeredCacheWorker { .. }")
     }
 }
 
@@ -319,11 +320,6 @@ impl LayeredCacheWorker {
         Ok(cache_l1_check)
     }
 
-    // TODO: move to `session` since that's the only layer that handles local images?
-    fn fetch_local_image(&self, path: PathBuf) -> anyhow::Result<StableImage> {
-        todo!()
-    }
-
     fn l2_check(&self, key: &RemoteKey) -> anyhow::Result<global::CacheCheck> {
         if let Some(global) = &self.global {
             global.check_remote_cache(&key)
@@ -344,7 +340,7 @@ impl LayeredCacheWorker {
                 let key = RemoteKey::new_unchecked(url.to_string());
                 let image_res = self.fetch_remote_image(req_parts.into())?;
                 (key, image_res)
-            },
+            }
             global::CacheCont::TryRefresh(_) => todo!(),
         };
 
@@ -371,11 +367,7 @@ impl LayeredCacheWorker {
         };
         let policy = CachePolicy::new(&standard_req, &standard_resp);
 
-        let image = if let Ok(image) = ImageData::load(&body, true) {
-            image.into()
-        } else {
-            todo!("Handle SVG stuff");
-        };
+        let image = load_image(&body)?;
 
         histogram!(HistTag::ImageLoad).record(start.elapsed());
         Ok(Ok((policy, image)))
@@ -438,11 +430,13 @@ impl L1Cont {
                 data
             }
             L1ContKind::FetchLocal(path) => {
-                let data = cache
-                    .fetch_local_image(path.clone())?
-                    .render(&cache.shared.svg_ctx);
+                let (m_time, image) = cache.shared.per_session.fetch_local(&path)?;
+                let data = image.render(&cache.shared.svg_ctx);
 
-                cache.shared.per_session.insert_local(path, data.clone());
+                cache
+                    .shared
+                    .per_session
+                    .insert_local(path, (m_time, data.clone()));
 
                 data
             }

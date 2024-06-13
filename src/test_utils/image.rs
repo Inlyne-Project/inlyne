@@ -86,7 +86,7 @@ pub enum SampleWebp {
 }
 
 impl Sample {
-    pub fn pre_decode(self) -> Vec<u8> {
+    pub fn pre_decode(self) -> &'static [u8] {
         match self {
             Self::Jpg(jpg) => match jpg {
                 SampleJpg::Rgb8 => include_bytes!("../../assets/test_data/rgb8.jpg").as_slice(),
@@ -124,22 +124,36 @@ impl Sample {
                 include_bytes!("../../assets/test_data/cargo_public_api.webp").as_slice()
             }
         }
-        .into()
     }
 
-    // TODO: adapt this to work with svg images too
     pub fn post_decode(self) -> ImageData {
-        ImageData::load(&self.pre_decode(), true).unwrap()
+        if let Self::Svg(_) = self {
+            // TODO: adapt this to work with svg images too
+            todo!();
+        } else {
+            ImageData::load(&self.pre_decode(), true).unwrap()
+        }
     }
 
     pub fn content_type(self) -> &'static str {
         match self {
-            Sample::Gif(_) => "image/gif",
-            Sample::Jpg(_) => "image/jpeg",
-            Sample::Png(_) => "image/png",
-            Sample::Qoi(_) => "image/qoi",
-            Sample::Svg(_) => "image/svg+xml",
-            Sample::Webp(_) => "image/webp",
+            Self::Gif(_) => "image/gif",
+            Self::Jpg(_) => "image/jpeg",
+            Self::Png(_) => "image/png",
+            Self::Qoi(_) => "image/qoi",
+            Self::Svg(_) => "image/svg+xml",
+            Self::Webp(_) => "image/webp",
+        }
+    }
+
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Self::Gif(_) => ".gif",
+            Self::Jpg(_) => ".jpg",
+            Self::Png(_) => ".png",
+            Self::Qoi(_) => ".qoi",
+            Self::Svg(_) => ".svg",
+            Self::Webp(_) => ".webp",
         }
     }
 }

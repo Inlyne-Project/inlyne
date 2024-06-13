@@ -203,3 +203,6 @@ ttf-parser.opt-level = 2
 rustybuzz.opt-level = 2
 cosmic-text.opt-level = 2
 png.opt-level = 2
+gif.opt-level = 2
+image.opt-level = 2
+lz4_flex.opt-level = 2

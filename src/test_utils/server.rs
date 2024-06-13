@@ -1,4 +1,4 @@
-use std::{sync::mpsc::Sender, time::Duration, thread};
+use std::{sync::mpsc::Sender, thread, time::Duration};
 
 use super::image::Sample;
 
@@ -124,8 +124,7 @@ pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
     spawn(state, |state, req, req_url| match req.method() {
         Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
             Some(file) => {
-                let mut resp = Response::from_data(file.bytes.clone())
-                    .with_header(file.mime);
+                let mut resp = Response::from_data(file.bytes.clone()).with_header(file.mime);
 
                 if let Some(c_c) = &file.cache_control {
                     resp = resp.with_header(c_c.to_owned());
@@ -223,7 +222,6 @@ impl From<Sample> for ContentType {
     }
 }
 
-
 impl ContentType {
     fn to_str(self) -> &'static str {
         match self {
@@ -254,12 +252,17 @@ pub struct File {
 }
 
 impl File {
-    pub fn new(url_path: &str, mime: ContentType, cache_control: Option<CacheControl>, bytes: &[u8]) -> Self {
+    pub fn new(
+        url_path: &str,
+        mime: ContentType,
+        cache_control: Option<CacheControl>,
+        bytes: &[u8],
+    ) -> Self {
         Self {
             url_path: url_path.into(),
             mime,
             cache_control,
-            bytes: bytes.into()
+            bytes: bytes.into(),
         }
     }
 }
