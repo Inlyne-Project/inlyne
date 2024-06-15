@@ -123,38 +123,33 @@ pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
     let state = State { files, send: None };
     spawn(state, |state, req, req_url| match req.method() {
         Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
-            Some(file) => {
-                let mut resp = Response::from_data(file.bytes.clone()).with_header(file.mime);
-
-                if let Some(c_c) = &file.cache_control {
-                    resp = resp.with_header(c_c.to_owned());
-                }
-
-                resp.boxed()
-            }
+            Some(file) => file.to_owned().into(),
             None => Response::empty(404).boxed(),
         },
         _ => Response::empty(404).boxed(),
     })
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct CacheControl {
     immutable: bool,
     max_age: Option<Duration>,
 }
 
 impl CacheControl {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            immutable: false,
+            max_age: None,
+        }
     }
 
-    pub fn immutable(mut self) -> Self {
+    pub const fn immutable(mut self) -> Self {
         self.immutable = true;
         self
     }
 
-    pub fn max_age(mut self, age: Duration) -> Self {
+    pub const fn max_age(mut self, age: Duration) -> Self {
         self.max_age = Some(age);
         self
     }
@@ -244,6 +239,7 @@ impl From<ContentType> for Header {
     }
 }
 
+#[derive(Clone)]
 pub struct File {
     pub url_path: String,
     pub mime: ContentType,

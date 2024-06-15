@@ -55,17 +55,18 @@
 //! smaller cache as only the entries that are within the global TTL will be retained
 
 use std::{
-    fmt, io,
+    fmt, io::{self, Read},
     path::PathBuf,
     sync::Arc,
     time::{Instant, SystemTime},
 };
 
-use crate::{image::ImageData, HistTag};
+use crate::{image::{ImageBuffer, ImageData}, HistTag};
 
 use http_cache_semantics::{CachePolicy, RequestLike};
-use lz4_flex::frame::FrameEncoder;
+use lz4_flex::frame::{FrameDecoder, FrameEncoder};
 use metrics::histogram;
+use resvg::{tiny_skia, usvg};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -92,7 +93,9 @@ fn load_image(bytes: &[u8]) -> anyhow::Result<StableImage> {
     let image = if let Ok(image) = ImageData::load(&bytes, true) {
         image.into()
     } else {
-        todo!("Handle SVG stuff");
+        // TODO: how to verify that this is an svg?
+        let svg = std::str::from_utf8(bytes)?;
+        StableImage::from_svg(&svg)
     };
     Ok(image)
 }
@@ -114,8 +117,14 @@ impl RemoteKey {
 }
 
 impl From<RemoteKey> for Key {
-    fn from(v: RemoteKey) -> Self {
-        Self::Remote(v)
+    fn from(key: RemoteKey) -> Self {
+        Self::Remote(key)
+    }
+}
+
+impl From<&RemoteKey> for Key {
+    fn from(key: &RemoteKey) -> Self {
+        key.to_owned().into()
     }
 }
 
@@ -158,6 +167,12 @@ impl From<Url> for Key {
     }
 }
 
+impl From<&Key> for Key {
+    fn from(key_ref: &Key) -> Self {
+        key_ref.to_owned()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum StableImage {
     /// Pre-baked image data ready to be served
@@ -180,10 +195,41 @@ impl StableImage {
         Self::CompressedSvg(output)
     }
 
-    fn render(self, ctx: &SvgContext) -> ImageData {
+    pub fn render(self, ctx: &SvgContext) -> ImageData {
         match self {
             Self::PreDecoded(data) => data,
-            Self::CompressedSvg(compressed) => todo!(),
+            Self::CompressedSvg(compressed) => {
+                let mut svg_bytes = Vec::with_capacity(compressed.len());
+                let mut decompressor = FrameDecoder::new(io::Cursor::new(compressed));
+                // TODO: refactor to return an error from here
+                decompressor.read_to_end(&mut svg_bytes).unwrap();
+
+                let opt = usvg::Options::default();
+                // TODO: loading the fontdb on every single SVG render is gonna be slow
+                let mut fontdb = usvg::fontdb::Database::new();
+                fontdb.load_system_fonts();
+                // TODO: yes all of this image loading is very messy and could use a refactor
+                let Ok(mut tree) = usvg::Tree::from_data(&svg_bytes, &opt) else {
+                    todo!();
+                };
+                tree.size = tree.size.scale_to(
+                    tiny_skia::Size::from_wh(
+                        tree.size.width() * ctx.dpi,
+                        tree.size.height() * ctx.dpi,
+                    )
+                    .unwrap(),
+                );
+                tree.postprocess(Default::default(), &fontdb);
+                let mut pixmap =
+                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
+                        .unwrap();
+                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+                ImageData::new(
+                    ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
+                        .unwrap(),
+                    false,
+                )
+            }
         }
     }
 }
@@ -222,8 +268,15 @@ pub struct Shared {
     svg_ctx: SvgContext,
 }
 
+#[derive(Clone)]
 pub struct SvgContext {
     dpi: f32,
+}
+
+impl Default for SvgContext {
+    fn default() -> Self {
+        Self { dpi: 1.0 }
+    }
 }
 
 // TODO: restructure how a lot of this is done. Allow for checking the l1 cache without touching a
@@ -410,17 +463,14 @@ impl L1Cont {
         let Self { mut cache, kind } = self;
         let image_date = match kind {
             L1ContKind::CheckL2(remote) => {
-                let (policy, data) = match cache.l2_check(&remote)? {
-                    global::CacheCheck::Fresh((policy, stored_image)) => {
-                        (policy, stored_image.render(&cache.shared.svg_ctx))
-                    }
+                let (policy, stored_image) = match cache.l2_check(&remote)? {
+                    global::CacheCheck::Fresh(pair) => pair,
                     global::CacheCheck::Cont(cont) => match cache.l2_cont(cont)? {
-                        Ok((policy, stored_image)) => {
-                            (policy, stored_image.render(&cache.shared.svg_ctx))
-                        }
+                        Ok(pair) => pair,
                         Err(e) => return Ok(Err(e)),
                     },
                 };
+                let data = stored_image.render(&cache.shared.svg_ctx);
 
                 cache
                     .shared

@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn sanity() {
-        let (temp_dir, temp_path) = temp::dir();
+        let (_temp_dir, temp_path) = temp::dir();
 
         let root = temp_path.join("a");
         let fork1 = temp_path.join("b");

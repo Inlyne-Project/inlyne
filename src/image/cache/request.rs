@@ -82,7 +82,7 @@ impl RequestLike for StandardRequest {
         const DESCRIPTIVE_USER_AGENT: &str = concat!(
             "inlyne ",
             env!("CARGO_PKG_VERSION"),
-            " https://github.com/trimental/inlyne"
+            " https://github.com/Inlyne-Project/inlyne"
         );
         HEADERS.get_or_init(|| {
             let mut headers = HeaderMap::new();
