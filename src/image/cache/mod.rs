@@ -55,13 +55,17 @@
 //! smaller cache as only the entries that are within the global TTL will be retained
 
 use std::{
-    fmt, io::{self, Read},
+    fmt,
+    io::{self, Read},
     path::PathBuf,
     sync::Arc,
     time::{Instant, SystemTime},
 };
 
-use crate::{image::{ImageBuffer, ImageData}, HistTag};
+use crate::{
+    image::{ImageBuffer, ImageData},
+    HistTag,
+};
 
 use http_cache_semantics::{CachePolicy, RequestLike};
 use lz4_flex::frame::{FrameDecoder, FrameEncoder};
@@ -195,40 +199,39 @@ impl StableImage {
         Self::CompressedSvg(output)
     }
 
-    pub fn render(self, ctx: &SvgContext) -> ImageData {
+    pub fn render(self, ctx: &SvgContext) -> ImageResult<ImageData> {
         match self {
-            Self::PreDecoded(data) => data,
+            Self::PreDecoded(data) => Ok(data),
             Self::CompressedSvg(compressed) => {
                 let mut svg_bytes = Vec::with_capacity(compressed.len());
                 let mut decompressor = FrameDecoder::new(io::Cursor::new(compressed));
-                // TODO: refactor to return an error from here
-                decompressor.read_to_end(&mut svg_bytes).unwrap();
+                decompressor.read_to_end(&mut svg_bytes).map_err(|_| ImageError::SvgDecompressionError)?;
 
                 let opt = usvg::Options::default();
                 // TODO: loading the fontdb on every single SVG render is gonna be slow
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
-                // TODO: yes all of this image loading is very messy and could use a refactor
-                let Ok(mut tree) = usvg::Tree::from_data(&svg_bytes, &opt) else {
-                    todo!();
-                };
+                let mut tree = usvg::Tree::from_data(&svg_bytes, &opt)?;
+                // TODO: need to check and see if someone can pass a negative dpi and see what kind
+                // of issues it can cause
                 tree.size = tree.size.scale_to(
                     tiny_skia::Size::from_wh(
                         tree.size.width() * ctx.dpi,
                         tree.size.height() * ctx.dpi,
                     )
-                    .unwrap(),
+                    .ok_or(ImageError::SvgInvalidDimensions)?,
                 );
                 tree.postprocess(Default::default(), &fontdb);
                 let mut pixmap =
                     tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
-                        .unwrap();
+                        .ok_or(ImageError::SvgInvalidDimensions)?;
                 resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-                ImageData::new(
-                    ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
-                        .unwrap(),
+                let image_buffer = ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
+                        .ok_or(ImageError::SvgContainerTooSmall)?;
+                Ok(ImageData::new(
+                    image_buffer,
                     false,
-                )
+                ))
             }
         }
     }
@@ -252,6 +255,7 @@ impl TimeSource for SystemTimeSource {
     }
 }
 
+// TODO: ban typical way of constructing to force usage of vv
 /// Our custom `CacheOptions` (could be `const`)
 fn cache_options() -> http_cache_semantics::CacheOptions {
     // TODO: PR upstream for `const fn new() -> CacheOptions`
@@ -386,23 +390,24 @@ impl LayeredCacheWorker {
     fn l2_cont(
         &mut self,
         cont: global::CacheCont,
-    ) -> anyhow::Result<ImageResult<(CachePolicy, StableImage)>> {
-        let (key, image_res) = match cont {
+    ) -> anyhow::Result<ImageResult<(CachePolicy, ImageSrc, StableImage)>> {
+        let (key, image_src, image_res) = match cont {
             global::CacheCont::Miss(req_parts) => {
                 let url = req_parts.uri();
                 let key = RemoteKey::new_unchecked(url.to_string());
                 let image_res = self.fetch_remote_image(req_parts.into())?;
-                (key, image_res)
+                (key, ImageSrc::RemoteFromSrc, image_res)
             }
             global::CacheCont::TryRefresh(_) => todo!(),
         };
 
-        // TODO: store data in l2
         if let (Some(global), Ok((policy, image))) = (&mut self.global, &image_res) {
-            global.insert(&key, policy, image.to_owned())?;
+            if policy.is_storable() {
+                global.insert(&key, policy, image.to_owned())?;
+            }
         }
 
-        Ok(image_res)
+        Ok(image_res.map(|(policy, stable)| (policy, image_src, stable)))
     }
 
     // TODO: extract out most of this image loading logic to share with fetching local images
@@ -418,7 +423,7 @@ impl LayeredCacheWorker {
             tracing::warn!("Request for image {url} failed");
             return Ok(Err(ImageError::ReqFailed));
         };
-        let policy = CachePolicy::new(&standard_req, &standard_resp);
+        let policy = CachePolicy::new_options(&standard_req, &standard_resp, SystemTime::now(), cache_options());
 
         let image = load_image(&body)?;
 
@@ -458,41 +463,56 @@ enum L1ContKind {
     FetchLocal(PathBuf),
 }
 
+enum ImageSrc {
+    L2Fresh,
+    L2Refreshed,
+    LocalFromSrc,
+    RemoteFromSrc,
+}
+
 impl L1Cont {
-    pub fn finish(self) -> anyhow::Result<ImageResult<(LayeredCacheWorker, ImageData)>> {
+    pub fn finish(self) -> anyhow::Result<ImageResult<(LayeredCacheWorker, ImageSrc, ImageData)>> {
         let Self { mut cache, kind } = self;
-        let image_date = match kind {
+        let (image_src, image_date) = match kind {
             L1ContKind::CheckL2(remote) => {
-                let (policy, stored_image) = match cache.l2_check(&remote)? {
-                    global::CacheCheck::Fresh(pair) => pair,
+                let (policy, image_src, stored_image) = match cache.l2_check(&remote)? {
+                    global::CacheCheck::Fresh((worker, data)) => (worker, ImageSrc::L2Fresh, data),
                     global::CacheCheck::Cont(cont) => match cache.l2_cont(cont)? {
-                        Ok(pair) => pair,
+                        Ok(triplet) => triplet,
                         Err(e) => return Ok(Err(e)),
                     },
                 };
-                let data = stored_image.render(&cache.shared.svg_ctx);
+                let data = match stored_image.render(&cache.shared.svg_ctx) {
+                    Ok(data) => data,
+                    Err(image_err) => return Ok(Err(image_err)),
+                };
 
-                cache
-                    .shared
-                    .per_session
-                    .insert_remote(remote, (policy, data.clone()));
+                if policy.is_storable() {
+                    cache
+                        .shared
+                        .per_session
+                        .insert_remote(remote, (policy, data.clone()));
+                }
 
-                data
+                (image_src, data)
             }
             L1ContKind::FetchLocal(path) => {
                 let (m_time, image) = cache.shared.per_session.fetch_local(&path)?;
-                let data = image.render(&cache.shared.svg_ctx);
+                let data = match image.render(&cache.shared.svg_ctx) {
+                    Ok(data) => data,
+                    Err(image_err) => return Ok(Err(image_err)),
+                };
 
                 cache
                     .shared
                     .per_session
                     .insert_local(path, (m_time, data.clone()));
 
-                data
+                (ImageSrc::LocalFromSrc, data)
             }
         };
 
-        Ok(Ok((cache, image_date)))
+        Ok(Ok((cache, image_src, image_date)))
     }
 }
 
@@ -500,5 +520,17 @@ type ImageResult<T> = Result<T, ImageError>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImageError {
+    SvgDecompressionError,
+    // TODO(cosmic): upstream PR to impl `PartialEq` and `Eq` for `usvg::Error` then include the
+    // error in the variant
+    InvalidSvg,
+    SvgContainerTooSmall,
+    SvgInvalidDimensions,
     ReqFailed,
+}
+
+impl From<usvg::Error> for ImageError {
+    fn from(_: usvg::Error) -> Self {
+        Self::InvalidSvg
+    }
 }

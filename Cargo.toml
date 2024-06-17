@@ -208,3 +208,4 @@ image.opt-level = 2
 lz4_flex.opt-level = 2
 tiny-skia.opt-level = 2
 fontdb.opt-level = 2
+image-webp.opt-level = 2

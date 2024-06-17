@@ -1,4 +1,7 @@
-use crate::image::{cache::{StableImage, SvgContext}, ImageData};
+use crate::image::{
+    cache::{StableImage, SvgContext},
+    ImageData,
+};
 
 #[derive(Clone, Copy)]
 pub enum Sample {
@@ -131,7 +134,7 @@ impl Sample {
         if let Self::Svg(_) = self {
             let text = std::str::from_utf8(self.pre_decode()).unwrap();
             let image = StableImage::from_svg(text);
-            image.render(svg_ctx)
+            image.render(svg_ctx).unwrap()
         } else {
             ImageData::load(&self.pre_decode(), true).unwrap()
         }

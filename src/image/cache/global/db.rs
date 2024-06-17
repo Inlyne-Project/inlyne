@@ -127,6 +127,7 @@ impl Db {
             gen_iter.next().transpose()?.unwrap_or(0u32).wrapping_add(1)
         };
         {
+            // TODO: change this query to handle existing entries
             let mut stmt = txn.prepare_cached(
                 "insert into images (url, generation, last_used, policy, image)
                     values (?1, ?2, ?3, ?4, ?5)",

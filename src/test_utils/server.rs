@@ -1,4 +1,4 @@
-use std::{sync::mpsc::Sender, thread, time::Duration};
+use std::{hash::Hasher, sync::mpsc::Sender, thread, time::Duration};
 
 use super::image::Sample;
 
@@ -6,6 +6,7 @@ use http::{header, HeaderMap, HeaderValue};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
+use twox_hash::XxHash64;
 
 type HandlerFn = fn(&State, &Request, &str) -> ResponseBox;
 
@@ -134,13 +135,18 @@ pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
 pub struct CacheControl {
     immutable: bool,
     max_age: Option<Duration>,
+    no_store: bool,
+    private: bool,
 }
 
 impl CacheControl {
+    // Same as what `derive(Default)` would do, but const
     pub const fn new() -> Self {
         Self {
             immutable: false,
             max_age: None,
+            no_store: false,
+            private: false,
         }
     }
 
@@ -154,8 +160,18 @@ impl CacheControl {
         self
     }
 
+    pub const fn no_store(mut self) -> Self {
+        self.no_store = true;
+        self
+    }
+
+    pub const fn private(mut self) -> Self {
+        self.private = true;
+        self
+    }
+
     fn to_header_value(&self) -> Option<String> {
-        let CacheControl { immutable, max_age } = self;
+        let CacheControl { immutable, max_age, no_store, private } = self;
         let mut cache_control = Vec::new();
         if *immutable {
             cache_control.push("immutable".to_owned());
@@ -163,9 +179,15 @@ impl CacheControl {
         if let Some(age) = max_age {
             cache_control.push(format!("max-age={}", age.as_secs()));
         }
+        if *no_store {
+            cache_control.push("no-store".to_owned());
+        }
+        if *private {
+            cache_control.push("private".to_owned());
+        }
 
         if !cache_control.is_empty() {
-            let cc = cache_control.join(",");
+            let cc = cache_control.join(", ");
             cc.parse().ok()
         } else {
             None
@@ -244,6 +266,7 @@ pub struct File {
     pub url_path: String,
     pub mime: ContentType,
     pub cache_control: Option<CacheControl>,
+    pub include_etag: bool,
     pub bytes: Vec<u8>,
 }
 
@@ -258,9 +281,16 @@ impl File {
             url_path: url_path.into(),
             mime,
             cache_control,
+            include_etag: false,
             bytes: bytes.into(),
         }
     }
+}
+
+fn hash(bytes: &[u8]) -> u64 {
+    let mut hasher = XxHash64::default();
+    hasher.write(bytes);
+    hasher.finish()
 }
 
 impl From<File> for ResponseBox {
@@ -269,13 +299,22 @@ impl From<File> for ResponseBox {
             url_path: _,
             mime,
             cache_control,
+            include_etag,
             bytes,
         } = file;
 
+        let body_hash = hash(&bytes);
         let mut resp = Response::from_data(bytes).with_header(mime);
 
         if let Some(c_c) = cache_control {
-            resp = resp.with_header(c_c);
+            resp.add_header(c_c);
+        }
+
+        if include_etag {
+            let header_name = http::header::ETAG.as_str().as_bytes();
+            let header_val = format!("\"{body_hash:x}\"");
+            let header = Header::from_bytes(header_name, header_val.as_bytes()).unwrap();
+            resp.add_header(header);
         }
 
         resp.boxed()
