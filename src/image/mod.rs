@@ -5,7 +5,7 @@ mod tests;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 use std::{
     fs,
@@ -23,7 +23,6 @@ use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
 use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
-use usvg::fontdb;
 use usvg::fontdb;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
@@ -266,9 +265,13 @@ impl Image {
                     )
                     .unwrap(),
                 );
-                let mut fontdb = usvg::fontdb::Database::new();
-                fontdb.load_system_fonts();
-                tree.postprocess(Default::default(), &fontdb);
+                static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
+                let fontdb = FONTDB.get_or_init(|| {
+                    let mut db = fontdb::Database::new();
+                    db.load_system_fonts();
+                    db
+                });
+                tree.postprocess(Default::default(), fontdb);
                 let mut pixmap =
                     tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
                         .context("Couldn't create svg pixmap")
