@@ -23,6 +23,8 @@ use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
 use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
+use usvg::fontdb;
+use usvg::fontdb;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 
@@ -243,8 +245,6 @@ impl Image {
                 image
             } else {
                 let opt = usvg::Options::default();
-                let mut fontdb = usvg::fontdb::Database::new();
-                fontdb.load_system_fonts();
                 // TODO: yes all of this image loading is very messy and could use a refactor
                 let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
                     tracing::warn!(
@@ -266,6 +266,8 @@ impl Image {
                     )
                     .unwrap(),
                 );
+                let mut fontdb = usvg::fontdb::Database::new();
+                fontdb.load_system_fonts();
                 tree.postprocess(Default::default(), &fontdb);
                 let mut pixmap =
                     tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
