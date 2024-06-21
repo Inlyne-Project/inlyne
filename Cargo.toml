@@ -200,3 +200,9 @@ png.opt-level = 2
 fontdb.opt-level = 2
 miniz_oxide.opt-level = 2
 backtrace.opt-level = 2
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+# We have a custom cfg you can use to enable emitting our metrics using
+# `tcp-metrics`
+check-cfg = ["cfg(inlyne_tcp_metrics)"]
