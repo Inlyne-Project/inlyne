@@ -198,3 +198,5 @@ rustybuzz.opt-level = 2
 cosmic-text.opt-level = 2
 png.opt-level = 2
 fontdb.opt-level = 2
+miniz_oxide.opt-level = 2
+backtrace.opt-level = 2
