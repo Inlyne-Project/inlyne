@@ -123,8 +123,12 @@ impl Cache {
     }
 
     // TODO: rename to remove `remote_` since it's always remote now
-    pub fn check_remote_cache(&self, key: &RemoteKey) -> anyhow::Result<CacheCheck> {
-        let check = self.check_remote_cache_inner(key)?.unwrap_or_else(|| {
+    pub fn check_remote_cache(
+        &self,
+        key: &RemoteKey,
+        now: SystemTime,
+    ) -> anyhow::Result<CacheCheck> {
+        let check = self.check_remote_cache_inner(key, now)?.unwrap_or_else(|| {
             let req: StandardRequest = key.into();
             let parts = (&req).into();
             CacheCont::Miss(parts).into()
@@ -133,16 +137,20 @@ impl Cache {
     }
 
     // TODO: rename to remove `remote_` since it's always remote now
-    pub fn check_remote_cache_inner(&self, key: &RemoteKey) -> anyhow::Result<Option<CacheCheck>> {
+    pub fn check_remote_cache_inner(
+        &self,
+        key: &RemoteKey,
+        now: SystemTime,
+    ) -> anyhow::Result<Option<CacheCheck>> {
         let req: StandardRequest = key.into();
         let maybe_meta = match self.0.get_meta(key)? {
             None => None,
-            Some(meta) => match meta.policy.before_request(&req, SystemTime::now()) {
+            Some(meta) => match meta.policy.before_request(&req, now) {
                 BeforeRequest::Fresh(_) => {
                     let gen = meta.generation;
                     match self.0.get_data(key, gen)? {
                         Some(image) => {
-                            self.0.refresh_last_used(key, gen)?;
+                            self.0.refresh_last_used(key, gen, now)?;
                             Some(CacheCheck::Fresh((meta.policy, image.into())))
                         }
                         None => None,
@@ -172,8 +180,9 @@ impl Cache {
         key: &RemoteKey,
         policy: &CachePolicy,
         image: StableImage,
+        now: SystemTime,
     ) -> anyhow::Result<()> {
-        self.0.insert(key, policy, image)
+        self.0.insert(key, policy, image, now)
     }
 
     pub fn run_garbage_collector(&self) -> anyhow::Result<()> {

@@ -1,13 +1,21 @@
 use std::{
-    fs, io, path::{Path, PathBuf}, sync::Arc, thread::sleep, time::{Duration, SystemTime}
+    fs, io,
+    path::{Path, PathBuf},
+    sync::Arc,
+    thread::sleep,
+    time::{Duration, SystemTime},
 };
 
-use super::{ImageSrc, Key, L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource};
+use super::{
+    ImageSrc, Key, L1Check, LayeredCache, LayeredCacheWorker, RemoteKey, SvgContext, TimeSource,
+};
 use crate::{
     image::{cache::ImageError, ImageData},
     test_utils::{
         image::{Sample, SampleGif, SampleJpg, SamplePng, SampleQoi, SampleSvg, SampleWebp},
-        log, server::{self, CacheControl}, temp,
+        log,
+        server::{self, CacheControl},
+        temp,
     },
 };
 
@@ -48,7 +56,9 @@ impl From<SystemTime> for FakeTimeSource {
 
 fn num_l2_entries(db_path: &Path) -> u32 {
     let conn = rusqlite::Connection::open(db_path).unwrap();
-    let num_entries = conn.query_row("select count(1) from images", [], |row| row.get(0)).unwrap();
+    let num_entries = conn
+        .query_row("select count(1) from images", [], |row| row.get(0))
+        .unwrap();
     num_entries
 }
 
@@ -62,7 +72,11 @@ struct RemoteImage {
 }
 
 impl RemoteImage {
-    fn from_sample(cache_control: Option<server::CacheControl>, path: &str, sample: Sample) -> Self {
+    fn from_sample(
+        cache_control: Option<server::CacheControl>,
+        path: &str,
+        sample: Sample,
+    ) -> Self {
         Self::new(
             cache_control,
             path,
@@ -193,6 +207,13 @@ impl TestCache {
     fn from_l2<K: Into<Key>>(&mut self, key: K) -> Result<ImageData, Fetch> {
         match self.fetch(key) {
             Fetch::L2Fresh(data) => Ok(data),
+            other => Err(other),
+        }
+    }
+
+    fn from_refresh<K: Into<Key>>(&mut self, key: K) -> Result<ImageData, Fetch> {
+        match self.fetch(key) {
+            Fetch::L2Refreshed(data) => Ok(data),
             other => Err(other),
         }
     }
@@ -367,10 +388,8 @@ fn local_svg_layers() {
     assert_eq!(data, expected_data, "Invalid L1 image");
 }
 
-// Remote invalidation depends upon the entry's cache policy info
 #[test]
-#[ignore = "TODO: get fake time source stuff actually working"]
-fn remote_invalidation() {
+fn past_max_age_refetch() {
     log::init();
 
     let max_age = Duration::from_secs(300);
@@ -391,7 +410,9 @@ fn remote_invalidation() {
     assert_eq!(data, expected_data, "Bad initial fetch");
     cache.from_l1(&key).expect("Fresh cache");
     time.inc(max_age + Duration::from_secs(1));
-    cache.from_remote_src(&key).expect("Entry went past max-age and has no e-tag refresh with");
+    cache
+        .from_remote_src(&key)
+        .expect("Entry went past max-age and has no e-tag refresh with");
 }
 
 // Local invalidation is handled by checking against the file's last modified time
@@ -429,7 +450,6 @@ fn local_invalidation() {
 // be refreshed
 // TODO: need to add support for this flow to the test image server
 #[test]
-#[ignore = "TODO: get fake time source stuff actually working"]
 fn etag_refresh_same() {
     log::init();
 
@@ -451,7 +471,9 @@ fn etag_refresh_same() {
     assert_eq!(data, expected_data, "Bad initial fetch");
     cache.from_l1(&key).expect("Fresh cache");
     time.inc(max_age + Duration::from_secs(1));
-    cache.from_remote_src(&key).expect("Entry went past max-age and has no e-tag refresh with");
+    cache
+        .from_refresh(&key)
+        .expect("Entry went past max-age, but the content still matches");
     todo!();
 }
 
@@ -519,7 +541,9 @@ fn invalid_img() {
     let key = Key::from_abs_path(image_path).expect("Path is internally canonicalized");
 
     let (_db_dir, mut cache) = cache_builder().temp_file();
-    let err = cache.err(&key).expect("Can't be decoded as any of our supported image types");
+    let err = cache
+        .err(&key)
+        .expect("Can't be decoded as any of our supported image types");
     assert_eq!(err, ImageError::InvalidSvg, "Can't be decoded");
 }
 
@@ -537,7 +561,9 @@ fn remote_404_error() {
     let key = RemoteKey::new_unchecked(url);
 
     let (_db_dir, mut cache) = cache_builder().temp_file();
-    cache.from_remote_src(&key).expect("Can fetch, but won't cache");
+    cache
+        .from_remote_src(&key)
+        .expect("Can fetch, but won't cache");
     drop(server);
     let err = cache.err(&key).expect("Server shutdown and not cached");
     assert_eq!(err, ImageError::ReqFailed);
@@ -560,7 +586,9 @@ fn private_cache() {
     let (_tmp_dir, db_path) = temp::dir();
 
     let mut cache = cache_builder().open_in(&db_path);
-    cache.from_remote_src(&key).expect("Fetch from remote and populate cache");
+    cache
+        .from_remote_src(&key)
+        .expect("Fetch from remote and populate cache");
     cache.from_l1(&key).expect("L1 of private cache");
     let mut fresh_l1_cache = cache_builder().open_in(&db_path);
     fresh_l1_cache.from_l2(&key).expect("L2 of private cache");

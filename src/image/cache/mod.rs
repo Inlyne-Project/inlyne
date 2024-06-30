@@ -205,7 +205,9 @@ impl StableImage {
             Self::CompressedSvg(compressed) => {
                 let mut svg_bytes = Vec::with_capacity(compressed.len());
                 let mut decompressor = FrameDecoder::new(io::Cursor::new(compressed));
-                decompressor.read_to_end(&mut svg_bytes).map_err(|_| ImageError::SvgDecompressionError)?;
+                decompressor
+                    .read_to_end(&mut svg_bytes)
+                    .map_err(|_| ImageError::SvgDecompressionError)?;
 
                 let opt = usvg::Options::default();
                 // TODO: loading the fontdb on every single SVG render is gonna be slow
@@ -226,12 +228,10 @@ impl StableImage {
                     tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
                         .ok_or(ImageError::SvgInvalidDimensions)?;
                 resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-                let image_buffer = ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
+                let image_buffer =
+                    ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .ok_or(ImageError::SvgContainerTooSmall)?;
-                Ok(ImageData::new(
-                    image_buffer,
-                    false,
-                ))
+                Ok(ImageData::new(image_buffer, false))
             }
         }
     }
@@ -354,9 +354,11 @@ impl fmt::Debug for LayeredCacheWorker {
 impl LayeredCacheWorker {
     pub fn fetch<K: Into<Key>>(self, key: K) -> anyhow::Result<L1Check> {
         let key = key.into();
+        let now = self.shared.time.now();
+        let session_cache = &self.shared.per_session;
         let cache_l1_check = match key {
             // Local images are exclusively handled by the per-session cache
-            Key::Local(local) => match self.shared.per_session.fetch_local_cached(&local) {
+            Key::Local(local) => match session_cache.fetch_local_cached(&local) {
                 Some(image_data) => image_data.into(),
                 None => L1Cont {
                     cache: self,
@@ -364,7 +366,7 @@ impl LayeredCacheWorker {
                 }
                 .into(),
             },
-            Key::Remote(remote) => match self.shared.per_session.check_remote_cache(&remote) {
+            Key::Remote(remote) => match session_cache.check_remote_cache(&remote, now) {
                 Some(session::RemoteEntry::Fresh(image_data)) => image_data.into(),
                 _ => L1Cont {
                     cache: self,
@@ -379,7 +381,8 @@ impl LayeredCacheWorker {
 
     fn l2_check(&self, key: &RemoteKey) -> anyhow::Result<global::CacheCheck> {
         if let Some(global) = &self.global {
-            global.check_remote_cache(&key)
+            let now = self.shared.time.now();
+            global.check_remote_cache(&key, now)
         } else {
             let req: StandardRequest = key.into();
             let parts = (&req).into();
@@ -403,14 +406,14 @@ impl LayeredCacheWorker {
 
         if let (Some(global), Ok((policy, image))) = (&mut self.global, &image_res) {
             if policy.is_storable() {
-                global.insert(&key, policy, image.to_owned())?;
+                let now = self.shared.time.now();
+                global.insert(&key, policy, image.to_owned(), now)?;
             }
         }
 
         Ok(image_res.map(|(policy, stable)| (policy, image_src, stable)))
     }
 
-    // TODO: extract out most of this image loading logic to share with fetching local images
     fn fetch_remote_image(
         &self,
         req: ureq::Request,
@@ -423,7 +426,8 @@ impl LayeredCacheWorker {
             tracing::warn!("Request for image {url} failed");
             return Ok(Err(ImageError::ReqFailed));
         };
-        let policy = CachePolicy::new_options(&standard_req, &standard_resp, SystemTime::now(), cache_options());
+        let now = self.shared.time.now();
+        let policy = CachePolicy::new_options(&standard_req, &standard_resp, now, cache_options());
 
         let image = load_image(&body)?;
 

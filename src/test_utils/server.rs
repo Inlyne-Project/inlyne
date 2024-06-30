@@ -39,6 +39,7 @@ pub fn spawn(state: State, handler_fn: HandlerFn) -> MiniServerHandle {
 }
 
 fn spawn_router(server: Server) {
+    // TODO: store server in an arc and restart the router if the thread panics
     thread::spawn(move || {
         for req in server.incoming_requests() {
             let resp = try_respond(&req).unwrap_or_else(|| Response::empty(404).boxed());
@@ -171,7 +172,12 @@ impl CacheControl {
     }
 
     fn to_header_value(&self) -> Option<String> {
-        let CacheControl { immutable, max_age, no_store, private } = self;
+        let CacheControl {
+            immutable,
+            max_age,
+            no_store,
+            private,
+        } = self;
         let mut cache_control = Vec::new();
         if *immutable {
             cache_control.push("immutable".to_owned());

@@ -11,11 +11,9 @@ use crate::{
 
 use anyhow::Context;
 use http_cache_semantics::CachePolicy;
-use rusqlite::{types::FromSqlError, Connection};
+use rusqlite::{types::FromSqlError, Connection, OptionalExtension};
 
 use super::wrappers::{CachePolicyBytes, StableImageBytes, SystemTimeSecs};
-
-// TODO: _a lot_ more sql impls to clean things up
 
 /// The current version for our database file
 ///
@@ -72,7 +70,7 @@ impl Db {
         let mut stmt = self
             .0
             .prepare_cached("select generation, last_used, policy from images where url = ?1")?;
-        let mut meta_iter = stmt.query_map([&remote.0], |row| {
+        stmt.query_row([&remote.0], |row| {
             let generation = row.get(0)?;
             let last_used = row.get::<_, SystemTimeSecs>(1)?.into();
             let policy = (&row.get::<_, CachePolicyBytes>(2)?)
@@ -83,8 +81,9 @@ impl Db {
                 last_used,
                 policy,
             })
-        })?;
-        meta_iter.next().transpose().map_err(Into::into)
+        })
+        .optional()
+        .map_err(Into::into)
     }
 
     pub fn get_data(
@@ -95,7 +94,7 @@ impl Db {
         let mut stmt = self
             .0
             .prepare_cached("select image from images where url = ?1 and generation = ?2")?;
-        let mut data_iter = stmt.query_map((&remote.0, generation), |row| {
+        stmt.query_row((&remote.0, generation), |row| {
             // TODO: fixup the error type here to be more sane
             let blah = row
                 .get::<_, StableImageBytes>(0)?
@@ -105,8 +104,9 @@ impl Db {
                     FromSqlError::InvalidType
                 })?;
             Ok(blah)
-        })?;
-        data_iter.next().transpose().map_err(Into::into)
+        })
+        .optional()
+        .map_err(Into::into)
     }
 
     pub fn insert(
@@ -114,27 +114,18 @@ impl Db {
         remote: &RemoteKey,
         policy: &CachePolicy,
         image: StableImage,
+        now: SystemTime,
     ) -> anyhow::Result<()> {
         let url = &remote.0;
-        let now: SystemTimeSecs = SystemTime::now().try_into()?;
+        let now: SystemTimeSecs = now.try_into()?;
         let policy: CachePolicyBytes = policy.try_into()?;
         let image: StableImageBytes = image.into();
 
-        let txn = self.0.transaction()?;
-        let next_gen = {
-            let mut stmt = txn.prepare_cached("select generation from images where url = ?1")?;
-            let mut gen_iter = stmt.query_map([url], |row| row.get(0).map_err(Into::into))?;
-            gen_iter.next().transpose()?.unwrap_or(0u32).wrapping_add(1)
-        };
-        {
-            // TODO: change this query to handle existing entries
-            let mut stmt = txn.prepare_cached(
-                "insert into images (url, generation, last_used, policy, image)
-                    values (?1, ?2, ?3, ?4, ?5)",
-            )?;
-            stmt.execute((url, next_gen, now, policy, image))?;
-        }
-        txn.commit()?;
+        let mut stmt = self.0.prepare_cached(
+            "insert or replace into images (url, last_used, policy, image, generation)
+                values (?1, ?2, ?3, ?4, abs(random() % 1000000))",
+        )?;
+        stmt.execute((url, now, policy, image))?;
         Ok(())
     }
 
@@ -147,9 +138,14 @@ impl Db {
         todo!();
     }
 
-    pub fn refresh_last_used(&self, remote: &RemoteKey, generation: u32) -> anyhow::Result<()> {
+    pub fn refresh_last_used(
+        &self,
+        remote: &RemoteKey,
+        generation: u32,
+        now: SystemTime,
+    ) -> anyhow::Result<()> {
         let url = &remote.0;
-        let now: SystemTimeSecs = SystemTime::now().try_into()?;
+        let now: SystemTimeSecs = now.try_into()?;
         self.0.execute(
             "update images set last_used = ?1 where url = ?2 and generation = ?3",
             (now, url, generation),

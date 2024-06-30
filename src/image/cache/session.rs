@@ -44,11 +44,11 @@ impl Cache {
         Ok((m_time, image))
     }
 
-    pub fn check_remote_cache(&self, remote: &RemoteKey) -> Option<RemoteEntry> {
+    pub fn check_remote_cache(&self, remote: &RemoteKey, now: SystemTime) -> Option<RemoteEntry> {
         self.remote.read().get(remote).map(|(policy, image_data)| {
             let req: StandardRequest = remote.into();
             // TODO: allow for faking time here
-            match policy.before_request(&req, SystemTime::now()) {
+            match policy.before_request(&req, now) {
                 BeforeRequest::Fresh(_) => RemoteEntry::Fresh(image_data.to_owned()),
                 BeforeRequest::Stale { request, .. } => RemoteEntry::Stale(request),
             }
