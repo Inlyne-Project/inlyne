@@ -15,31 +15,31 @@ expression: "interpret_md_with_opts(text, opts)"
                 Text {
                     text: "Alt-",
                     font_family: Monospace,
-                    color: Some(Color(BLACK)),
+                    color: Some(Color { r: 0.30, g: 0.01, b: 0.08 }),
                     ..
                 },
                 Text {
                     text: "<",
                     font_family: Monospace,
-                    color: Some(Color(BLACK)),
+                    color: Some(Color { r: 0.30, g: 0.01, b: 0.08 }),
                     ..
                 },
                 Text {
                     text: "n",
                     font_family: Monospace,
-                    color: Some(Color(BLACK)),
+                    color: Some(Color { r: 0.30, g: 0.01, b: 0.08 }),
                     ..
                 },
                 Text {
                     text: "um",
                     font_family: Monospace,
-                    color: Some(Color(BLACK)),
+                    color: Some(Color { r: 0.30, g: 0.01, b: 0.08 }),
                     ..
                 },
                 Text {
                     text: ">",
                     font_family: Monospace,
-                    color: Some(Color(BLACK)),
+                    color: Some(Color { r: 0.30, g: 0.01, b: 0.08 }),
                     ..
                 },
             ],

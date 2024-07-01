@@ -9,66 +9,66 @@ expression: "interpret_md_with_opts(text, opts)"
     ),
     Table(
         Table {
-            headers: [
-                TextBox {
-                    texts: [
-                        Text {
-                            text: "left default",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-                TextBox {
-                    texts: [
-                        Text {
-                            text: "left forced",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-                TextBox {
-                    align: Center,
-                    texts: [
-                        Text {
-                            text: "centered",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-                TextBox {
-                    align: Right,
-                    texts: [
-                        Text {
-                            text: "right",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-                TextBox {
-                    texts: [
-                        Text {
-                            text: "left default",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-            ],
             rows: [
+                [
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "left default",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "left forced",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        align: Center,
+                        texts: [
+                            Text {
+                                text: "centered",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        align: Right,
+                        texts: [
+                            Text {
+                                text: "right",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        texts: [
+                            Text {
+                                text: "left default",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                ],
                 [
                     TextBox {
                         texts: [

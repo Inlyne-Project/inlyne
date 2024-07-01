@@ -1,15 +1,9 @@
 ---
 source: src/interpreter/tests.rs
-description: " --- md\n\n<details>\n\n<summary>summary</summary>\n\ncollapsed text\n\n</details>\n\n\n --- html\n\n<details>\n<summary>summary</summary>\n<p>collapsed text</p>\n</details>\n"
+description: " --- md\n\n<details>\n<summary>summary</summary>\n\ncollapsed text\n</details>\n\n\n --- html\n\n<details>\n<summary>summary</summary>\n<p>collapsed text</p>\n</details>\n"
 expression: "interpret_md_with_opts(text, opts)"
 ---
 [
-    Spacer(
-        InvisibleSpacer(5),
-    ),
-    Spacer(
-        InvisibleSpacer(5),
-    ),
     Section(
         Section {
             elements: [
@@ -25,6 +19,12 @@ expression: "interpret_md_with_opts(text, opts)"
                             ],
                             ..
                         },
+                    ),
+                    bounds: None,
+                },
+                Positioned {
+                    inner: Spacer(
+                        InvisibleSpacer(5),
                     ),
                     bounds: None,
                 },
@@ -51,8 +51,5 @@ expression: "interpret_md_with_opts(text, opts)"
                 },
             ),
         },
-    ),
-    Spacer(
-        InvisibleSpacer(5),
     ),
 ]

@@ -136,10 +136,9 @@ impl TextBox {
         self.is_quote_block = None;
     }
 
-    pub fn set_checkbox(&mut self, is_checked: bool) {
-        self.is_checkbox = Some(is_checked);
+    pub fn set_checkbox(&mut self, is_checked: Option<bool>) {
+        self.is_checkbox = is_checked;
     }
-
     pub fn set_anchor(&mut self, anchor: String) {
         self.is_anchor = Some(anchor);
     }
