@@ -67,7 +67,7 @@ use crate::{
     HistTag,
 };
 
-use http_cache_semantics::{CachePolicy, RequestLike};
+use http_cache_semantics::{AfterResponse, CachePolicy, RequestLike};
 use lz4_flex::frame::{FrameDecoder, FrameEncoder};
 use metrics::histogram;
 use resvg::{tiny_skia, usvg};
@@ -85,7 +85,7 @@ pub use global::{
     run_garbage_collector as run_global_garbage_collector, stats as global_stats,
     Stats as GlobalStats, StatsInner as GlobalStatsInner,
 };
-use request::StandardRequest;
+use request::{StandardRequest, StandardResp};
 
 // TODO: spawn a cache worker when creating the cache and return a handle that can communicate with
 // it? Each request can be pushed to a thread-pool that shares the cache?
@@ -401,9 +401,28 @@ impl LayeredCacheWorker {
                 let image_res = self.fetch_remote_image(req_parts.into())?;
                 (key, ImageSrc::RemoteFromSrc, image_res)
             }
-            global::CacheCont::TryRefresh(_) => todo!(),
+            global::CacheCont::TryRefresh((policy, req_parts, stored_image)) => {
+                let url = req_parts.uri();
+                let key = RemoteKey::new_unchecked(url.to_string());
+                let req: ureq::Request = req_parts.into();
+                let standard_req: StandardRequest = req.url().parse().unwrap();
+                let key = RemoteKey::new_unchecked(url.to_string());
+                let Ok((standard_resp, body)) = request::http_call_req(req) else {
+                    return Ok(Err(ImageError::ReqFailed));
+                };
+
+                let now = self.shared.time.now();
+                match policy.after_response(&standard_req, &standard_resp, now) {
+                    AfterResponse::NotModified(policy, parts) => {
+                        (key, ImageSrc::L2Refreshed, Ok((policy, stored_image)))
+                    }
+                    AfterResponse::Modified(policy, parts) => todo!("store the whole thing"),
+                }
+            }
         };
 
+        // NIT: this re-stores the image data even on etag refreshes when it could just update the
+        // cache policy and lru time instead
         if let (Some(global), Ok((policy, image))) = (&mut self.global, &image_res) {
             if policy.is_storable() {
                 let now = self.shared.time.now();

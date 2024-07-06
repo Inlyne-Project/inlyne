@@ -446,9 +446,8 @@ fn local_invalidation() {
 
 // Stale cache entries with an ETag can use a flow to re-validate the stale entry without having to
 // send it from the remote server again. This involves sending our stored e-tag in a special
-// request header and the server can respond saying that it still matches the remote entry and can
-// be refreshed
-// TODO: need to add support for this flow to the test image server
+// request header and the server can respond saying that it still matches the remote entry without
+// actually sending the remote entry
 #[test]
 fn etag_refresh_same() {
     log::init();
@@ -474,7 +473,6 @@ fn etag_refresh_same() {
     cache
         .from_refresh(&key)
         .expect("Entry went past max-age, but the content still matches");
-    todo!();
 }
 
 // Same as valid e-tag refresh, but this time the content is different and needs to be re-pulled

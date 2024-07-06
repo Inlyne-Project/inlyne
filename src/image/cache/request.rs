@@ -14,10 +14,7 @@ pub fn http_call_req(req: ureq::Request) -> anyhow::Result<(StandardResp, Vec<u8
 
     let resp = req.call()?;
     let standard_resp = (&resp).into();
-    let len = resp
-        .header("Content-Length")
-        .and_then(|len| len.parse::<usize>().ok());
-    let mut body = Vec::with_capacity(len.unwrap_or(0).clamp(0, BODY_SIZE_LIMIT));
+    let mut body = Vec::new();
     resp.into_reader()
         .take(u64::try_from(BODY_SIZE_LIMIT).unwrap())
         .read_to_end(&mut body)?;

@@ -1,10 +1,12 @@
 use std::{hash::Hasher, sync::mpsc::Sender, thread, time::Duration};
 
 use super::image::Sample;
+use crate::debug_impls::DebugBytesPrefix;
 
 use http::{header, HeaderMap, HeaderValue};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+use smart_debug::SmartDebug;
 use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
 use twox_hash::XxHash64;
 
@@ -120,15 +122,54 @@ pub enum FromServer {
     UserAgent(Option<String>),
 }
 
+// TODO: split out some of this logic into some cache control test server crate? There's a lot of
+// low-level cache control server side stuff that we wind up implementing just to test things
 /// Spin up a server, so we can test network requests without external services
 pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
     let state = State { files, send: None };
-    spawn(state, |state, req, req_url| match req.method() {
-        Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
-            Some(file) => file.to_owned().into(),
-            None => Response::empty(404).boxed(),
-        },
-        _ => Response::empty(404).boxed(),
+    spawn(state, |state, req, req_url| {
+        tracing::warn!("Handling req");
+
+        match req.method() {
+            Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
+                Some(file) => {
+                    // <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag#caching_of_unchanged_resources>
+                    //
+                    // > The server compares the client's `ETag` (sent with `If-None-Match`) with the
+                    // > `ETag` for its current version of the resource, and if both values match (that
+                    // > is, the resource has not changed), the server sends back a `304 Not Modified`
+                    // > status, without a body, which tells the client that the cached version of the
+                    // > response is still good to use (fresh).
+                    let desired_header_name: tiny_http::HeaderField =
+                        http::header::IF_NONE_MATCH.as_str().parse().unwrap();
+                    let maybe_client_etag = req.headers().iter().find_map(|header| {
+                        (header.field == desired_header_name).then(|| header.value.to_string())
+                    });
+                    match (file.include_etag, maybe_client_etag.as_deref()) {
+                        (true, Some(client_etag)) => {
+                            let body_hash = hash(&file.bytes);
+                            let server_etag = format!("\"{body_hash:x}\"");
+                            if server_etag == client_etag {
+                                // TODO: dedupe the etag header construction logic with sending the
+                                // original responses
+                                let header_name = http::header::ETAG.as_str().as_bytes();
+                                let header =
+                                    Header::from_bytes(header_name, server_etag.as_bytes())
+                                        .unwrap();
+                                Response::empty(http::status::StatusCode::NOT_MODIFIED.as_u16())
+                                    .with_header(header)
+                                    .boxed()
+                            } else {
+                                file.to_owned().into()
+                            }
+                        }
+                        _ => file.to_owned().into(),
+                    }
+                }
+                None => Response::empty(404).boxed(),
+            },
+            _ => Response::empty(404).boxed(),
+        }
     })
 }
 
@@ -221,7 +262,7 @@ impl From<CacheControl> for HeaderMap {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ContentType {
     Gif,
     Jpg,
@@ -267,12 +308,13 @@ impl From<ContentType> for Header {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, SmartDebug)]
 pub struct File {
     pub url_path: String,
     pub mime: ContentType,
     pub cache_control: Option<CacheControl>,
     pub include_etag: bool,
+    #[debug(wrapper = DebugBytesPrefix)]
     pub bytes: Vec<u8>,
 }
 

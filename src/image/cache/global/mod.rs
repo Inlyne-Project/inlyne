@@ -164,9 +164,9 @@ impl Cache {
                         // No change to our usual headers means this is a new request
                         Some(CacheCont::Miss(request).into())
                     } else {
-                        self.0
-                            .get_data(key, meta.generation)?
-                            .map(|image| CacheCont::TryRefresh((request, image)).into())
+                        self.0.get_data(key, meta.generation)?.map(|image| {
+                            CacheCont::TryRefresh((meta.policy, request, image)).into()
+                        })
                     }
                 }
             },
@@ -208,6 +208,6 @@ impl From<CacheCont> for CacheCheck {
 
 #[must_use]
 pub enum CacheCont {
-    TryRefresh((request::Parts, StableImage)),
+    TryRefresh((CachePolicy, request::Parts, StableImage)),
     Miss(request::Parts),
 }
