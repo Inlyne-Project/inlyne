@@ -87,6 +87,7 @@ impl Stats {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RemoteMeta {
+    // TODO: switch to a content hash or uuid v4
     /// A generation used to uniquely identify this cache entry
     ///
     /// We use generations  to keep track of the consistency of a cache entry between different

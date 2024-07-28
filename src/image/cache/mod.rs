@@ -115,8 +115,12 @@ pub enum Key {
 pub struct RemoteKey(String);
 
 impl RemoteKey {
-    fn new_unchecked<I: Into<String>>(s: I) -> Self {
+    pub fn new_unchecked<I: Into<String>>(s: I) -> Self {
         Self(s.into())
+    }
+
+    pub fn get(&self) -> &str {
+        &self.0
     }
 }
 
@@ -403,7 +407,6 @@ impl LayeredCacheWorker {
             }
             global::CacheCont::TryRefresh((policy, req_parts, stored_image)) => {
                 let url = req_parts.uri();
-                let key = RemoteKey::new_unchecked(url.to_string());
                 let req: ureq::Request = req_parts.into();
                 let standard_req: StandardRequest = req.url().parse().unwrap();
                 let key = RemoteKey::new_unchecked(url.to_string());
@@ -413,10 +416,13 @@ impl LayeredCacheWorker {
 
                 let now = self.shared.time.now();
                 match policy.after_response(&standard_req, &standard_resp, now) {
-                    AfterResponse::NotModified(policy, parts) => {
+                    AfterResponse::NotModified(policy, _) => {
                         (key, ImageSrc::L2Refreshed, Ok((policy, stored_image)))
                     }
-                    AfterResponse::Modified(policy, parts) => todo!("store the whole thing"),
+                    AfterResponse::Modified(policy, _) => {
+                        let image = load_image(&body)?;
+                        (key, ImageSrc::RemoteFromSrc, Ok((policy, image)))
+                    }
                 }
             }
         };
@@ -486,7 +492,7 @@ enum L1ContKind {
     FetchLocal(PathBuf),
 }
 
-enum ImageSrc {
+pub enum ImageSrc {
     L2Fresh,
     L2Refreshed,
     LocalFromSrc,

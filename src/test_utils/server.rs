@@ -1,7 +1,13 @@
-use std::{hash::Hasher, sync::mpsc::Sender, thread, time::Duration};
+use std::{
+    collections::{btree_map, BTreeMap},
+    hash::Hasher,
+    sync::{mpsc::Sender, Arc},
+    thread,
+    time::Duration,
+};
 
 use super::image::Sample;
-use crate::debug_impls::DebugBytesPrefix;
+use crate::{debug_impls::DebugBytesPrefix, image::cache::RemoteKey};
 
 use http::{header, HeaderMap, HeaderValue};
 use once_cell::sync::Lazy;
@@ -29,7 +35,11 @@ static META_SERVER: Lazy<MetaServer> = Lazy::new(|| {
 });
 
 pub fn spawn(state: State, handler_fn: HandlerFn) -> MiniServerHandle {
-    let mini_server = MiniServer { handler_fn, state };
+    let state = SharedState::new(state.into());
+    let mini_server = MiniServer {
+        handler_fn,
+        state: state.clone(),
+    };
     let mut meta = META_SERVER.slots.write();
     let index = meta.len();
     meta.push(Some(mini_server));
@@ -37,7 +47,7 @@ pub fn spawn(state: State, handler_fn: HandlerFn) -> MiniServerHandle {
     let base_url = META_SERVER.base_url.clone();
     let url = format!("{base_url}/{index}");
 
-    MiniServerHandle { url, index }
+    MiniServerHandle { url, index, state }
 }
 
 fn spawn_router(server: Server) {
@@ -62,7 +72,10 @@ fn try_respond(req: &Request) -> Option<ResponseBox> {
 
     let meta = META_SERVER.slots.read();
     let MiniServer { state, handler_fn } = meta.get(server_index)?.as_ref()?;
-    let resp = (handler_fn)(state, req, subserver_url);
+    let resp = {
+        let state = state.read();
+        (handler_fn)(&*state, req, subserver_url)
+    };
     Some(resp)
 }
 
@@ -74,11 +87,49 @@ struct MetaServer {
 pub struct MiniServerHandle {
     url: String,
     index: usize,
+    state: SharedState,
 }
 
 impl MiniServerHandle {
     pub fn url(&self) -> &str {
         &self.url
+    }
+
+    pub fn mount_image<F: Into<File>>(&self, file: F) -> RemoteKey {
+        let file = file.into();
+        let mut state = self.state.write();
+        let mut num_files = state.files.len();
+        let new_name = loop {
+            let new_name = format!(
+                "/file_{}{}",
+                num_files,
+                file.mime.to_ext().unwrap_or(".unknown")
+            );
+            if !state.files.contains_key(&new_name) {
+                break new_name;
+            } else {
+                num_files += 1;
+            }
+        };
+
+        let full_url = format!("{}{}", self.url(), new_name);
+        let key = RemoteKey::new_unchecked(full_url);
+        state.files.insert(new_name, file);
+        key
+    }
+
+    pub fn swap_image<F: Into<File>>(&self, key: &RemoteKey, file: F) -> Option<()> {
+        let file = file.into();
+        let url = key.get();
+        let rel_path = url.strip_prefix(self.url())?;
+        let mut state = self.state.write();
+        match state.files.entry(rel_path.to_owned()) {
+            btree_map::Entry::Vacant(_) => None,
+            btree_map::Entry::Occupied(mut slot) => {
+                slot.insert(file);
+                Some(())
+            }
+        }
     }
 }
 
@@ -93,13 +144,15 @@ impl Drop for MiniServerHandle {
 
 struct MiniServer {
     handler_fn: HandlerFn,
-    state: State,
+    state: SharedState,
 }
+
+type SharedState = Arc<RwLock<State>>;
 
 #[derive(Default)]
 pub struct State {
-    pub files: Vec<File>,
-    pub send: Option<Sender<FromServer>>,
+    files: BTreeMap<String, File>,
+    send: Option<Sender<FromServer>>,
 }
 
 impl State {
@@ -107,14 +160,18 @@ impl State {
         Self::default()
     }
 
-    pub fn file(mut self, file: File) -> Self {
-        self.files.push(file);
+    pub fn file(mut self, url_path: String, file: File) -> Self {
+        self.files.insert(url_path, file);
         self
     }
 
     pub fn send(mut self, send: Sender<FromServer>) -> Self {
         self.send = Some(send);
         self
+    }
+
+    pub fn send_msg(&self, msg: FromServer) {
+        let _ = self.send.as_ref().unwrap().send(msg);
     }
 }
 
@@ -125,49 +182,57 @@ pub enum FromServer {
 // TODO: split out some of this logic into some cache control test server crate? There's a lot of
 // low-level cache control server side stuff that we wind up implementing just to test things
 /// Spin up a server, so we can test network requests without external services
-pub fn mock_file_server(files: Vec<File>) -> MiniServerHandle {
+pub fn mock_file_server(files: Vec<(String, File)>) -> MiniServerHandle {
+    let files = files
+        .into_iter()
+        .map(|(path, file)| (path, file.into()))
+        .collect();
     let state = State { files, send: None };
     spawn(state, |state, req, req_url| {
-        tracing::warn!("Handling req");
-
         match req.method() {
-            Method::Get => match state.files.iter().find(|file| file.url_path == req_url) {
-                Some(file) => {
-                    // <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag#caching_of_unchanged_resources>
-                    //
-                    // > The server compares the client's `ETag` (sent with `If-None-Match`) with the
-                    // > `ETag` for its current version of the resource, and if both values match (that
-                    // > is, the resource has not changed), the server sends back a `304 Not Modified`
-                    // > status, without a body, which tells the client that the cached version of the
-                    // > response is still good to use (fresh).
-                    let desired_header_name: tiny_http::HeaderField =
-                        http::header::IF_NONE_MATCH.as_str().parse().unwrap();
-                    let maybe_client_etag = req.headers().iter().find_map(|header| {
-                        (header.field == desired_header_name).then(|| header.value.to_string())
-                    });
-                    match (file.include_etag, maybe_client_etag.as_deref()) {
-                        (true, Some(client_etag)) => {
-                            let body_hash = hash(&file.bytes);
-                            let server_etag = format!("\"{body_hash:x}\"");
-                            if server_etag == client_etag {
-                                // TODO: dedupe the etag header construction logic with sending the
-                                // original responses
-                                let header_name = http::header::ETAG.as_str().as_bytes();
-                                let header =
-                                    Header::from_bytes(header_name, server_etag.as_bytes())
-                                        .unwrap();
-                                Response::empty(http::status::StatusCode::NOT_MODIFIED.as_u16())
-                                    .with_header(header)
-                                    .boxed()
-                            } else {
-                                file.to_owned().into()
+            Method::Get => {
+                match state
+                    .files
+                    .iter()
+                    .find_map(|(url_path, file)| (url_path == &req_url).then_some(file))
+                {
+                    None => Response::empty(404).boxed(),
+                    Some(file) => {
+                        // <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag#caching_of_unchanged_resources>
+                        //
+                        // > The server compares the client's `ETag` (sent with `If-None-Match`) with the
+                        // > `ETag` for its current version of the resource, and if both values match (that
+                        // > is, the resource has not changed), the server sends back a `304 Not Modified`
+                        // > status, without a body, which tells the client that the cached version of the
+                        // > response is still good to use (fresh).
+                        let desired_header_name: tiny_http::HeaderField =
+                            http::header::IF_NONE_MATCH.as_str().parse().unwrap();
+                        let maybe_client_etag = req.headers().iter().find_map(|header| {
+                            (header.field == desired_header_name).then(|| header.value.to_string())
+                        });
+                        match (file.include_etag, maybe_client_etag.as_deref()) {
+                            (true, Some(client_etag)) => {
+                                let body_hash = hash(&file.bytes);
+                                let server_etag = format!("\"{body_hash:x}\"");
+                                if server_etag == client_etag {
+                                    // TODO: dedupe the etag header construction logic with sending the
+                                    // original responses
+                                    let header_name = http::header::ETAG.as_str().as_bytes();
+                                    let header =
+                                        Header::from_bytes(header_name, server_etag.as_bytes())
+                                            .unwrap();
+                                    Response::empty(http::status::StatusCode::NOT_MODIFIED.as_u16())
+                                        .with_header(header)
+                                        .boxed()
+                                } else {
+                                    file.to_owned().into()
+                                }
                             }
+                            _ => file.to_owned().into(),
                         }
-                        _ => file.to_owned().into(),
                     }
                 }
-                None => Response::empty(404).boxed(),
-            },
+            }
             _ => Response::empty(404).boxed(),
         }
     })
@@ -298,6 +363,18 @@ impl ContentType {
             Self::Other(other) => other,
         }
     }
+
+    fn to_ext(self) -> Option<&'static str> {
+        match self {
+            Self::Gif => Some(".gif"),
+            Self::Jpg => Some(".jpeg"),
+            Self::Png => Some(".png"),
+            Self::Qoi => Some(".qoi"),
+            Self::Svg => Some(".svg"),
+            Self::Webp => Some(".webp"),
+            Self::Other(_) => None,
+        }
+    }
 }
 
 impl From<ContentType> for Header {
@@ -310,7 +387,6 @@ impl From<ContentType> for Header {
 
 #[derive(Clone, SmartDebug)]
 pub struct File {
-    pub url_path: String,
     pub mime: ContentType,
     pub cache_control: Option<CacheControl>,
     pub include_etag: bool,
@@ -319,14 +395,8 @@ pub struct File {
 }
 
 impl File {
-    pub fn new(
-        url_path: &str,
-        mime: ContentType,
-        cache_control: Option<CacheControl>,
-        bytes: &[u8],
-    ) -> Self {
+    pub fn new(mime: ContentType, cache_control: Option<CacheControl>, bytes: &[u8]) -> Self {
         Self {
-            url_path: url_path.into(),
             mime,
             cache_control,
             include_etag: false,
@@ -344,7 +414,6 @@ fn hash(bytes: &[u8]) -> u64 {
 impl From<File> for ResponseBox {
     fn from(file: File) -> Self {
         let File {
-            url_path: _,
             mime,
             cache_control,
             include_etag,

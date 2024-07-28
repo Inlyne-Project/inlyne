@@ -27,6 +27,10 @@ fn touch(file: &Path) {
     filetime::set_file_mtime(file, now).unwrap();
 }
 
+fn cache_control() -> CacheControl {
+    CacheControl::new()
+}
+
 #[derive(Clone)]
 struct FakeTimeSource(Arc<RwLock<SystemTime>>);
 
@@ -65,39 +69,15 @@ fn num_l2_entries(db_path: &Path) -> u32 {
 #[derive(Clone)]
 struct RemoteImage {
     cache_control: Option<server::CacheControl>,
-    path: String,
     content_type: server::ContentType,
     include_etag: bool,
     body: Vec<u8>,
 }
 
 impl RemoteImage {
-    fn from_sample(
-        cache_control: Option<server::CacheControl>,
-        path: &str,
-        sample: Sample,
-    ) -> Self {
-        Self::new(
-            cache_control,
-            path,
-            sample.into(),
-            sample.pre_decode().into(),
-        )
-    }
-
-    fn new(
-        cache_control: Option<server::CacheControl>,
-        path: &str,
-        content_type: server::ContentType,
-        body: Vec<u8>,
-    ) -> Self {
-        Self {
-            cache_control,
-            path: path.to_owned(),
-            content_type,
-            include_etag: false,
-            body,
-        }
+    fn cache_control(mut self, c_c: CacheControl) -> Self {
+        self.cache_control = Some(c_c);
+        self
     }
 
     fn include_etag(mut self) -> Self {
@@ -106,17 +86,38 @@ impl RemoteImage {
     }
 }
 
+impl From<Sample> for RemoteImage {
+    fn from(sample: Sample) -> Self {
+        Self {
+            cache_control: None,
+            content_type: sample.into(),
+            body: sample.pre_decode().into(),
+            include_etag: false,
+        }
+    }
+}
+
+impl From<SamplePng> for RemoteImage {
+    fn from(sample_png: SamplePng) -> Self {
+        Sample::from(sample_png).into()
+    }
+}
+
+impl From<SamplePng> for server::File {
+    fn from(sample_png: SamplePng) -> Self {
+        RemoteImage::from(sample_png).into()
+    }
+}
+
 impl From<RemoteImage> for server::File {
     fn from(image: RemoteImage) -> Self {
         let RemoteImage {
             cache_control,
-            path,
             content_type,
             include_etag,
             body,
         } = image;
         Self {
-            url_path: path.into(),
             mime: content_type,
             cache_control,
             include_etag,
@@ -125,14 +126,13 @@ impl From<RemoteImage> for server::File {
     }
 }
 
-fn image_server(images: Vec<RemoteImage>) -> server::MiniServerHandle {
-    let files = images.into_iter().map(Into::into).collect();
-    server::mock_file_server(files)
+fn image_server() -> server::MiniServerHandle {
+    server::mock_file_server(vec![])
 }
 
-const IMMUTABLE_C_C: Option<server::CacheControl> = Some(server::CacheControl::new().immutable());
-const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
-const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
+const IMMUTABLE_C_C: server::CacheControl = server::CacheControl::new().immutable();
+// 300 seconds is used for a lot of images hosted by github
+const COMMON_MAX_AGE: Duration = Duration::from_secs(300);
 
 fn cache_builder() -> CacheBuilder {
     Default::default()
@@ -284,13 +284,10 @@ fn remote_layers() {
     log::init();
 
     // Setup server
-    let image: Sample = SamplePng::Bun.into();
-    let expected_data = image.post_decode(&Default::default());
-    let remote_path = format!("/sample{}", image.suffix());
-    let remote_image = RemoteImage::from_sample(IMMUTABLE_C_C, &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let sample: Sample = SamplePng::Bun.into();
+    let expected_data = sample.post_decode(&Default::default());
+    let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Setup cache
     let (_tmp_dir, db_path) = temp::dir();
@@ -313,16 +310,15 @@ fn remote_layers() {
 fn local_layers() {
     log::init();
 
-    // Setup local image
+    // Local image
     let image: Sample = SampleGif::AtuinDemo.into();
     let (_tmp_image, key) = create_local_image(image);
     let expected_data = image.post_decode(&Default::default());
-    // Setup cache
+    // Populate cache
     let mut cache = cache_builder().l1_only();
-    // Fetch from source
     let data = cache.from_local_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
-    // And now from l1
+    // And now we can fetch from l1
     let data = cache.from_l1(&key).expect("L1 is populated");
     assert_eq!(data, expected_data, "Invalid L1 image");
 }
@@ -338,13 +334,10 @@ fn remote_svg_layers() {
     log::init();
 
     // Setup server
-    let image: Sample = SampleSvg::Cargo.into();
-    let expected_data = image.post_decode(&Default::default());
-    let remote_path = format!("/sample{}", image.suffix());
-    let remote_image = RemoteImage::from_sample(IMMUTABLE_C_C, &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let sample: Sample = SampleSvg::Cargo.into();
+    let expected_data = sample.post_decode(&Default::default());
+    let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Setup cache
     let (_tmp_dir, db_path) = temp::dir();
@@ -362,7 +355,7 @@ fn remote_svg_layers() {
 
     // Try fetching again with different DPI and make sure the rendering changes
     let hidpi_ctx = SvgContext { dpi: 2.0 };
-    let hidpi_expected = image.post_decode(&hidpi_ctx);
+    let hidpi_expected = sample.post_decode(&hidpi_ctx);
     let mut hidpi_cache = cache_builder.svg_ctx(hidpi_ctx).open_in(&db_path);
     let hidpi_data = hidpi_cache.from_l2(&key).expect("L2 has stable SVG");
     assert_eq!(hidpi_data, hidpi_expected, "Bad higher dpi fetch");
@@ -392,16 +385,11 @@ fn local_svg_layers() {
 fn past_max_age_refetch() {
     log::init();
 
-    let max_age = Duration::from_secs(300);
-    let image: Sample = SampleWebp::CargoPublicApi.into();
-    let expected_data = image.post_decode(&Default::default());
-    let remote_path = format!("/sample{}", image.suffix());
-    // 300 seconds is used for a lot of images hosted by github
-    let c_c = server::CacheControl::new().max_age(max_age);
-    let remote_image = RemoteImage::from_sample(Some(c_c), &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let sample: Sample = SampleWebp::CargoPublicApi.into();
+    let expected_data = sample.post_decode(&Default::default());
+    let c_c = cache_control().max_age(COMMON_MAX_AGE);
+    let key = server.mount_image(RemoteImage::from(sample).cache_control(c_c));
 
     let time = FakeTimeSource::default();
     let (_db_dir, mut cache) = cache_builder().time(time.clone()).temp_file();
@@ -409,28 +397,33 @@ fn past_max_age_refetch() {
     let data = cache.from_remote_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
     cache.from_l1(&key).expect("Fresh cache");
-    time.inc(max_age + Duration::from_secs(1));
-    cache
+    time.inc(COMMON_MAX_AGE + Duration::from_secs(1));
+    let data = cache
         .from_remote_src(&key)
         .expect("Entry went past max-age and has no e-tag refresh with");
+    assert_eq!(data, expected_data, "Refetch should return the same");
 }
 
+// TODO: swap out the local file and check that
 // Local invalidation is handled by checking against the file's last modified time
 #[test]
 fn local_invalidation() {
     log::init();
 
-    // Setup local image
+    // Local image
     let image: Sample = SampleJpg::Rgb8.into();
     let (tmp_image, key) = create_local_image(image);
     let expected_data = image.post_decode(&Default::default());
-    // Setup cache
+
+    // Local images are only stored in the l1 cache
     let mut cache = cache_builder().l1_only();
     // Fetch from source
     let data = cache.from_local_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
     // It's available in l1
     cache.from_l1(&key).expect("L1 is populated");
+    // TODO: store the file size as well so we have more granularity than seconds. Then change this
+    // to swapping the file for something else and only try fetching once
     // Updating the m-time will invalidate the cached l1 entry
     let refetched = (0..20).find_map(|_| {
         touch(tmp_image.path());
@@ -452,37 +445,42 @@ fn local_invalidation() {
 fn etag_refresh_same() {
     log::init();
 
-    let max_age = Duration::from_secs(300);
-    let image: Sample = SampleQoi::Rgb8.into();
-    let expected_data = image.post_decode(&Default::default());
-    let remote_path = format!("/sample{}", image.suffix());
-    // 300 seconds is used for a lot of images hosted by github
-    let c_c = server::CacheControl::new().max_age(max_age);
-    let remote_image = RemoteImage::from_sample(Some(c_c), &remote_path, image).include_etag();
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let sample: Sample = SampleQoi::Rgb8.into();
+    let c_c = cache_control().max_age(COMMON_MAX_AGE);
+    let key = server.mount_image(RemoteImage::from(sample).cache_control(c_c).include_etag());
 
     let time = FakeTimeSource::default();
     let (_db_dir, mut cache) = cache_builder().time(time.clone()).temp_file();
 
-    let data = cache.from_remote_src(&key).expect("Empty cache");
-    assert_eq!(data, expected_data, "Bad initial fetch");
+    cache.from_remote_src(&key).expect("Empty cache");
     cache.from_l1(&key).expect("Fresh cache");
-    time.inc(max_age + Duration::from_secs(1));
-    cache
-        .from_refresh(&key)
-        .expect("Entry went past max-age, but the content still matches");
+    time.inc(COMMON_MAX_AGE + Duration::from_secs(1));
+    cache.from_refresh(&key).expect("Entry went past max-age");
 }
 
 // Same as valid e-tag refresh, but this time the content is different and needs to be re-pulled
 // TODO: need to add support for this flow to the test image server
 #[test]
-#[ignore = "TODO"]
 fn etag_refresh_different() {
     log::init();
 
-    todo!();
+    let server = image_server();
+    let sample: Sample = SampleQoi::Rgb8.into();
+    let c_c = cache_control().max_age(COMMON_MAX_AGE);
+    let key = server.mount_image(RemoteImage::from(sample).cache_control(c_c).include_etag());
+
+    let time = FakeTimeSource::default();
+    let (_db_dir, mut cache) = cache_builder().time(time.clone()).temp_file();
+
+    cache.from_remote_src(&key).expect("Empty cache");
+    cache.from_l1(&key).expect("Fresh cache");
+
+    server.swap_image(&key, SamplePng::Ariadne).unwrap();
+    time.inc(COMMON_MAX_AGE + Duration::from_secs(1));
+    cache
+        .from_remote_src(&key)
+        .expect("Cached entry is both stale and different now");
 }
 
 #[test]
@@ -551,19 +549,17 @@ fn remote_404_error() {
     log::init();
 
     // Setup server
-    let image: Sample = SamplePng::Ariadne.into();
-    let remote_path = format!("/sample{}", image.suffix());
-    let remote_image = RemoteImage::from_sample(None, &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let key = server.mount_image(SamplePng::Bun);
 
     let (_db_dir, mut cache) = cache_builder().temp_file();
     cache
         .from_remote_src(&key)
         .expect("Can fetch, but won't cache");
     drop(server);
-    let err = cache.err(&key).expect("Server shutdown and not cached");
+    let err = cache
+        .err(&key)
+        .expect("Server is shutdown and the image is not cached");
     assert_eq!(err, ImageError::ReqFailed);
 }
 
@@ -573,16 +569,11 @@ fn private_cache() {
     log::init();
 
     // Setup server
-    let image: Sample = SamplePng::Bun.into();
-    let remote_path = format!("/sample{}", image.suffix());
-    let private_immutable_c_c = CacheControl::new().immutable().private();
-    let remote_image = RemoteImage::from_sample(Some(private_immutable_c_c), &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let c_c = IMMUTABLE_C_C.private();
+    let key = server.mount_image(RemoteImage::from(SamplePng::Bun).cache_control(c_c));
 
     let (_tmp_dir, db_path) = temp::dir();
-
     let mut cache = cache_builder().open_in(&db_path);
     cache
         .from_remote_src(&key)
@@ -592,26 +583,28 @@ fn private_cache() {
     fresh_l1_cache.from_l2(&key).expect("L2 of private cache");
 }
 
-// We shouldn't just store everything. A prime example to test with being the `no-store` directive
+// We shouldn't just store everything. A prime candidate to test being the `no-store` directive
 #[test]
 fn selectively_stores() {
     log::init();
 
     // Setup server
-    let image: Sample = SamplePng::Bun.into();
-    let remote_path = format!("/sample{}", image.suffix());
-    let no_store_c_c = CacheControl::new().no_store();
-    let remote_image = RemoteImage::from_sample(Some(no_store_c_c), &remote_path, image);
-    let server = image_server(vec![remote_image]);
-    let url = server.url().to_owned() + &remote_path;
-    let key = RemoteKey::new_unchecked(url);
+    let server = image_server();
+    let c_c = cache_control().no_store();
+    let key = server.mount_image(RemoteImage::from(SamplePng::Bun).cache_control(c_c));
 
     // Setup cache
-    let (_db_dir, mut cache) = cache_builder().temp_file();
+    let (_tmp_dir, db_path) = temp::dir();
+    let mut cache = cache_builder().open_in(&db_path);
 
     // Because the image is `no-store` it will fetch from source each time
     cache.from_remote_src(&key).expect("Empty cache");
     cache.from_remote_src(&key).expect("Still empty");
+    assert_eq!(
+        num_l2_entries(&db_path.join("test.db")),
+        0,
+        "Shouldn't be in the cache at all"
+    );
 }
 
 // TODO: add a cache builder that can configure various sizes along with allowing storing locally

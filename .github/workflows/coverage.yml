@@ -1,4 +1,4 @@
-on: [push]
+name: codecov
 
 on:
   pull_request:
