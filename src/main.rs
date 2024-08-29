@@ -189,7 +189,7 @@ impl Inlyne {
             &window,
             opts.theme.clone(),
             opts.scale.unwrap_or(window.scale_factor() as f32),
-            opts.page_width.unwrap_or(std::f32::MAX),
+            opts.page_width.unwrap_or(f32::MAX),
             opts.font_opts.clone(),
         ))?;
 
