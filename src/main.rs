@@ -175,16 +175,21 @@ fn root_filepath_to_vcs_dir(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Sets window tile to the path of currently loaded file.
+fn set_window_title_with_new_path(window: &Window, new_path: &Path) {
+    match root_filepath_to_vcs_dir(new_path) {
+        Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
+        None => window.set_title("Inlyne"),
+    }
+}
+
 impl Inlyne {
     pub fn new(opts: Opts) -> anyhow::Result<Self> {
         let keycombos = KeyCombos::new(opts.keybindings.clone())?;
 
         let event_loop = EventLoopBuilder::<InlyneEvent>::with_user_event().build();
         let window = Arc::new(Window::new(&event_loop).unwrap());
-        match root_filepath_to_vcs_dir(&opts.file_path) {
-            Some(path) => window.set_title(&format!("Inlyne - {}", path.to_string_lossy())),
-            None => window.set_title("Inlyne"),
-        }
+        set_window_title_with_new_path(&window, &opts.file_path);
         let renderer = pollster::block_on(Renderer::new(
             &window,
             opts.theme.clone(),
@@ -235,6 +240,15 @@ impl Inlyne {
             need_repositioning: false,
             watcher,
         })
+    }
+
+    pub fn react_to_new_loaded_file(&mut self, new_path: PathBuf, contents: String) {
+        set_window_title_with_new_path(&self.window, &new_path);
+        self.watcher.update_file(&new_path, contents);
+        // TODO: Once and if history is implemented,
+        // old scroll_y might be stored there
+        self.renderer.set_scroll_y(0.);
+        self.opts.file_path = new_path;
     }
 
     pub fn position_queued_elements(
@@ -311,7 +325,9 @@ impl Inlyne {
                             );
                         }
                     },
-                    InlyneEvent::FileChange { contents } => self.load_file(contents),
+                    InlyneEvent::FileChange { contents } => {
+                        self.load_file(contents)
+                    },
                     InlyneEvent::Reposition => {
                         self.need_repositioning = true;
                     }
@@ -513,16 +529,7 @@ impl Inlyne {
                                             .expect("Could not spawn new inlyne instance");
                                         } else {
                                             match read_to_string(&path) {
-                                                Ok(contents) => {
-                                                    self.opts.file_path = path;
-                                                    self.watcher.update_file(
-                                                        &self.opts.file_path,
-                                                        contents,
-                                                    );
-                                                    // TODO: Once and if history is implemented,
-                                                    // old scroll_y might be stored there
-                                                    self.renderer.set_scroll_y(0.);
-                                                }
+                                                Ok(contents) => self.react_to_new_loaded_file(path, contents),
                                                 Err(err) => {
                                                     tracing::warn!(
                                                         "Failed loading markdown file at {}\nError: {}",
