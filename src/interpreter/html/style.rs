@@ -45,7 +45,7 @@ pub enum Style {
     TextDecoration(TextDecoration),
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum FontWeight {
     #[default]
     Normal,
@@ -61,7 +61,7 @@ impl FontWeight {
     }
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum FontStyle {
     #[default]
     Normal,
@@ -77,7 +77,7 @@ impl FontStyle {
     }
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum TextDecoration {
     #[default]
     Normal,
