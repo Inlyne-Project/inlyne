@@ -84,7 +84,7 @@ impl Line {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rect {
     pub pos: Point,
     pub size: Point,

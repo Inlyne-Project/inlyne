@@ -13,7 +13,7 @@ use crate::{debug_impls, Element};
 pub const DEFAULT_PADDING: f32 = 5.;
 pub const DEFAULT_MARGIN: f32 = 100.;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Positioned<T> {
     pub inner: T,
     pub bounds: Option<Rect>,
@@ -231,6 +231,7 @@ impl Positioner {
     }
 }
 
+#[derive(PartialEq)]
 pub struct Spacer {
     pub space: f32,
     pub visible: bool,
@@ -256,7 +257,7 @@ impl fmt::Debug for Spacer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Row {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,
@@ -271,7 +272,7 @@ impl Row {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Section {
     pub elements: Vec<Positioned<Element>>,
     pub hidpi_scale: f32,

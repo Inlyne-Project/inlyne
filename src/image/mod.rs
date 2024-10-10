@@ -45,7 +45,7 @@ impl From<u32> for Px {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ImageSize {
     PxWidth(Px),
     PxHeight(Px),
@@ -61,7 +61,7 @@ impl ImageSize {
     }
 }
 
-#[derive(SmartDebug, Default, Clone)]
+#[derive(SmartDebug, Default, Clone, PartialEq)]
 pub struct ImageData {
     #[debug(wrapper = DebugBytesPrefix)]
     lz4_blob: Vec<u8>,
@@ -113,6 +113,8 @@ impl ImageData {
 
 #[derive(SmartDebug, Default)]
 pub struct Image {
+    // TODO: Instead of sharing a mutex with the image loading thread change this to hold a oneshot
+    // channel that stores the image?
     #[debug(skip_fn = debug_ignore_image_data)]
     pub image_data: Arc<Mutex<Option<ImageData>>>,
     #[debug(skip_fn = Option::is_none, wrapper = DebugInline)]
@@ -125,6 +127,49 @@ pub struct Image {
     pub is_link: Option<String>,
     #[debug(skip)]
     pub hidpi_scale: f32,
+}
+
+// NOTE: Internally performs some expensive operations. Avoid calling often
+// TODO: can we deprecate this and then `allow` specific usages of it due to ^^?
+impl PartialEq for Image {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            image_data,
+            is_aligned,
+            size,
+            bind_group,
+            is_link,
+            hidpi_scale,
+        } = self;
+        let Self {
+            image_data: other_image_data,
+            is_aligned: other_is_aligned,
+            size: other_size,
+            bind_group: other_bind_group,
+            is_link: other_is_link,
+            hidpi_scale: other_hidpi_scale,
+        } = other;
+
+        let clone_image_data = |shared_image: &Mutex<Option<_>>| {
+            shared_image
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .to_owned()
+        };
+        let image_data = clone_image_data(image_data);
+        let other_image_data = clone_image_data(other_image_data);
+
+        let some_bind_group = bind_group.is_some();
+        let some_other_bind_group = other_bind_group.is_some();
+        let bind_group_variant_matches = some_bind_group ^ !some_other_bind_group;
+
+        image_data == other_image_data
+            && is_aligned == other_is_aligned
+            && size == other_size
+            && is_link == other_is_link
+            && hidpi_scale == other_hidpi_scale
+            && bind_group_variant_matches
+    }
 }
 
 fn debug_ignore_image_data(mutex: &Mutex<Option<ImageData>>) -> bool {
