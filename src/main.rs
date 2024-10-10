@@ -88,7 +88,7 @@ pub enum Hoverable<'a> {
     Summary(&'a Section),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Element {
     TextBox(TextBox),
     Spacer(Spacer),

@@ -53,7 +53,7 @@ impl TextBoxMeasure {
     }
 }
 
-#[derive(SmartDebug, Clone)]
+#[derive(SmartDebug, Clone, PartialEq)]
 #[debug(skip_defaults)]
 pub struct TextBox {
     pub font_size: f32,
@@ -574,7 +574,7 @@ struct ThinLine {
     color: [f32; 4],
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Text {
     pub text: String,
     pub color: Option<[f32; 4]>,
