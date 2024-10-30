@@ -31,10 +31,10 @@ wayland = ["copypasta/wayland", "winit/wayland"]
 [dependencies]
 # `anstream` and `anstyle` are both terminal helper crates used for our custom
 # panic hook (and already used by `clap`, so it's a "free" dependency)
-anstream = "0.6.14"
-anstyle = "1.0.7"
+anstream = "0.6.17"
+anstyle = "1.0.9"
 # Easier error handling
-anyhow = "1.0.86"
+anyhow = "1.0.91"
 # System preferred color scheme detection
 dark-light = "1.1.1"
 # System specific directories
@@ -52,7 +52,7 @@ html5ever = "0.27.0"
 # Provides some extra helpers that we use for our custom panic hook
 human-panic = "2.0.0"
 # Generic image decoding
-image = "0.25.1"
+image = "0.25.4"
 # 2D GPU graphics rendering
 lyon = "1.0.1"
 # Images are compressed to in-memory lz4 blobs
@@ -61,11 +61,11 @@ lz4_flex = "0.11.3"
 metrics = "0.22.3"
 # File event notifications for the live reloading feature
 notify = "6.1.1"
-once_cell = "1.19.0"
+once_cell = "1.20.2"
 # Used to open external links like in the user's browser
-open = "5.1.3"
+open = "5.3.0"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
-parking_lot = "0.12.2"
+parking_lot = "0.12.3"
 # Dead simple way to handle some async operations
 pollster = "0.3.0"
 # Used to get a handle to the display, so that we can setup a clipboard
@@ -82,7 +82,7 @@ syntect = "5.2.0"
 # lacking HTML ones
 taffy = "0.3.19"
 # For parsing our config file
-toml = "0.8.13"
+toml = "0.8.19"
 # In application tracing (aka logging on steroids)
 tracing = "0.1.40"
 # Extra syntax and theme definitions for `syntect`
@@ -90,13 +90,13 @@ two-face = "0.4.0"
 # More text hashing...
 twox-hash = "1.6.3"
 # HTTP client for requesting images from urls
-ureq = "2.9.7"
+ureq = "2.10.1"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
-version = "1.16.0"
+version = "1.19.0"
 features = ["derive"]
 
 # Command line arg parsing
@@ -125,7 +125,7 @@ features = ["fontconfig"]
 
 # Common dep used from yaml that can probably be replaced with a `Vec<(_, _)>`
 [dependencies.indexmap]
-version = "2.2.6"
+version = "2.6.0"
 features = ["serde"]
 
 # Metrics helpers used for our custom metric logger
@@ -137,12 +137,12 @@ features = ["registry", "summary"]
 # Debouncer that papers over some issues with various ways that editors save
 # files
 [dependencies.notify-debouncer-full]
-version = "0.3.1"
+version = "0.3.2"
 default-features = false
 
 # For dealing with both TOML and YAML
 [dependencies.serde]
-version = "1.0.202"
+version = "1.0.214"
 features = ["derive"]
 
 # Common dep used by `html5ever`
@@ -164,14 +164,14 @@ default-features = false
 # Succinct and more readable binary blobs
 base64 = "0.22.1"
 # Used to update file's modified time for tests
-filetime = "0.2.23"
+filetime = "0.2.25"
 # Snapshot testing
-insta = "1.39.0"
+insta = "1.41.0"
 # Assertions displayed as diffs which is immensely helpful for some of our large
 # values
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.1"
 # Throwaway files/dirs for isolated test environments
-tempfile = "3.10.1"
+tempfile = "3.13.0"
 # Use for setting up a local http server to test image requests in isolation
 tiny_http = "0.12.0"
 
