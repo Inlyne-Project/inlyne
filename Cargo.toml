@@ -60,7 +60,7 @@ lyon = "1.0.1"
 # Images are compressed to in-memory lz4 blobs
 lz4_flex = "0.11.3"
 # Generic metrics facade for our metrics recording/emission infra
-metrics = "0.22.3"
+metrics = "0.24.0"
 # File event notifications for the live reloading feature
 notify = "6.1.1"
 once_cell = "1.20.2"
@@ -69,7 +69,7 @@ open = "5.3.0"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
 parking_lot = "0.12.3"
 # Dead simple way to handle some async operations
-pollster = "0.3.0"
+pollster = "0.4.0"
 # Used to get a handle to the display, so that we can setup a clipboard
 raw-window-handle = "0.5.2"
 # SVG rendering
@@ -108,7 +108,7 @@ features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
 [dependencies.comrak]
-version = "0.24.1"
+version = "0.29.0"
 default-features = false
 features = ["shortcodes", "syntect"]
 
@@ -132,7 +132,7 @@ features = ["serde"]
 
 # Metrics helpers used for our custom metric logger
 [dependencies.metrics-util]
-version = "0.16.3"
+version = "0.18.0"
 default-features = false
 features = ["registry", "summary"]
 
@@ -178,7 +178,7 @@ tempfile = "3.13.0"
 tiny_http = "0.12.0"
 
 [target.'cfg(inlyne_tcp_metrics)'.dependencies]
-metrics-exporter-tcp = "0.9.0"
+metrics-exporter-tcp = "0.11.0"
 
 [profile.release]
 strip = true
