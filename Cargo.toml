@@ -23,6 +23,7 @@ exclude = [
     "/typos.toml",
 ]
 keywords = ["markdown", "viewer", "gpu"]
+categories = ["gui"]
 
 [features]
 default = ["wayland", "x11"]
