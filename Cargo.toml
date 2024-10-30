@@ -14,9 +14,7 @@ authors = [
     "Cosmic <CosmicHorrorDev@pm.me>",
 ]
 license = "MIT"
-readme = "README.md"
 repository = "https://github.com/Inlyne-Project/inlyne"
-homepage = "https://github.com/Inlyne-Project/inlyne"
 rust-version = "1.81.0"
 exclude = [
     "/ci/*",
