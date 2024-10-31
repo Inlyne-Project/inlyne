@@ -10,7 +10,7 @@ use std::{
     fmt::Write,
     hash::Hasher,
     io,
-    panic::PanicInfo,
+    panic::PanicHookInfo,
     path::{Path, PathBuf},
 };
 
@@ -26,7 +26,7 @@ macro_rules! setup_panic {
         match ::human_panic::PanicStyle::default() {
             ::human_panic::PanicStyle::Human => {
                 ::std::panic::set_hook(::std::boxed::Box::new(
-                    move |info: &::std::panic::PanicInfo| {
+                    move |info: &::std::panic::PanicHookInfo| {
                         eprintln!("{info}");
                         let file_path = $crate::panic_hook::handle_dump(info);
                         $crate::panic_hook::print_msg(file_path.as_deref()).unwrap();
@@ -122,7 +122,7 @@ impl From<human_panic::report::Report> for Report {
     }
 }
 
-pub fn handle_dump(panic_info: &PanicInfo) -> Option<PathBuf> {
+pub fn handle_dump(panic_info: &PanicHookInfo) -> Option<PathBuf> {
     let mut expl = String::new();
 
     let message = match (
