@@ -8,6 +8,35 @@ use crate::image::{cache::StableImage, ImageData};
 use http_cache_semantics::CachePolicy;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 
+#[derive(Debug)]
+pub enum ConvertError {
+    CachePolicy(bincode::Error),
+    Image(StableImageConvertError),
+}
+
+impl fmt::Display for ConvertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CachePolicy(err) => write!(f, "Invalid stored cache policy: {err}"),
+            Self::Image(err) => write!(f, "Invalid stored image: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ConvertError {}
+
+impl From<bincode::Error> for ConvertError {
+    fn from(err: bincode::Error) -> Self {
+        Self::CachePolicy(err)
+    }
+}
+
+impl From<StableImageConvertError> for ConvertError {
+    fn from(err: StableImageConvertError) -> Self {
+        Self::Image(err)
+    }
+}
+
 pub struct CachePolicyBytes(Vec<u8>);
 
 impl From<&CachePolicy> for CachePolicyBytes {
@@ -18,7 +47,7 @@ impl From<&CachePolicy> for CachePolicyBytes {
 }
 
 impl TryFrom<&CachePolicyBytes> for CachePolicy {
-    type Error = bincode::Error;
+    type Error = ConvertError;
 
     fn try_from(bytes: &CachePolicyBytes) -> Result<Self, Self::Error> {
         let policy = bincode::deserialize(&bytes.0)?;
@@ -113,7 +142,7 @@ impl fmt::Display for StableImageConvertError {
 impl std::error::Error for StableImageConvertError {}
 
 impl TryFrom<StableImageBytes> for StableImage {
-    type Error = StableImageConvertError;
+    type Error = ConvertError;
 
     fn try_from(bytes: StableImageBytes) -> Result<Self, Self::Error> {
         let mut bytes = bytes.0;
@@ -131,7 +160,9 @@ impl TryFrom<StableImageBytes> for StableImage {
                         0 => false,
                         1 => true,
                         unknown => {
-                            return Err(StableImageConvertError::InvalidPreDecodedScale(unknown));
+                            return Err(
+                                StableImageConvertError::InvalidPreDecodedScale(unknown).into()
+                            );
                         }
                     };
                     let dim_x = array::from_fn(|_| footer.next().expect("Length pre-checked"));
@@ -147,7 +178,7 @@ impl TryFrom<StableImageBytes> for StableImage {
                 };
                 Ok(Self::PreDecoded(image_data))
             }
-            unknown => Err(StableImageConvertError::InvalidKind(unknown)),
+            unknown => Err(StableImageConvertError::InvalidKind(unknown).into()),
         }
     }
 }

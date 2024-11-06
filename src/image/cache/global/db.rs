@@ -59,7 +59,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn get_meta(&self, remote: &RemoteKey) -> anyhow::Result<Option<RemoteMeta>> {
+    pub fn get_meta(&self, remote: &RemoteKey) -> rusqlite::Result<Option<RemoteMeta>> {
         let mut stmt = self
             .0
             .prepare_cached("select generation, last_used, policy from images where url = ?1")?;
@@ -83,7 +83,7 @@ impl Db {
         &self,
         remote: &RemoteKey,
         generation: u32,
-    ) -> anyhow::Result<Option<StableImage>> {
+    ) -> rusqlite::Result<Option<StableImage>> {
         let mut stmt = self
             .0
             .prepare_cached("select image from images where url = ?1 and generation = ?2")?;

@@ -113,6 +113,12 @@ pub enum Key {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct RemoteKey(String);
 
+impl fmt::Display for RemoteKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 impl RemoteKey {
     pub fn new_unchecked<I: Into<String>>(s: I) -> Self {
         Self(s.into())

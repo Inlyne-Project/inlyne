@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::{RemoteKey, StableImage, StandardRequest};
-use crate::utils;
+use crate::{image::cache::global, utils};
 
 use anyhow::Context;
 use http::request;
@@ -153,20 +153,43 @@ impl Cache {
         key: &RemoteKey,
         now: SystemTime,
     ) -> anyhow::Result<Option<CacheCheck>> {
-        let Some(meta) = self.0.get_meta(key)? else {
-            return Ok(None);
+        fn is_corrupt_entry(err: &rusqlite::Error) -> bool {
+            use rusqlite::Error as E;
+
+            match err {
+                E::FromSqlConversionFailure(_, _, conv_err) => {
+                    conv_err.is::<global::wrappers::ConvertError>()
+                }
+                E::IntegralValueOutOfRange(_, _) => true,
+                _ => false,
+            }
+        }
+
+        let meta = match self.0.get_meta(key) {
+            Ok(Some(meta)) => meta,
+            Ok(None) => return Ok(None),
+            Err(err) if is_corrupt_entry(&err) => {
+                tracing::warn!(%key, %err, "Ignoring corrupt cache entry");
+                return Ok(None);
+            }
+            Err(err) => return Err(err.into()),
         };
         let req: StandardRequest = key.into();
 
         let maybe_meta = match meta.policy.before_request(&req, now) {
             BeforeRequest::Fresh(_) => {
                 let gen = meta.generation;
-                match self.0.get_data(key, gen)? {
-                    None => None,
-                    Some(image) => {
+                match self.0.get_data(key, gen) {
+                    Ok(Some(image)) => {
                         self.0.refresh_last_used(key, gen, now)?;
                         Some(CacheCheck::Fresh((meta.policy, image.into())))
                     }
+                    Ok(None) => None,
+                    Err(err) if is_corrupt_entry(&err) => {
+                        tracing::warn!(%key, %err, "Ignoring corrupt cache entry");
+                        None
+                    }
+                    Err(err) => return Err(err.into()),
                 }
             }
             BeforeRequest::Stale { request, .. } => {
