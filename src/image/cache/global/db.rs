@@ -135,6 +135,7 @@ impl Db {
     ) -> anyhow::Result<()> {
         let url = &remote.0;
         let now: SystemTimeSecs = now.try_into()?;
+        // TODO: cache this query
         self.0.execute(
             "update images set last_used = ?1 where url = ?2 and generation = ?3",
             (now, url, generation),

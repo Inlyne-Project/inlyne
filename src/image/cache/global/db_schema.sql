@@ -4,4 +4,4 @@ create table if not exists images (
     last_used int not null,
     policy blob not null,
     image blob not null
-)
+) strict

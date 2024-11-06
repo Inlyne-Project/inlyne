@@ -276,10 +276,12 @@ impl TestCache {
         match worker.fetch(key.into()).unwrap() {
             L1Check::Fini(data) => Fetch::L1(data),
             L1Check::Cont(cont) => match cont.finish().unwrap() {
-                Ok((_, ImageSrc::L2Fresh, data)) => Fetch::L2Fresh(data),
-                Ok((_, ImageSrc::L2Refreshed, data)) => Fetch::L2Refreshed(data),
-                Ok((_, ImageSrc::LocalFromSrc, data)) => Fetch::LocalFromSrc(data),
-                Ok((_, ImageSrc::RemoteFromSrc, data)) => Fetch::RemoteFromSrc(data),
+                Ok((_, src, data)) => match src {
+                    ImageSrc::L2Fresh => Fetch::L2Fresh(data),
+                    ImageSrc::L2Refreshed => Fetch::L2Refreshed(data),
+                    ImageSrc::LocalFromSrc => Fetch::LocalFromSrc(data),
+                    ImageSrc::RemoteFromSrc => Fetch::RemoteFromSrc(data),
+                },
                 Err(err) => Fetch::Err(err),
             },
         }
@@ -629,21 +631,28 @@ fn corrupt_db_entry() {
     let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Populate the cache
-    let time = FakeTimeSource::default();
-    let (db_dir, mut cache) = cache_builder().time(time.clone()).temp_file();
+    let (_tmp_dir, db_path) = temp::dir();
+    let mut cache = cache_builder().open_in(&db_path);
     let data = cache.from_remote_src(&key).unwrap();
+
+    // Ensure we can fetch the cached item
     assert_eq!(data, expected_data, "Bad initial fetch");
+    let mut fresh_l1_cache = cache_builder().open_in(&db_path);
+    fresh_l1_cache.from_l2(&key).unwrap();
 
-    // Corrupt the cached image's kind
+    // Corrupt the cached image
     let conn = rusqlite::Connection::open(cache.path().unwrap()).unwrap();
-    conn.execute("update images set image = '' where url = ?1", [key.get()])
-        .unwrap();
+    conn.execute(
+        "update images set image = ?1 where url = ?2",
+        ([], key.get()),
+    )
+    .unwrap();
 
-    // The entry is corrupt, so it re-fetches from source and refreshes the corrupt entry
-    let mut fresh_l1_cache = cache_builder().open_in(db_dir.path());
+    // The entry is corrupt, so it re-fetches from source and heals the corrupt entry
+    fresh_l1_cache = cache_builder().open_in(&db_path);
     let data = fresh_l1_cache.from_remote_src(&key).unwrap();
     assert_eq!(data, expected_data);
-    let mut fresh_l1_cache = cache_builder().open_in(db_dir.path());
+    fresh_l1_cache = cache_builder().open_in(&db_path);
     let data = fresh_l1_cache.from_l2(&key).unwrap();
     assert_eq!(data, expected_data);
 }
@@ -716,8 +725,7 @@ fn selectively_stores() {
     let key = server.mount_image(RemoteImage::from(SamplePng::Bun).cache_control(c_c));
 
     // Setup cache
-    let (_tmp_dir, db_path) = temp::dir();
-    let mut cache = cache_builder().open_in(&db_path);
+    let (_tmp_file, mut cache) = cache_builder().temp_file();
 
     // Because the image is `no-store` it will fetch from source each time
     cache.from_remote_src(&key).expect("Empty cache");
