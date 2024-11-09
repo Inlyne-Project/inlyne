@@ -3,6 +3,7 @@ mod tests;
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use crate::InlyneEvent;
@@ -106,9 +107,12 @@ impl Watcher {
         let notify_watcher =
             new_debouncer(Duration::from_millis(10), None, MsgHandler(msg_tx)).unwrap();
 
-        std::thread::spawn(move || {
-            endlessly_handle_messages(notify_watcher, msg_rx, reload_callback, file_path);
-        });
+        thread::Builder::new()
+            .name("file-watcher".into())
+            .spawn(move || {
+                endlessly_handle_messages(notify_watcher, msg_rx, reload_callback, file_path);
+            })
+            .expect("failed to spawn thread");
 
         watcher
     }

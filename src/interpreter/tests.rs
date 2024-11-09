@@ -178,9 +178,12 @@ fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element
     let (interpreter, element_queue) = opts.finish(counter.clone());
     let (md_tx, md_rx) = mpsc::channel();
     md_tx.send(text.to_owned()).unwrap();
-    let interpreter_handle = std::thread::spawn(|| {
-        interpreter.interpret_md(md_rx);
-    });
+    let interpreter_handle = thread::Builder::new()
+        .name("test-interpreter".into())
+        .spawn(|| {
+            interpreter.interpret_md(md_rx);
+        })
+        .unwrap();
 
     let start = Instant::now();
     while !counter.is_finished() {

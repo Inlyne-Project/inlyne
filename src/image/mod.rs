@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
-use std::{fs, io};
+use std::{fs, io, thread};
 
 use crate::debug_impls::{DebugBytesPrefix, DebugInline};
 use crate::interpreter::ImageCallback;
@@ -265,74 +265,82 @@ impl Image {
         let image_data = Arc::new(Mutex::new(None));
         let image_data_clone = image_data.clone();
 
-        std::thread::spawn(move || {
-            let start = Instant::now();
+        thread::Builder::new()
+            .name("remote-image-dl".into())
+            .spawn(move || {
+                let start = Instant::now();
 
-            let mut src_path = PathBuf::from(&src);
-            if src_path.is_relative() {
-                if let Some(parent_dir) = file_path.parent() {
-                    src_path = parent_dir.join(src_path.strip_prefix("./").unwrap_or(&src_path));
+                let mut src_path = PathBuf::from(&src);
+                if src_path.is_relative() {
+                    if let Some(parent_dir) = file_path.parent() {
+                        src_path =
+                            parent_dir.join(src_path.strip_prefix("./").unwrap_or(&src_path));
+                    }
                 }
-            }
 
-            let image_data = if let Ok(img_file) = fs::read(&src_path) {
-                img_file
-            } else if let Ok(bytes) = http_get_image(&src) {
-                bytes
-            } else {
-                tracing::warn!("Request for image from {} failed", src_path.display());
-                return;
-            };
-
-            let image = if let Ok(image) = ImageData::load(&image_data, true) {
-                image
-            } else {
-                let opt = usvg::Options::default();
-                // TODO: yes all of this image loading is very messy and could use a refactor
-                let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
-                    tracing::warn!(
-                        "Failed loading image:\n- src: {}\n- src_path: {}",
-                        src,
-                        src_path.display()
-                    );
-                    let image =
-                        ImageData::load(include_bytes!("../../assets/img/broken.png"), false)
-                            .unwrap();
-                    *image_data_clone.lock().unwrap() = Some(image);
-                    image_callback.loaded_image(src, image_data_clone);
+                let image_data = if let Ok(img_file) = fs::read(&src_path) {
+                    img_file
+                } else if let Ok(bytes) = http_get_image(&src) {
+                    bytes
+                } else {
+                    tracing::warn!("Request for image from {} failed", src_path.display());
                     return;
                 };
-                tree.size = tree.size.scale_to(
-                    tiny_skia::Size::from_wh(
-                        tree.size.width() * hidpi_scale,
-                        tree.size.height() * hidpi_scale,
-                    )
-                    .unwrap(),
-                );
-                static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
-                let fontdb = FONTDB.get_or_init(|| {
-                    let mut db = fontdb::Database::new();
-                    db.load_system_fonts();
-                    db
-                });
-                tree.postprocess(Default::default(), fontdb);
-                let mut pixmap =
-                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
-                        .context("Couldn't create svg pixmap")
-                        .unwrap();
-                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-                ImageData::new(
-                    ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
+
+                let image = if let Ok(image) = ImageData::load(&image_data, true) {
+                    image
+                } else {
+                    let opt = usvg::Options::default();
+                    // TODO: yes all of this image loading is very messy and could use a refactor
+                    let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
+                        tracing::warn!(
+                            "Failed loading image:\n- src: {}\n- src_path: {}",
+                            src,
+                            src_path.display()
+                        );
+                        let image =
+                            ImageData::load(include_bytes!("../../assets/img/broken.png"), false)
+                                .unwrap();
+                        *image_data_clone.lock().unwrap() = Some(image);
+                        image_callback.loaded_image(src, image_data_clone);
+                        return;
+                    };
+                    tree.size = tree.size.scale_to(
+                        tiny_skia::Size::from_wh(
+                            tree.size.width() * hidpi_scale,
+                            tree.size.height() * hidpi_scale,
+                        )
+                        .unwrap(),
+                    );
+                    static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
+                    let fontdb = FONTDB.get_or_init(|| {
+                        let mut db = fontdb::Database::new();
+                        db.load_system_fonts();
+                        db
+                    });
+                    tree.postprocess(Default::default(), fontdb);
+                    let mut pixmap =
+                        tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
+                            .context("Couldn't create svg pixmap")
+                            .unwrap();
+                    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+                    ImageData::new(
+                        ImageBuffer::from_raw(
+                            pixmap.width(),
+                            pixmap.height(),
+                            pixmap.data().into(),
+                        )
                         .context("Svg buffer has invalid dimensions")
                         .unwrap(),
-                    false,
-                )
-            };
+                        false,
+                    )
+                };
 
-            *image_data_clone.lock().unwrap() = Some(image);
-            histogram!(HistTag::ImageLoad).record(start.elapsed());
-            image_callback.loaded_image(src, image_data_clone);
-        });
+                *image_data_clone.lock().unwrap() = Some(image);
+                histogram!(HistTag::ImageLoad).record(start.elapsed());
+                image_callback.loaded_image(src, image_data_clone);
+            })
+            .expect("failed to spawn thread");
 
         let image = Image {
             image_data,

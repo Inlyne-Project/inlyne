@@ -51,13 +51,22 @@ pub fn spawn(state: State, handler_fn: HandlerFn) -> MiniServerHandle {
 }
 
 fn spawn_router(server: Server) {
-    // TODO: store server in an arc and restart the router if the thread panics
-    thread::spawn(move || {
-        for req in server.incoming_requests() {
-            let resp = try_respond(&req).unwrap_or_else(|| Response::empty(404).boxed());
-            let _ = req.respond(resp);
-        }
-    });
+    thread::Builder::new()
+        .name("test-server-router".into())
+        .spawn(move || {
+            for req in server.incoming_requests() {
+                // Run each request in its own thread to isolate potential panics
+                thread::Builder::new()
+                    .name("test-server-handler".into())
+                    .spawn(move || {
+                        let resp =
+                            try_respond(&req).unwrap_or_else(|| Response::empty(404).boxed());
+                        let _ = req.respond(resp);
+                    })
+                    .unwrap();
+            }
+        })
+        .unwrap();
 }
 
 fn try_respond(req: &Request) -> Option<ResponseBox> {

@@ -145,6 +145,7 @@ struct CacheBuilder {
     time: Option<FakeTimeSource>,
     svg_ctx: SvgContext,
     max_size: Option<usize>,
+    no_l1: bool,
     // TODO: vv
     // global_deny_localhost: bool,
 }
@@ -165,26 +166,33 @@ impl CacheBuilder {
         self
     }
 
-    fn l1_only(self) -> TestCache {
+    fn no_l1(mut self) -> Self {
+        self.no_l1 = true;
+        self
+    }
+
+    fn no_l2(self) -> TestCache {
         self.finish(WorkerSrc::L1Only)
     }
 
-    fn open_in(self, dir: &Path) -> TestCache {
-        let db_path = dir.join(global::db_name());
+    fn open_from(self, dir: &TempDir) -> TestCache {
+        let db_path = dir.path().join(global::db_name());
         self.finish(WorkerSrc::L2Path(db_path))
     }
 
     fn temp_file(self) -> (TempDir, TestCache) {
-        let (tmp_dir, tmp_path) = temp::dir();
-        let test_cache = self.open_in(&tmp_path);
+        let (tmp_dir, _) = temp::dir();
+        let test_cache = self.open_from(&tmp_dir);
         (tmp_dir, test_cache)
     }
 
     fn finish(self, src: WorkerSrc) -> TestCache {
+        let no_l1 = self.no_l1.then(|| self.clone());
         let Self {
             time,
             svg_ctx,
             max_size,
+            no_l1: _,
         } = self;
 
         if let Some(max) = max_size {
@@ -197,12 +205,13 @@ impl CacheBuilder {
         }
         .unwrap();
 
-        TestCache { cache, src }
+        TestCache { no_l1, cache, src }
     }
 }
 
 #[derive(Clone)]
 struct TestCache {
+    no_l1: Option<CacheBuilder>,
     cache: LayeredCache,
     src: WorkerSrc,
 }
@@ -266,6 +275,10 @@ impl TestCache {
     // TODO: refactor so that checking L1 doesn't take a DB connection and then there isn't the
     // consumption of the worker due to needing to take it for `L1Cont`
     fn fetch<K: Into<Key>>(&mut self, key: K) -> Fetch {
+        // Reset the underlying cache to bypass l1 if desired
+        if let Some(cache_builder) = self.no_l1.clone() {
+            self.cache = cache_builder.finish(self.src.clone()).cache;
+        }
         let worker = match &self.src {
             WorkerSrc::L1Only => self.cache.worker(None),
             WorkerSrc::L2Path(path) => {
@@ -319,8 +332,7 @@ fn remote_layers() {
     let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Setup cache
-    let (_tmp_dir, db_path) = temp::dir();
-    let mut cache = cache_builder().open_in(&db_path);
+    let (tmp_dir, mut cache) = cache_builder().temp_file();
     // Fetch from remote and populate all of the cache layers in the process
     let data = cache.from_remote_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
@@ -328,7 +340,7 @@ fn remote_layers() {
     let data = cache.from_l1(&key).expect("L1 is populated");
     assert_eq!(data, expected_data, "Invalid L1 image");
     // Fetch from l2
-    let mut empty_l1_cache = cache_builder().open_in(&db_path);
+    let mut empty_l1_cache = cache_builder().open_from(&tmp_dir);
     let data = empty_l1_cache.from_l2(&key).expect("L2 is populated");
     assert_eq!(data, expected_data, "Invalid L2 image");
 }
@@ -344,7 +356,7 @@ fn local_layers() {
     let (_tmp_image, key) = create_local_image(image);
     let expected_data = image.post_decode(&Default::default());
     // Populate cache
-    let mut cache = cache_builder().l1_only();
+    let mut cache = cache_builder().no_l2();
     let data = cache.from_local_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
     // And now we can fetch from l1
@@ -369,23 +381,26 @@ fn remote_svg_layers() {
     let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Setup cache
-    let (_tmp_dir, db_path) = temp::dir();
     let cache_builder = cache_builder();
-    let mut cache = cache_builder.clone().open_in(&db_path);
+    let (tmp_dir, mut cache) = cache_builder.clone().temp_file();
 
     // Fetch from remote and populate all of the cache layers in the process
     let data = cache.from_remote_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
 
+    // Fetch from l1
+    let data = cache.from_l1(&key).expect("L1 is populated");
+    assert_eq!(data, expected_data, "Invalid L1 image");
+
     // Fetch from l2
-    let mut empty_l1_cache = cache_builder.clone().open_in(&db_path);
+    let mut empty_l1_cache = cache_builder.clone().open_from(&tmp_dir);
     let data = empty_l1_cache.from_l2(&key).expect("L2 is populated");
     assert_eq!(data, expected_data, "Invalid L2 image");
 
     // Try fetching again with different DPI and make sure the rendering changes
     let hidpi_ctx = SvgContext { dpi: 2.0 };
     let hidpi_expected = sample.post_decode(&hidpi_ctx);
-    let mut hidpi_cache = cache_builder.svg_ctx(hidpi_ctx).open_in(&db_path);
+    let mut hidpi_cache = cache_builder.svg_ctx(hidpi_ctx).open_from(&tmp_dir);
     let hidpi_data = hidpi_cache.from_l2(&key).expect("L2 has stable SVG");
     assert_eq!(hidpi_data, hidpi_expected, "Bad higher dpi fetch");
     assert_ne!(hidpi_data, data, "Rendering changes with different dpi");
@@ -401,7 +416,7 @@ fn local_svg_layers() {
     let (_tmp_image, key) = create_local_image(image);
     let expected_data = image.post_decode(&Default::default());
     // Setup cache
-    let mut cache = cache_builder().l1_only();
+    let mut cache = cache_builder().no_l2();
     // Fetch from source
     let data = cache.from_local_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
@@ -445,7 +460,7 @@ fn local_invalidation() {
     let expected_data = image.post_decode(&Default::default());
 
     // Local images are only stored in the l1 cache
-    let mut cache = cache_builder().l1_only();
+    let mut cache = cache_builder().no_l2();
     // Fetch from source
     let data = cache.from_local_src(&key).expect("Empty cache");
     assert_eq!(data, expected_data, "Bad initial fetch");
@@ -631,14 +646,12 @@ fn corrupt_db_entry() {
     let key = server.mount_image(RemoteImage::from(sample).cache_control(IMMUTABLE_C_C));
 
     // Populate the cache
-    let (_tmp_dir, db_path) = temp::dir();
-    let mut cache = cache_builder().open_in(&db_path);
+    let (_tmp_dir, mut cache) = cache_builder().no_l1().temp_file();
     let data = cache.from_remote_src(&key).unwrap();
 
     // Ensure we can fetch the cached item
     assert_eq!(data, expected_data, "Bad initial fetch");
-    let mut fresh_l1_cache = cache_builder().open_in(&db_path);
-    fresh_l1_cache.from_l2(&key).unwrap();
+    cache.from_l2(&key).unwrap();
 
     // Corrupt the cached image
     let conn = rusqlite::Connection::open(cache.path().unwrap()).unwrap();
@@ -649,11 +662,9 @@ fn corrupt_db_entry() {
     .unwrap();
 
     // The entry is corrupt, so it re-fetches from source and heals the corrupt entry
-    fresh_l1_cache = cache_builder().open_in(&db_path);
-    let data = fresh_l1_cache.from_remote_src(&key).unwrap();
+    let data = cache.from_remote_src(&key).unwrap();
     assert_eq!(data, expected_data);
-    fresh_l1_cache = cache_builder().open_in(&db_path);
-    let data = fresh_l1_cache.from_l2(&key).unwrap();
+    let data = cache.from_l2(&key).unwrap();
     assert_eq!(data, expected_data);
 }
 
@@ -704,13 +715,12 @@ fn private_cache() {
     let c_c = IMMUTABLE_C_C.private();
     let key = server.mount_image(RemoteImage::from(SamplePng::Bun).cache_control(c_c));
 
-    let (_tmp_dir, db_path) = temp::dir();
-    let mut cache = cache_builder().open_in(&db_path);
+    let (tmp_dir, mut cache) = cache_builder().temp_file();
     cache
         .from_remote_src(&key)
         .expect("Fetch from remote and populate cache");
     cache.from_l1(&key).expect("L1 of private cache");
-    let mut fresh_l1_cache = cache_builder().open_in(&db_path);
+    let mut fresh_l1_cache = cache_builder().open_from(&tmp_dir);
     fresh_l1_cache.from_l2(&key).expect("L2 of private cache");
 }
 
