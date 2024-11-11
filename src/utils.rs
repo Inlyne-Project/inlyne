@@ -14,6 +14,10 @@ use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use syntect::parsing::SyntaxSet;
 use winit::window::CursorIcon;
 
+pub fn inlyne_cache_dir() -> Option<PathBuf> {
+    dirs::cache_dir().map(|dir| dir.join("inlyne"))
+}
+
 pub fn format_title(file_path: &Path) -> String {
     match root_filepath_to_vcs_dir(file_path) {
         Some(path) => format!("Inlyne - {}", path.to_string_lossy()),

@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use crate::test_utils::temp;
+
 use super::{Callback, Watcher};
 
 use tempfile::TempDir;
@@ -62,11 +64,7 @@ impl Delays {
 
 fn init_test_env() -> (TestEnv, TempDir) {
     // Create our dummy test env
-    let temp_dir = tempfile::Builder::new()
-        .prefix("inlyne-tests-")
-        .tempdir()
-        .unwrap();
-    let base = temp_dir.path();
+    let (temp_dir, base) = temp::dir();
     let main_file = base.join("main.md");
     let rel_file = base.join("rel.md");
     fs::write(&main_file, "# Main\n\n[rel](./rel.md)").unwrap();

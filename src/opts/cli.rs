@@ -115,6 +115,8 @@ pub enum Commands {
     View(View),
     #[command(subcommand)]
     Config(ConfigCmd),
+    #[command(subcommand)]
+    Cache(CacheCmd),
 }
 
 /// View a markdown file with inlyne
@@ -155,4 +157,13 @@ pub struct View {
 pub enum ConfigCmd {
     /// Opens the configuration file in the default text editor
     Open,
+}
+
+/// Actions dealing with the image cache
+#[derive(Subcommand, PartialEq, Clone, Debug)]
+pub enum CacheCmd {
+    /// Run the garbage collector on the image cache file
+    Gc,
+    /// Display different info about your cache
+    Stats,
 }

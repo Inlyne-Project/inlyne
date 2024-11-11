@@ -59,14 +59,11 @@ mod tests {
     use std::fs;
 
     use super::*;
+    use crate::test_utils::temp;
 
     #[test]
     fn sanity() {
-        let temp_dir = tempfile::Builder::new()
-            .prefix("inlyne-tests-")
-            .tempdir()
-            .unwrap();
-        let temp_path = temp_dir.path().canonicalize().unwrap();
+        let (_temp_dir, temp_path) = temp::dir();
 
         let root = temp_path.join("a");
         let fork1 = temp_path.join("b");
