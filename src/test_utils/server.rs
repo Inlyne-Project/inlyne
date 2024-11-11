@@ -198,51 +198,43 @@ pub fn mock_file_server(files: Vec<(String, File)>) -> MiniServerHandle {
         .collect();
     let state = State { files, send: None };
     spawn(state, |state, req, req_url| {
-        match req.method() {
-            Method::Get => {
-                match state
-                    .files
-                    .iter()
-                    .find_map(|(url_path, file)| (url_path == &req_url).then_some(file))
-                {
-                    None => Response::empty(404).boxed(),
-                    Some(file) => {
-                        // <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag#caching_of_unchanged_resources>
-                        //
-                        // > The server compares the client's `ETag` (sent with `If-None-Match`) with the
-                        // > `ETag` for its current version of the resource, and if both values match (that
-                        // > is, the resource has not changed), the server sends back a `304 Not Modified`
-                        // > status, without a body, which tells the client that the cached version of the
-                        // > response is still good to use (fresh).
-                        let desired_header_name: tiny_http::HeaderField =
-                            http::header::IF_NONE_MATCH.as_str().parse().unwrap();
-                        let maybe_client_etag = req.headers().iter().find_map(|header| {
-                            (header.field == desired_header_name).then(|| header.value.to_string())
-                        });
-                        match (file.include_etag, maybe_client_etag.as_deref()) {
-                            (true, Some(client_etag)) => {
-                                let body_hash = hash(&file.bytes);
-                                let server_etag = format!("\"{body_hash:x}\"");
-                                if server_etag == client_etag {
-                                    // TODO: dedupe the etag header construction logic with sending the
-                                    // original responses
-                                    let header_name = http::header::ETAG.as_str().as_bytes();
-                                    let header =
-                                        Header::from_bytes(header_name, server_etag.as_bytes())
-                                            .unwrap();
-                                    Response::empty(http::status::StatusCode::NOT_MODIFIED.as_u16())
-                                        .with_header(header)
-                                        .boxed()
-                                } else {
-                                    file.to_owned().into()
-                                }
-                            }
-                            _ => file.to_owned().into(),
-                        }
-                    }
+        if *req.method() != Method::Get {
+            return Response::empty(404).boxed();
+        }
+
+        let Some(file) = state.files.get(req_url) else {
+            return Response::empty(404).boxed();
+        };
+
+        // <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag#caching_of_unchanged_resources>
+        //
+        // > The server compares the client's `ETag` (sent with `If-None-Match`) with the
+        // > `ETag` for its current version of the resource, and if both values match (that
+        // > is, the resource has not changed), the server sends back a `304 Not Modified`
+        // > status, without a body, which tells the client that the cached version of the
+        // > response is still good to use (fresh).
+        let desired_header_name: tiny_http::HeaderField =
+            http::header::IF_NONE_MATCH.as_str().parse().unwrap();
+        let maybe_client_etag = req.headers().iter().find_map(|header| {
+            (header.field == desired_header_name).then(|| header.value.to_string())
+        });
+        match (file.include_etag, maybe_client_etag.as_deref()) {
+            (true, Some(client_etag)) => {
+                let body_hash = hash(&file.bytes);
+                let server_etag = format!("\"{body_hash:x}\"");
+                if server_etag == client_etag {
+                    let header_name = http::header::ETAG.as_str().as_bytes();
+                    let header =
+                        Header::from_bytes(header_name, server_etag.as_bytes())
+                            .unwrap();
+                    Response::empty(http::status::StatusCode::NOT_MODIFIED.as_u16())
+                        .with_header(header)
+                        .boxed()
+                } else {
+                    file.to_owned().into()
                 }
             }
-            _ => Response::empty(404).boxed(),
+            _ => file.to_owned().into(),
         }
     })
 }

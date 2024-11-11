@@ -325,7 +325,7 @@ impl LayeredCache {
 
     pub fn load(&self) -> LayeredCacheWorker {
         let global = global::Cache::load()
-            .inspect_err(|err| tracing::warn!("Failed loading persistent image cache: {err}"))
+            .inspect_err(|err| tracing::warn!(%err, "Failed loading persistent image cache"))
             .ok();
         self.worker(global)
     }
