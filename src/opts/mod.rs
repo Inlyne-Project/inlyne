@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::color;
-pub use cli::{Cli, Commands, ConfigCmd, Position, Size, ThemeType, View};
+pub use cli::{CacheCmd, Cli, Commands, ConfigCmd, Position, Size, ThemeType, View};
 pub use config::{Config, DebugSection, FontOptions, KeybindingsSection, MetricsExporter};
 
 use crate::history::History;
