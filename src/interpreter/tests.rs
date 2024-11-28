@@ -298,7 +298,7 @@ collapsed text
 ";
 
 snapshot_interpreted_elements!(
-    // (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
+    (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
     (para_in_ordered_list, PARA_IN_ORDERED_LIST),
     (code_in_ordered_list, CODE_IN_ORDERED_LIST),
