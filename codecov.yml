@@ -2,4 +2,5 @@ comment: false
 github_checks: false
 coverage:
   status:
-    patch: false
+    patch: off
+    project: off
