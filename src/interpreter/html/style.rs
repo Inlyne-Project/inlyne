@@ -6,7 +6,7 @@ impl<'style> Iter<'style> {
     }
 }
 
-impl<'style> Iterator for Iter<'style> {
+impl Iterator for Iter<'_> {
     type Item = Style;
 
     fn next(&mut self) -> Option<Self::Item> {

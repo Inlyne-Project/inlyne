@@ -60,7 +60,7 @@ fn debug_inline_some<T: fmt::Debug>(
 
 pub struct DebugBytesPrefix<'a>(pub &'a [u8]);
 
-impl<'a> fmt::Debug for DebugBytesPrefix<'a> {
+impl fmt::Debug for DebugBytesPrefix<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             [x, y, z, _, ..] => {
