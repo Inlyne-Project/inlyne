@@ -12,7 +12,7 @@ impl<'attrs> Iter<'attrs> {
     }
 }
 
-impl<'attrs> Iterator for Iter<'attrs> {
+impl Iterator for Iter<'_> {
     type Item = Attr;
 
     fn next(&mut self) -> Option<Self::Item> {
