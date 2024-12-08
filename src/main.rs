@@ -474,13 +474,17 @@ impl Inlyne {
                                             && !path.to_str().map_or(false, |s| s.starts_with("http")) {
                                             // Open them in a new window, akin to what a browser does
                                             if modifiers.shift() {
-                                                Command::new(
-                                                    std::env::current_exe()
-                                                        .unwrap_or_else(|_| "inlyne".into()),
-                                                )
-                                                    .args(Opts::program_args(&path))
-                                                    .spawn()
-                                                    .expect("Could not spawn new inlyne instance");
+                                                std::thread::spawn(move || {
+                                                    Command::new(
+                                                        std::env::current_exe()
+                                                            .unwrap_or_else(|_| "inlyne".into()),
+                                                    )
+                                                        .args(Opts::program_args(&path))
+                                                        .spawn()
+                                                        .expect("Couldn't spawn inlyne instance")
+                                                        .wait()
+                                                        .expect("Failed waiting on child");
+                                                });
                                             } else {
                                                 match read_to_string(&path) {
                                                     Ok(contents) => {
