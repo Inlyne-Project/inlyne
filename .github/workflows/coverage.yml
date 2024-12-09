@@ -24,6 +24,6 @@ jobs:
         run: cargo llvm-cov --lcov --no-default-features --features x11 --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5.0.7
+        uses: codecov/codecov-action@v5.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
