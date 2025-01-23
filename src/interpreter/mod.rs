@@ -744,7 +744,7 @@ impl HtmlInterpreter {
                     .state
                     .element_stack
                     .last()
-                    .map_or(false, |e| e.is_picture());
+                    .is_some_and(|e| e.is_picture());
                 if !picture_on_top {
                     tracing::warn!("Element stack is muddled");
                     return;

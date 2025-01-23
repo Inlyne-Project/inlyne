@@ -470,8 +470,8 @@ impl Inlyne {
                                     Hoverable::Text(Text { link: Some(link), .. }) => {
                                         let path = PathBuf::from_str(link).unwrap(); // Can't fail
 
-                                        if  path.extension().map_or(false, |ext| ext == "md")
-                                            && !path.to_str().map_or(false, |s| s.starts_with("http")) {
+                                        if  path.extension().is_some_and(|ext| ext == "md")
+                                            && !path.to_str().is_some_and(|s| s.starts_with("http")) {
                                             // Open them in a new window, akin to what a browser does
                                             if modifiers.shift() {
                                                 std::thread::spawn(move || {
