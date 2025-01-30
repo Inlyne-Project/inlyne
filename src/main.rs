@@ -808,15 +808,20 @@ fn main() -> anyhow::Result<()> {
                 .join("inlyne")
                 .join("inlyne.toml");
 
-            if !config_path.is_file() {
-                tracing::warn!(
-                    "No config found. Creating a new config at: {}",
-                    config_path.display()
-                );
-                Config::create_default_config(&config_path)?;
-            }
+            let config = std::fs::read_to_string(&config_path)
+                .unwrap_or_else(|_| Config::default_config().to_string());
 
-            edit::edit_file(config_path)?;
+            let new_config = edit::edit_with_builder(
+                &config,
+                edit::Builder::new()
+                    .prefix("inlyne_temp")
+                    .suffix(".toml")
+                    .keep(true),
+            )?;
+
+            _ = Config::load_from_str(&new_config)?;
+
+            std::fs::write(config_path, new_config)?;
         }
     }
 
