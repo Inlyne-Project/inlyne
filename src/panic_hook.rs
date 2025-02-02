@@ -221,12 +221,12 @@ mod tests {
         let report_path = report.persist().unwrap();
 
         let contents = std::fs::read_to_string(&report_path).unwrap();
-        insta::assert_snapshot!(contents, @r###"
+        insta::assert_snapshot!(contents, @r"
         # Crash Report
 
         | Name | `inlyne` |
         | ---: | :--- |
-        | Version | `0.5.0-dev` |
+        | Version | `0.5.0` |
         | Operating System | [REDACTED] |
 
         `````text
@@ -248,6 +248,6 @@ mod tests {
         ---
 
         <!-- Add any relevant info below vv -->
-        "###);
+        ");
     }
 }

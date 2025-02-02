@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "inlyne"
-version = "0.5.0-dev"
+version = "0.5.0"
 description = "Introducing Inlyne, a GPU powered yet browserless tool to help you quickly view markdown files in the blink of an eye."
 edition = "2021"
 authors = [
