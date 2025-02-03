@@ -178,9 +178,12 @@ fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element
     let (interpreter, element_queue) = opts.finish(counter.clone());
     let (md_tx, md_rx) = mpsc::channel();
     md_tx.send(text.to_owned()).unwrap();
-    let interpreter_handle = std::thread::spawn(|| {
-        interpreter.interpret_md(md_rx);
-    });
+    let interpreter_handle = thread::Builder::new()
+        .name("test-interpreter".into())
+        .spawn(|| {
+            interpreter.interpret_md(md_rx);
+        })
+        .unwrap();
 
     let start = Instant::now();
     while !counter.is_finished() {
@@ -816,13 +819,12 @@ fn centered_image_with_size_align_and_link() {
 
     let logo: Sample = SamplePng::Bun.into();
     let logo_path = "/bun_logo.png";
-    let files = vec![server::File::new(
-        logo_path,
-        logo.content_type(),
-        &logo.pre_decode(),
+    let files = vec![(
+        logo_path.to_owned(),
+        server::File::new(logo.into(), None, &logo.pre_decode()),
     )];
-    let (_server, server_url) = server::mock_file_server(files);
-    let logo_url = server_url + logo_path;
+    let server = server::mock_file_server(files);
+    let logo_url = server.url().to_owned() + logo_path;
 
     let text = format!(
         r#"
@@ -861,12 +863,15 @@ fn image_loading_fails_gracefully() {
 
     let json = r#"{"im": "not an image"}"#;
     let json_path = "/snapshot.png";
-    let (_server, server_url) = server::mock_file_server(vec![server::File::new(
-        json_path,
-        "application/json",
-        json.as_bytes(),
+    let server = server::mock_file_server(vec![(
+        json_path.to_owned(),
+        server::File::new(
+            server::ContentType::Other("application/json"),
+            None,
+            json.as_bytes(),
+        ),
     )]);
-    let json_url = server_url + json_path;
+    let json_url = server.url().to_owned() + json_path;
 
     let text = format!("![This actually returns JSON 😈]({json_url})");
 
@@ -901,7 +906,7 @@ fn picture_dark_light() {
     let light_path = "/light.webp";
     let dark_path = "/dark.webp";
     let default_path = "/default.webp";
-    let webp_mime = "image/webp";
+    let webp_mime = server::ContentType::Webp;
     let files = [
         (dark_path, B64_SINGLE_PIXEL_WEBP_FFF),
         (light_path, B64_SINGLE_PIXEL_WEBP_000),
@@ -910,10 +915,11 @@ fn picture_dark_light() {
     .into_iter()
     .map(|(path, b64_bytes)| {
         let bytes = BASE64_STANDARD.decode(b64_bytes).unwrap();
-        server::File::new(path, webp_mime, &bytes)
+        (path.to_owned(), server::File::new(webp_mime, None, &bytes))
     })
     .collect();
-    let (_server, server_url) = server::mock_file_server(files);
+    let server = server::mock_file_server(files);
+    let server_url = server.url();
     let dark_url = format!("{server_url}{dark_path}");
     let light_url = format!("{server_url}{light_path}");
     let default_url = format!("{server_url}{default_path}");
@@ -921,13 +927,12 @@ fn picture_dark_light() {
     let text = format!(
         r#"
 <p align="center">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="{dark_url}"/>
-      <source media="(prefers-color-scheme: light)" srcset="{light_url}"/>
-      <img src="{default_url}"/>
-    </picture>
-</p>
-"#,
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="{dark_url}"/>
+    <source media="(prefers-color-scheme: light)" srcset="{light_url}"/>
+    <img src="{default_url}"/>
+  </picture>
+</p>"#,
     );
 
     for color_scheme in [None, Some(ResolvedTheme::Dark), Some(ResolvedTheme::Light)] {
@@ -972,11 +977,7 @@ fn custom_user_agent() {
         let maybe_ua = req.headers().iter().find_map(|Header { field, value }| {
             field.equiv("user-agent").then(|| value.as_str().to_owned())
         });
-        let _ = state
-            .send
-            .as_ref()
-            .unwrap()
-            .send(server::FromServer::UserAgent(maybe_ua));
+        let _ = state.send_msg(server::FromServer::UserAgent(maybe_ua));
         let sample_body = Sample::Png(SamplePng::Bun).pre_decode();
         Response::from_data(sample_body).boxed()
     });

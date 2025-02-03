@@ -57,7 +57,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{ImageCache, Point, Rect, Size};
 
-use crate::opts::{Commands, ConfigCmd, MetricsExporter};
+use crate::opts::{CacheCmd, Commands, ConfigCmd, MetricsExporter};
 use crate::selection::Selection;
 use anyhow::Context;
 use clap::Parser;
@@ -822,6 +822,17 @@ fn main() -> anyhow::Result<()> {
             _ = Config::load_from_str(&new_config)?;
 
             std::fs::write(config_path, new_config)?;
+        }
+        Commands::Cache(CacheCmd::Gc) => image::cache::run_global_garbage_collector()?,
+        Commands::Cache(CacheCmd::Stats) => {
+            let image::cache::GlobalStats { path, inner } = image::cache::GlobalStats::detect()?;
+            match inner {
+                None => {
+                    // TODO: colors
+                    println!("Path: {} (not found)", path.display());
+                }
+                Some(image::cache::GlobalStatsInner { size }) => todo!(),
+            }
         }
     }
 

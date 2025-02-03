@@ -1,6 +1,11 @@
+use crate::metrics;
+
 use tracing_subscriber::prelude::*;
 
 pub fn init() {
+    let recorder = metrics::LogRecorder::default();
+    let _ = metrics::set_global_recorder(recorder);
+
     let filter = tracing_subscriber::filter::Targets::new()
         .with_default(tracing_subscriber::filter::LevelFilter::WARN)
         .with_target("inlyne", tracing_subscriber::filter::LevelFilter::TRACE);

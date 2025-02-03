@@ -9,7 +9,7 @@ use crate::color::{SyntaxTheme, Theme, ThemeDefaults};
 use crate::history::History;
 use crate::opts::config::{self, FontOptions, LinesToScroll};
 use crate::opts::{Cli, Opts, Position, ResolvedTheme, Size, ThemeType};
-use crate::test_utils::log;
+use crate::test_utils::{log, temp};
 
 fn gen_args(args: Vec<&str>) -> Vec<OsString> {
     std::iter::once("inlyne")
@@ -19,12 +19,8 @@ fn gen_args(args: Vec<&str>) -> Vec<OsString> {
 }
 
 fn temp_md_file() -> (NamedTempFile, String) {
-    let temp_file = tempfile::Builder::new()
-        .prefix("inlyne-tests-")
-        .suffix(".md")
-        .tempfile()
-        .unwrap();
-    let path = temp_file.path().to_str().unwrap().to_owned();
+    let (temp_file, path) = temp::file_with_suffix(".md");
+    let path = path.to_str().unwrap().to_owned();
     (temp_file, path)
 }
 
