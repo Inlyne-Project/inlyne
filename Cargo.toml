@@ -40,7 +40,7 @@ anyhow = "1.0.95"
 # System preferred color scheme detection
 dark-light = "1.1.1"
 # System specific directories
-dirs = "5.0.1"
+dirs = "6.0.0"
 # Used to open the config file with `$ inlyne config open`
 edit = "0.1.5"
 # Faster hash for the text cache
