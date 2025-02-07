@@ -35,7 +35,6 @@ use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, channel};
 use std::sync::{Arc, Mutex};
