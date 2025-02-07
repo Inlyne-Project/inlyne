@@ -1910,6 +1910,7 @@ dependencies = [
  "once_cell",
  "open",
  "parking_lot",
+ "percent-encoding",
  "pollster",
  "pretty_assertions",
  "raw-window-handle",
