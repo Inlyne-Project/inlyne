@@ -468,7 +468,7 @@ impl Inlyne {
                                 match hoverable {
                                     Hoverable::Image(Image { is_link: Some(link), .. }) |
                                     Hoverable::Text(Text { link: Some(link), .. }) => {
-                                        let path = PathBuf::from_str(link).unwrap(); // Can't fail
+                                        let path = PathBuf::from(link);
 
                                         if  path.extension().is_some_and(|ext| ext == "md")
                                             && !path.to_str().is_some_and(|s| s.starts_with("http")) {
