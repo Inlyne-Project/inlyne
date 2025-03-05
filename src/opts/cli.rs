@@ -129,6 +129,10 @@ pub struct View {
     #[arg(short = 't', long = "theme", value_parser = value_parser!(ThemeType))]
     pub theme: Option<ThemeType>,
 
+    /// Enable decorations
+    #[arg(short = 'd', long = "decorations")]
+    pub decorations: Option<bool>,
+
     /// Factor to scale rendered file by [default: OS defined window scale factor]
     #[arg(short = 's', long = "scale")]
     pub scale: Option<f32>,

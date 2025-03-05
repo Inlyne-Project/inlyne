@@ -163,6 +163,9 @@ impl Inlyne {
         let window = {
             let mut wb = WindowBuilder::new().with_title(utils::format_title(&file_path));
 
+            if let Some(decorations) = opts.decorations {
+                wb = wb.with_decorations(decorations);
+            }
             if let Some(ref pos) = opts.position {
                 wb = wb.with_position(winit::dpi::PhysicalPosition::new(pos.x, pos.y));
             }
