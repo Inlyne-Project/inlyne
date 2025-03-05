@@ -99,6 +99,7 @@ pub struct Window {
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
     pub theme: Option<ThemeType>,
+    pub decorations: Option<bool>,
     pub scale: Option<f32>,
     pub page_width: Option<f32>,
     pub lines_to_scroll: LinesToScroll,

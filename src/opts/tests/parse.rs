@@ -33,6 +33,7 @@ impl Opts {
         Self {
             history: History::new(file_path.as_ref()).unwrap(),
             theme: ResolvedTheme::Light.as_theme(),
+            decorations: None,
             scale: None,
             page_width: None,
             font_opts: FontOptions::default(),
