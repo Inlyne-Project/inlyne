@@ -294,6 +294,12 @@ collapsed text
 </details>
 ";
 
+const VISIBLE_SPACER_AFTER_IMAGE: &str = "\
+![](assets/test_data/rgb8.png)
+
+---
+";
+
 snapshot_interpreted_elements!(
     // (footnotes_list_prefix, FOOTNOTES_LIST_PREFIX),
     (checklist_has_no_text_prefix, CHECKLIST_HAS_NO_TEXT_PREFIX),
@@ -303,6 +309,7 @@ snapshot_interpreted_elements!(
     (aligned_table, ALIGNED_TABLE),
     (header_inherit_align, HEADER_INHERIT_ALIGN),
     (collapsed_section, COLLAPSED_SECTION),
+    (visible_spacer_after_image, VISIBLE_SPACER_AFTER_IMAGE),
 );
 
 fn elem_as_text_box(elem: &Element) -> Option<&TextBox> {
@@ -979,4 +986,109 @@ fn custom_user_agent() {
         panic!();
     };
     insta::assert_snapshot!(user_agent, @"inlyne 0.5.0 https://github.com/Inlyne-Project/inlyne");
+}
+
+const SPACERS_IN_COLLAPSED_SECTION: &str = "\
+<details>
+<summary>summary</summary>
+
+Line
+
+Line
+</details>
+";
+
+#[test]
+fn spacers_in_collapsed_section() {
+    log::init();
+
+    let [Element::Section(section)] = &*interpret_md(SPACERS_IN_COLLAPSED_SECTION) else {
+        panic!("Unexpected AST layout");
+    };
+    let inner_elements: Vec<_> = section.elements.iter().map(|elem| &elem.inner).collect();
+    insta::assert_debug_snapshot!(inner_elements, @r#"
+    [
+        TextBox(
+            TextBox {
+                texts: [
+                    Text {
+                        text: "Line",
+                        default_color: Color(BLACK),
+                        ..
+                    },
+                ],
+                ..
+            },
+        ),
+        Spacer(
+            InvisibleSpacer(5),
+        ),
+        TextBox(
+            TextBox {
+                texts: [
+                    Text {
+                        text: "Line",
+                        default_color: Color(BLACK),
+                        ..
+                    },
+                ],
+                ..
+            },
+        ),
+        Spacer(
+            InvisibleSpacer(5),
+        ),
+    ]
+    "#);
+}
+
+const OPEN_CLOSE_TAG_MISMATCH: &str = "\
+<b>bold open italic close</i> after both
+";
+
+#[test]
+fn open_close_tag_mismatch() {
+    log::init();
+
+    match &*interpret_md(OPEN_CLOSE_TAG_MISMATCH) {
+        [Element::TextBox(TextBox { texts, .. }), Element::Spacer(Spacer { visible: false, .. })] =>
+        {
+            insta::assert_debug_snapshot!(texts, @r#"
+            [
+                Text {
+                    text: "bold open italic close",
+                    default_color: Color(BLACK),
+                    style: BOLD ,
+                    ..
+                },
+                Text {
+                    text: " after both",
+                    default_color: Color(BLACK),
+                    ..
+                },
+            ]
+            "#)
+        }
+        unexpected => panic!("Unexpected AST layout: {unexpected:#?}"),
+    }
+}
+
+const SPACED_OUT_CHECKBOXES: &str = "\
+- [ ] Some option
+
+- [x] Wow, the checks disappear
+";
+
+#[test]
+fn spaced_out_checkboxes_are_checkboxes() {
+    log::init();
+
+    let checkbox_markers: Vec<_> = interpret_md(SPACED_OUT_CHECKBOXES)
+        .iter()
+        .filter_map(|elem| match elem {
+            Element::TextBox(TextBox { is_checkbox, .. }) => Some(*is_checkbox),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(checkbox_markers, [Some(false), Some(true)]);
 }

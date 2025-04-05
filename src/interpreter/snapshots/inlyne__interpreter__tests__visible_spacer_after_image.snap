@@ -1,0 +1,38 @@
+---
+source: src/interpreter/tests.rs
+description: " --- md\n\n![](assets/test_data/rgb8.png)\n\n---\n\n\n --- html\n\n<p><img src=\"assets/test_data/rgb8.png\" alt=\"\" /></p>\n<hr />\n"
+expression: "interpret_md_with_opts(text, opts)"
+---
+[
+    Row(
+        Row {
+            elements: [
+                Positioned {
+                    inner: Image(
+                        Image {
+                            image_data: Mutex {
+                                data: Some(
+                                    ImageData {
+                                        lz4_blob: { len: 30, data: [4, 34, 77, ..] },
+                                        scale: true,
+                                        dimensions: (2, 2),
+                                    },
+                                ),
+                            },
+                            is_aligned: Some(Left),
+                            ..
+                        },
+                    ),
+                    bounds: None,
+                },
+            ],
+            hidpi_scale: 1.0,
+        },
+    ),
+    Spacer(
+        InvisibleSpacer(5),
+    ),
+    Spacer(
+        VisibleSpacer(5),
+    ),
+]
