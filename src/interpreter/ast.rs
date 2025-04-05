@@ -167,8 +167,10 @@ impl Ast {
         Self { opts, elements }
     }
     pub fn interpret(&self, hir: Hir) {
-        let nodes = hir.content();
-        let root = &nodes.first().unwrap().content;
+        let mut nodes = hir.content();
+
+        assert!(!nodes.is_empty(), "Hir should contain root");
+        let mut root = std::mem::take(&mut nodes[0].content);
         let state =
             InheritedState::with_span_color(self.opts.native_color(self.opts.theme.code_color));
 
@@ -179,9 +181,9 @@ impl Ast {
             input,
         };
 
-        root.iter()
-            .filter_map(|ton| {
-                if let TextOrHirNode::Hir(node) = ton {
+        root.drain(..)
+            .filter_map(|ton| match ton {
+                TextOrHirNode::Hir(node) => {
                     let mut out = vec![];
                     let mut tb = TextBox::new(vec![], self.opts.hidpi_scale);
                     let state = State::Borrowed(&state);
@@ -189,12 +191,21 @@ impl Ast {
                         &global,
                         &mut tb,
                         state.borrow(),
-                        global.input.get(*node),
+                        global.input.get(node),
                         &mut out,
                     );
                     out.push_text_box(&global, &mut tb, state);
                     Some(out)
-                } else {
+                }
+                TextOrHirNode::Text(text) => {
+                    if text.trim().is_empty() {
+                        return None;
+                    }
+                    let hidpi_scale = self.opts.hidpi_scale;
+                    let color = global.opts.native_color(global.opts.theme.text_color);
+                    let paragraph = Text::new(text, hidpi_scale, color);
+                    let text_box = TextBox::new(vec![paragraph], self.opts.hidpi_scale);
+                    self.elements.lock().push(text_box.into());
                     None
                 }
             })
