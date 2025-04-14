@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use crate::image::ImageData;
 
@@ -9,6 +9,7 @@ use comrak::adapters::SyntaxHighlighterAdapter;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
+use parking_lot::Mutex;
 use serde::Deserialize;
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet as SyntectThemeSet};
 use syntect::parsing::SyntaxSet;

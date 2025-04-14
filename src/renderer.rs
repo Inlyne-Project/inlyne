@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::color::{native_color, Theme};
@@ -21,6 +21,7 @@ use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
 use lyon::tessellation::*;
+use parking_lot::Mutex;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, IndexFormat, MultisampleState, TextureFormat};
 use winit::window::Window;
@@ -771,7 +772,7 @@ impl Renderer {
         let image_bindgroups = self.image_bindgroups(elements);
 
         {
-            let mut text_cache = self.text_system.text_cache.lock().unwrap();
+            let mut text_cache = self.text_system.text_cache.lock();
             let text_areas: Vec<TextArea> = cached_text_areas
                 .iter()
                 .map(|c| c.text_area(&text_cache))
@@ -780,7 +781,7 @@ impl Renderer {
             self.text_system.text_renderer.prepare(
                 &self.device,
                 &self.queue,
-                &mut self.text_system.font_system.lock().unwrap(),
+                &mut self.text_system.font_system.lock(),
                 &mut self.text_system.text_atlas,
                 Resolution {
                     width: self.config.width,

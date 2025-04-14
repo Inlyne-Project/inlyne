@@ -3,13 +3,14 @@ use std::collections::hash_map;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
     Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, LayoutGlyph,
     Shaping, Style, SwashCache, TextArea, TextBounds, Weight,
 };
+use parking_lot::Mutex;
 use smart_debug::SmartDebug;
 use taffy::prelude::{AvailableSpace, Size as TaffySize};
 
@@ -201,10 +202,10 @@ impl TextBox {
             return None;
         }
 
-        let mut cache = text_system.text_cache.lock().unwrap();
+        let mut cache = text_system.text_cache.lock();
 
         let (_, buffer) = cache.allocate(
-            text_system.font_system.lock().unwrap().borrow_mut(),
+            text_system.font_system.lock().borrow_mut(),
             self.key(bounds, zoom),
         );
 
@@ -241,14 +242,12 @@ impl TextBox {
             return (0., self.padding_height * self.hidpi_scale * zoom);
         }
 
-        let mut cache = text_cache.lock().unwrap();
+        let mut cache = text_cache.lock();
 
         let line_height = self.line_height(zoom);
 
-        let (_, paragraph) = cache.allocate(
-            font_system.lock().unwrap().borrow_mut(),
-            self.key(bounds, zoom),
-        );
+        let (_, paragraph) =
+            cache.allocate(font_system.lock().borrow_mut(), self.key(bounds, zoom));
 
         let (total_lines, max_width) = paragraph
             .layout_runs()
@@ -274,9 +273,9 @@ impl TextBox {
         let cache = text_system.text_cache.borrow_mut();
 
         let (key, max_width) = {
-            let mut cache = cache.lock().unwrap();
+            let mut cache = cache.lock();
             let (key, paragraph) = cache.allocate(
-                text_system.font_system.lock().unwrap().borrow_mut(),
+                text_system.font_system.lock().borrow_mut(),
                 self.key(bounds, zoom),
             );
 
@@ -341,10 +340,10 @@ impl TextBox {
         let line_height = self.line_height(zoom);
         let mut lines = Vec::new();
 
-        let mut cache = text_system.text_cache.lock().unwrap();
+        let mut cache = text_system.text_cache.lock();
 
         let (_, buffer) = cache.allocate(
-            text_system.font_system.lock().unwrap().borrow_mut(),
+            text_system.font_system.lock().borrow_mut(),
             self.key(bounds, zoom),
         );
 
@@ -420,10 +419,10 @@ impl TextBox {
         let mut selected_text = String::new();
 
         let line_height = self.line_height(zoom);
-        let mut cache = text_system.text_cache.lock().unwrap();
+        let mut cache = text_system.text_cache.lock();
 
         let (_, buffer) = cache.allocate(
-            text_system.font_system.lock().unwrap().borrow_mut(),
+            text_system.font_system.lock().borrow_mut(),
             self.key(bounds, zoom),
         );
 

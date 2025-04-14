@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use file_watcher::Watcher;
@@ -47,6 +47,7 @@ use keybindings::action::{Action, HistDirection, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
 use metrics::{histogram, HistTag};
 use opts::{Cli, Config, Opts};
+use parking_lot::Mutex;
 use positioner::{Positioned, Row, Section, Spacer, DEFAULT_MARGIN, DEFAULT_PADDING};
 use raw_window_handle::HasRawDisplayHandle;
 use renderer::Renderer;
@@ -246,7 +247,7 @@ impl Inlyne {
                 .try_lock()
                 .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
         };
-        if let Ok(queue) = queue {
+        if let Some(queue) = queue {
             let positioning_start = Instant::now();
 
             for element in queue {
@@ -273,7 +274,7 @@ impl Inlyne {
     fn load_file(&mut self, contents: String) {
         self.interpreter_should_queue
             .store(false, Ordering::Relaxed);
-        self.element_queue.lock().unwrap().clear();
+        self.element_queue.lock().clear();
         self.elements.clear();
         self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
         self.renderer.positioner.anchors.clear();
@@ -305,7 +306,7 @@ impl Inlyne {
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
                     InlyneEvent::LoadedImage(src, image_data) => {
-                        self.image_cache.lock().unwrap().insert(src, image_data);
+                        self.image_cache.lock().insert(src, image_data);
                         self.need_repositioning = true;
                     }
                     InlyneEvent::FileReload => match read_to_string(self.opts.history.get_path()) {
