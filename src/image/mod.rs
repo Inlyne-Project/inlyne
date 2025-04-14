@@ -3,9 +3,10 @@ mod decode;
 mod tests;
 
 use std::borrow::Cow;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::{
     fs,
@@ -21,6 +22,7 @@ use crate::utils::{usize_in_mib, Align, Point, Size};
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use image::{ImageBuffer, RgbaImage};
+use parking_lot::Mutex;
 use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
 use usvg::fontdb;
@@ -150,12 +152,7 @@ impl PartialEq for Image {
             hidpi_scale: other_hidpi_scale,
         } = other;
 
-        let clone_image_data = |shared_image: &Mutex<Option<_>>| {
-            shared_image
-                .lock()
-                .unwrap_or_else(|err| err.into_inner())
-                .to_owned()
-        };
+        let clone_image_data = |shared_image: &Mutex<Option<_>>| shared_image.lock().to_owned();
         let image_data = clone_image_data(image_data);
         let other_image_data = clone_image_data(other_image_data);
 
@@ -173,10 +170,7 @@ impl PartialEq for Image {
 }
 
 fn debug_ignore_image_data(mutex: &Mutex<Option<ImageData>>) -> bool {
-    match mutex.lock() {
-        Ok(data) => data.is_none(),
-        Err(_) => true,
-    }
+    mutex.lock().is_none()
 }
 
 impl Image {
@@ -197,7 +191,6 @@ impl Image {
         let rgba_image = self
             .image_data
             .lock()
-            .unwrap()
             .as_ref()
             .map(|image| image.to_bytes())?;
 
@@ -263,7 +256,7 @@ impl Image {
         hidpi_scale: f32,
         image_callback: Box<dyn ImageCallback + Send>,
     ) -> anyhow::Result<Image> {
-        let image_data = Arc::new(Mutex::new(None));
+        let image_data = Arc::new(Mutex::new(None::<ImageData>));
         let image_data_clone = image_data.clone();
 
         std::thread::spawn(move || {
@@ -299,7 +292,7 @@ impl Image {
                     let image =
                         ImageData::load(include_bytes!("../../assets/img/broken.png"), false)
                             .unwrap();
-                    *image_data_clone.lock().unwrap() = Some(image);
+                    *image_data_clone.lock() = Some(image);
                     image_callback.loaded_image(src, image_data_clone);
                     return;
                 };
@@ -330,7 +323,7 @@ impl Image {
                 )
             };
 
-            *image_data_clone.lock().unwrap() = Some(image);
+            *image_data_clone.lock() = Some(image);
             histogram!(HistTag::ImageLoad).record(start.elapsed());
             image_callback.loaded_image(src, image_data_clone);
         });
@@ -383,13 +376,13 @@ impl Image {
     }
 
     fn buffer_dimensions(&self) -> Option<(u32, u32)> {
-        Some(self.image_data.lock().unwrap().as_ref()?.dimensions)
+        Some(self.image_data.lock().as_ref()?.dimensions)
     }
 
     fn dimensions(&mut self, screen_size: Size, zoom: f32) -> Option<(u32, u32)> {
         let buffer_size = self.buffer_dimensions()?;
         let mut buffer_size = (buffer_size.0 as f32 * zoom, buffer_size.1 as f32 * zoom);
-        if let Some(image) = self.image_data.lock().as_deref().unwrap() {
+        if let Some(image) = self.image_data.lock().deref() {
             if image.scale {
                 buffer_size.0 *= self.hidpi_scale;
                 buffer_size.1 *= self.hidpi_scale;

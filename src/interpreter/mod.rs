@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::slice;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 
 use crate::color::{native_color, Theme};
 use crate::image::{Image, ImageData, ImageSize};
@@ -28,6 +28,7 @@ use html5ever::tendril::*;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
 };
+use parking_lot::Mutex;
 use percent_encoding::percent_decode_str;
 use wgpu::TextureFormat;
 use winit::event_loop::EventLoopProxy;
@@ -307,7 +308,7 @@ impl HtmlInterpreter {
         self.push_element(Spacer::invisible());
     }
     fn push_element<I: Into<Element>>(&mut self, element: I) {
-        self.element_queue.lock().unwrap().push_back(element.into());
+        self.element_queue.lock().push_back(element.into());
         if self.first_pass {
             self.window.request_redraw()
         }
@@ -318,7 +319,7 @@ impl HtmlInterpreter {
         let src = pic.resolve_src(self.color_scheme).to_owned();
         let align = align.unwrap_or_default();
         let is_url = src.starts_with("http://") || src.starts_with("https://");
-        let mut image = match self.image_cache.lock().unwrap().get(&src) {
+        let mut image = match self.image_cache.lock().get(&src) {
             Some(image_data) if is_url => {
                 Image::from_image_data(image_data.clone(), self.hidpi_scale)
             }

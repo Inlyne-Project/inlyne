@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc, Arc,
 };
 use std::time::{Duration, Instant};
 use std::{env, thread};
@@ -20,6 +20,7 @@ use crate::{Element, ImageCache};
 
 use base64::prelude::*;
 use glyphon::FamilyOwned;
+use parking_lot::Mutex;
 use pretty_assertions::assert_eq;
 use smart_debug::SmartDebug;
 use syntect::highlighting::Theme as SyntectTheme;
@@ -192,7 +193,7 @@ fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element
         thread::sleep(Duration::from_millis(1));
     }
 
-    let mut elements_queue = element_queue.lock().unwrap();
+    let mut elements_queue = element_queue.lock();
     std::mem::take(&mut *elements_queue)
 }
 
@@ -833,7 +834,7 @@ fn centered_image_with_size_align_and_link() {
 
     let elems = interpret_md(&text);
     let image = find_image(&elems).unwrap();
-    insta::assert_debug_snapshot!(image, @r###"
+    insta::assert_debug_snapshot!(image, @r#"
     Image {
         image_data: Mutex {
             data: Some(
@@ -843,15 +844,13 @@ fn centered_image_with_size_align_and_link() {
                     dimensions: (396, 347),
                 },
             ),
-            poisoned: false,
-            ..
         },
         is_aligned: Some(Center),
         size: Some(PxHeight(Px(170))),
         is_link: Some("https://bun.sh"),
         ..
     }
-    "###);
+    "#);
 }
 
 // TODO: change this to test against the image cache so that we can inspect the error?
@@ -941,13 +940,7 @@ fn picture_dark_light() {
         // Should pick up align from the enclosing `<p>`
         assert_eq!(image.is_aligned, Some(Align::Center));
 
-        let rgba_data = image
-            .image_data
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .to_bytes();
+        let rgba_data = image.image_data.lock().as_ref().unwrap().to_bytes();
         let byte = match color_scheme {
             Some(ResolvedTheme::Dark) => 0xff,
             Some(ResolvedTheme::Light) => 0x00,
