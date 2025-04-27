@@ -374,63 +374,6 @@ impl Renderer {
                         self.zoom,
                     )?;
 
-                    for (col, node) in layout.headers.iter().enumerate() {
-                        if let Some(text_box) = table.headers.get(col) {
-                            text_areas.push(text_box.text_areas(
-                                &mut self.text_system,
-                                (pos.0 + node.location.x, pos.1 + node.location.y),
-                                (node.size.width, f32::MAX),
-                                self.zoom,
-                                self.scroll_y,
-                            ));
-                            if let Some(selection_rects) = text_box.render_selection(
-                                &mut self.text_system,
-                                (pos.0 + node.location.x, pos.1 + node.location.y),
-                                (node.size.width, node.size.height),
-                                self.zoom,
-                                selection,
-                            ) {
-                                for rect in selection_rects {
-                                    self.draw_rectangle(
-                                        Rect::from_min_max(
-                                            (rect.pos.0, rect.pos.1 - self.scroll_y),
-                                            (rect.max().0, rect.max().1 - self.scroll_y),
-                                        ),
-                                        native_color(self.theme.select_color, &self.surface_format),
-                                    )?;
-                                }
-                            }
-                        }
-                    }
-                    let y = layout
-                        .headers
-                        .last()
-                        .map(|last_header_node| {
-                            last_header_node.location.y
-                                + last_header_node.size.height
-                                + TABLE_ROW_GAP / 2.0
-                        })
-                        .unwrap_or(0.0);
-                    let x = layout
-                        .headers
-                        .last()
-                        .map(|f| f.location.x + f.size.width)
-                        .unwrap_or(0.);
-                    {
-                        let min = (
-                            scrolled_pos.0.max(DEFAULT_MARGIN + centering),
-                            scrolled_pos.1 + y,
-                        );
-                        let max = (
-                            (scrolled_pos.0 + x),
-                            scrolled_pos.1 + y + 2. * self.hidpi_scale * self.zoom,
-                        );
-                        self.draw_rectangle(
-                            Rect::from_min_max(min, max),
-                            native_color(self.theme.text_color, &self.surface_format),
-                        )?;
-                    }
-
                     for (row, node_row) in layout.rows.iter().enumerate() {
                         for (col, node) in node_row.iter().enumerate() {
                             if let Some(row) = table.rows.get(row) {
@@ -466,7 +409,9 @@ impl Renderer {
                                 }
                             }
                         }
-                        let last_row_node = node_row.last().unwrap();
+                        let Some(last_row_node) = node_row.last() else {
+                            continue;
+                        };
                         let y = last_row_node.location.y
                             + last_row_node.size.height
                             + TABLE_ROW_GAP / 2.;
