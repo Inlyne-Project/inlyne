@@ -30,7 +30,7 @@ pub mod test_utils;
 pub mod text;
 pub mod utils;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
@@ -141,7 +141,7 @@ pub struct Inlyne {
     // splitting this out from the rest of the state
     event_loop: Option<EventLoop<InlyneEvent>>,
     renderer: Renderer,
-    element_queue: Arc<Mutex<VecDeque<Element>>>,
+    element_queue: Arc<Mutex<Vec<Element>>>,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
     image_cache: ImageCache,
@@ -190,7 +190,7 @@ impl Inlyne {
             opts.font_opts.clone(),
         ))?;
 
-        let element_queue = Arc::new(Mutex::new(VecDeque::new()));
+        let element_queue = Arc::new(Mutex::new(Vec::new()));
         let image_cache = Arc::new(Mutex::new(HashMap::new()));
         let md_string = read_to_string(&file_path)
             .with_context(|| format!("Could not read file at '{}'", file_path.display()))?;
@@ -238,7 +238,7 @@ impl Inlyne {
     }
 
     pub fn position_queued_elements(
-        element_queue: &Arc<Mutex<VecDeque<Element>>>,
+        element_queue: &Arc<Mutex<Vec<Element>>>,
         renderer: &mut Renderer,
         elements: &mut Vec<Positioned<Element>>,
     ) {

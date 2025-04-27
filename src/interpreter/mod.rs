@@ -2,7 +2,6 @@ mod html;
 #[cfg(test)]
 mod tests;
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::slice;
 use std::str::FromStr;
@@ -129,7 +128,7 @@ impl WindowInteractor for LiveWindow {
 }
 
 pub struct HtmlInterpreter {
-    element_queue: Arc<Mutex<VecDeque<Element>>>,
+    element_queue: Arc<Mutex<Vec<Element>>>,
     current_textbox: TextBox,
     hidpi_scale: f32,
     theme: Theme,
@@ -152,7 +151,7 @@ impl HtmlInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         window: Arc<Window>,
-        element_queue: Arc<Mutex<VecDeque<Element>>>,
+        element_queue: Arc<Mutex<Vec<Element>>>,
         theme: Theme,
         surface_format: TextureFormat,
         hidpi_scale: f32,
@@ -180,7 +179,7 @@ impl HtmlInterpreter {
     // TODO: fix in a later refactor (consolidate a lot of junk)
     #[allow(clippy::too_many_arguments)]
     fn new_with_interactor(
-        element_queue: Arc<Mutex<VecDeque<Element>>>,
+        element_queue: Arc<Mutex<Vec<Element>>>,
         theme: Theme,
         surface_format: TextureFormat,
         hidpi_scale: f32,
@@ -308,7 +307,7 @@ impl HtmlInterpreter {
         self.push_element(Spacer::invisible());
     }
     fn push_element<I: Into<Element>>(&mut self, element: I) {
-        self.element_queue.lock().push_back(element.into());
+        self.element_queue.lock().push(element.into());
         if self.first_pass {
             self.window.request_redraw()
         }

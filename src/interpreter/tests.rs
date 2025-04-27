@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
@@ -111,7 +110,7 @@ impl InterpreterOpts {
         self.color_scheme = Some(color_scheme);
     }
 
-    fn finish(self, counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<VecDeque<Element>>>) {
+    fn finish(self, counter: AtomicCounter) -> (HtmlInterpreter, Arc<Mutex<Vec<Element>>>) {
         let Self {
             theme,
             fail_after: _,
@@ -168,11 +167,11 @@ impl From<ThemeDefaults> for Theme {
     }
 }
 
-fn interpret_md(text: &str) -> VecDeque<Element> {
+fn interpret_md(text: &str) -> Vec<Element> {
     interpret_md_with_opts(text, InterpreterOpts::new())
 }
 
-fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> VecDeque<Element> {
+fn interpret_md_with_opts(text: &str, opts: InterpreterOpts) -> Vec<Element> {
     let fail_after = opts.fail_after;
 
     let counter = AtomicCounter::new();
@@ -419,7 +418,7 @@ fn horizontal_ruler_is_visible_spacer() {
     assert_eq!(num_visible_spacers, 1);
 }
 
-fn collect_list_prefixes(elems: &VecDeque<Element>) -> Vec<(&str, f32)> {
+fn collect_list_prefixes(elems: &[Element]) -> Vec<(&str, f32)> {
     elems
         .iter()
         .filter_map(|elem| {
@@ -804,7 +803,7 @@ fn toml_gets_highlighted() {
     assert_ne!(highlighted_elems, plain_elems, "Highlighting should differ");
 }
 
-fn find_image(elements: &VecDeque<Element>) -> Option<&Image> {
+fn find_image(elements: &[Element]) -> Option<&Image> {
     elements.iter().find_map(|element| match element {
         crate::Element::Image(image) => Some(image),
         _ => None,
