@@ -14,14 +14,12 @@ pub const TABLE_COL_GAP: f32 = 20.;
 
 #[derive(Debug)]
 pub struct TableLayout {
-    pub headers: Vec<Layout>,
     pub rows: Vec<Vec<Layout>>,
     pub size: Size,
 }
 
 #[derive(Default, Debug, PartialEq)]
 pub struct Table {
-    pub headers: Vec<TextBox>,
     pub rows: Vec<Vec<TextBox>>,
 }
 
@@ -40,22 +38,7 @@ impl Table {
         zoom: f32,
     ) -> Option<&'a Text> {
         let table_layout = self.layout(text_system, taffy, bounds, zoom).ok()?;
-        for (header, layout) in self.headers.iter().zip(table_layout.headers.iter()) {
-            if Rect::new(
-                (pos.0 + layout.location.x, pos.1 + layout.location.y),
-                (layout.size.width, layout.size.height),
-            )
-            .contains(loc)
-            {
-                return header.find_hoverable(
-                    text_system,
-                    loc,
-                    (pos.0 + layout.location.x, pos.1 + layout.location.y),
-                    (layout.size.width, layout.size.height),
-                    zoom,
-                );
-            }
-        }
+
         for (row, row_layout) in self.rows.iter().zip(table_layout.rows.iter()) {
             for (item, layout) in row.iter().zip(row_layout.iter()) {
                 if Rect::new(
@@ -87,7 +70,7 @@ impl Table {
         let max_columns = self
             .rows
             .iter()
-            .fold(self.headers.len(), |max, row| std::cmp::max(row.len(), max));
+            .fold(0, |max, row| std::cmp::max(row.len(), max));
 
         // Setup the grid
         let root_style = Style {
@@ -112,27 +95,6 @@ impl Table {
 
         let mut nodes = Vec::new();
         let mut node_row = Vec::new();
-        // Define the child nodes
-        for (x, header) in self.headers.iter().enumerate() {
-            let textbox_measure = TextBoxMeasure {
-                font_system: text_system.font_system.clone(),
-                text_cache: text_system.text_cache.clone(),
-                textbox: Arc::new(header.clone()),
-                zoom,
-            };
-            node_row.push(taffy.new_leaf_with_measure(
-                Style {
-                    grid_row: line(1),
-                    grid_column: line(x as i16 + 1),
-                    ..default()
-                },
-                MeasureFunc::Boxed(Box::new(move |known_dimensions, available_space| {
-                    textbox_measure.measure(known_dimensions, available_space)
-                })),
-            )?);
-        }
-        nodes.push(node_row.clone());
-        node_row.clear();
 
         for (y, row) in self.rows.iter().enumerate() {
             for (x, item) in row.iter().enumerate() {
@@ -174,28 +136,16 @@ impl Table {
             },
         )?;
 
-        let mut rows = nodes.into_iter();
-        let header_layout = rows
-            .next()
-            .unwrap_or_default()
-            .iter()
-            .map(|n| *taffy.layout(*n).unwrap())
-            .collect();
-
-        let rows_layout: Vec<Vec<Layout>> = rows
+        let rows_layout: Vec<Vec<Layout>> = nodes
+            .into_iter()
             .map(|row| row.iter().map(|n| *taffy.layout(*n).unwrap()).collect())
             .collect();
         let size = taffy.layout(root)?.size;
 
         Ok(TableLayout {
-            headers: header_layout,
             rows: rows_layout,
             size: (size.width, size.height),
         })
-    }
-
-    pub fn push_header(&mut self, header: TextBox) {
-        self.headers.push(header);
     }
 
     pub fn push_row(&mut self, row: Vec<TextBox>) {

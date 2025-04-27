@@ -635,11 +635,12 @@ impl HtmlInterpreter {
             TagName::Small => self.state.text_options.small -= 1,
             TagName::TableHead | TagName::TableBody => {}
             TagName::TableHeader => {
-                let iter = self.state.element_iter_mut();
-                let table = iter.rev().find_map(|elem| elem.as_mut_table()).unwrap();
-                table.push_header(self.current_textbox.clone());
+                let table_row = self.state.element_stack.last_mut();
+                if let Some(InterpreterElement::TableRow(ref mut row)) = table_row {
+                    self.state.text_options.bold -= 1;
+                    row.push(self.current_textbox.clone());
+                }
                 self.current_textbox.texts.clear();
-                self.state.text_options.bold -= 1;
             }
             TagName::TableDataCell => {
                 let table_row = self.state.element_stack.last_mut();

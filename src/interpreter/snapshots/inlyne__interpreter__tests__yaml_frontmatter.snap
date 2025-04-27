@@ -9,33 +9,33 @@ expression: "interpret_md_with_opts(text, opts)"
     ),
     Table(
         Table {
-            headers: [
-                TextBox {
-                    align: Center,
-                    texts: [
-                        Text {
-                            text: "date",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-                TextBox {
-                    align: Center,
-                    texts: [
-                        Text {
-                            text: "tags",
-                            default_color: Color(BLACK),
-                            style: BOLD ,
-                            ..
-                        },
-                    ],
-                    ..
-                },
-            ],
             rows: [
+                [
+                    TextBox {
+                        align: Center,
+                        texts: [
+                            Text {
+                                text: "date",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                    TextBox {
+                        align: Center,
+                        texts: [
+                            Text {
+                                text: "tags",
+                                default_color: Color(BLACK),
+                                style: BOLD ,
+                                ..
+                            },
+                        ],
+                        ..
+                    },
+                ],
                 [
                     TextBox {
                         align: Center,
