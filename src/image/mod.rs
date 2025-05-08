@@ -252,7 +252,6 @@ impl Image {
 
     pub fn from_src(
         src: String,
-        file_path: PathBuf,
         hidpi_scale: f32,
         image_callback: Box<dyn ImageCallback + Send>,
     ) -> anyhow::Result<Image> {
@@ -264,7 +263,7 @@ impl Image {
 
             let mut src_path = PathBuf::from(&src);
             if src_path.is_relative() {
-                if let Some(parent_dir) = file_path.parent() {
+                if let Ok(parent_dir) = std::env::current_dir() {
                     src_path = parent_dir.join(src_path.strip_prefix("./").unwrap_or(&src_path));
                 }
             }

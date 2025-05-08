@@ -43,6 +43,7 @@ impl Iterator for Iter<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Attr {
     Align(Align),
     Href(String),
@@ -59,6 +60,20 @@ pub enum Attr {
 }
 
 impl Attr {
+    pub fn to_style(&self) -> Option<String> {
+        if let Self::Style(style) = self {
+            Some(style.to_owned())
+        } else {
+            None
+        }
+    }
+    pub fn to_align(&self) -> Option<Align> {
+        if let Self::Align(align) = self {
+            Some(align.to_owned())
+        } else {
+            None
+        }
+    }
     pub fn to_anchor(&self) -> Option<String> {
         if let Self::Anchor(name) = self {
             Some(name.to_owned())
@@ -68,6 +83,7 @@ impl Attr {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct PrefersColorScheme(pub ResolvedTheme);
 
 impl PrefersColorScheme {

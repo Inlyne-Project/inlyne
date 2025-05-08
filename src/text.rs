@@ -140,7 +140,6 @@ impl TextBox {
     pub fn set_checkbox(&mut self, is_checked: bool) {
         self.is_checkbox = Some(is_checked);
     }
-
     pub fn set_anchor(&mut self, anchor: String) {
         self.is_anchor = Some(anchor);
     }

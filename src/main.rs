@@ -35,7 +35,6 @@ use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, channel};
 use std::sync::Arc;
 use std::time::Instant;
@@ -146,7 +145,6 @@ pub struct Inlyne {
     lines_to_scroll: f32,
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
-    interpreter_should_queue: Arc<AtomicBool>,
     keycombos: KeyCombos,
     need_repositioning: bool,
     watcher: Watcher,
@@ -201,14 +199,12 @@ impl Inlyne {
             renderer.theme.clone(),
             renderer.surface_format,
             renderer.hidpi_scale,
-            file_path.clone(),
             image_cache.clone(),
             event_loop.create_proxy(),
             opts.color_scheme,
         );
 
         let (interpreter_sender, interpreter_receiver) = channel();
-        let interpreter_should_queue = interpreter.should_queue.clone();
         std::thread::spawn(move || interpreter.interpret_md(interpreter_receiver));
 
         interpreter_sender.send(md_string)?;
@@ -228,7 +224,6 @@ impl Inlyne {
             elements: Vec::new(),
             lines_to_scroll,
             interpreter_sender,
-            interpreter_should_queue,
             image_cache,
             keycombos,
             need_repositioning: false,
@@ -242,43 +237,33 @@ impl Inlyne {
         renderer: &mut Renderer,
         elements: &mut Vec<Positioned<Element>>,
     ) {
-        let queue = {
-            element_queue
-                .try_lock()
-                .map(|mut queue| queue.drain(..).collect::<Vec<Element>>())
-        };
-        if let Some(queue) = queue {
-            let positioning_start = Instant::now();
+        let positioning_start = Instant::now();
 
-            for element in queue {
-                // Position element and add it to elements
-                let mut positioned_element = Positioned::new(element);
-                renderer
-                    .positioner
-                    .position(
-                        &mut renderer.text_system,
-                        &mut positioned_element,
-                        renderer.zoom,
-                    )
-                    .unwrap();
-                renderer.positioner.reserved_height +=
-                    DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
-                        + positioned_element.bounds.as_ref().unwrap().size.1;
-                elements.push(positioned_element);
-            }
-
-            histogram!(HistTag::Positioner).record(positioning_start.elapsed());
+        for element in element_queue.lock().drain(..) {
+            // Position element and add it to elements
+            let mut positioned_element = Positioned::new(element);
+            renderer
+                .positioner
+                .position(
+                    &mut renderer.text_system,
+                    &mut positioned_element,
+                    renderer.zoom,
+                )
+                .unwrap();
+            renderer.positioner.reserved_height +=
+                DEFAULT_PADDING * renderer.hidpi_scale * renderer.zoom
+                    + positioned_element.bounds.as_ref().unwrap().size.1;
+            elements.push(positioned_element);
         }
+
+        histogram!(HistTag::Positioner).record(positioning_start.elapsed());
     }
 
     fn load_file(&mut self, contents: String) {
-        self.interpreter_should_queue
-            .store(false, Ordering::Relaxed);
         self.element_queue.lock().clear();
         self.elements.clear();
         self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
         self.renderer.positioner.anchors.clear();
-        self.interpreter_should_queue.store(true, Ordering::Relaxed);
         self.interpreter_sender.send(contents).unwrap();
     }
 
