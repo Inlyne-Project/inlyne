@@ -245,7 +245,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
         String::new()
     };
 
-    format!("{}{}", html_front_matter, htmlified)
+    format!("{html_front_matter}{htmlified}")
 }
 
 #[derive(Deserialize, Debug)]

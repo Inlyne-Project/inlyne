@@ -25,8 +25,7 @@ fn check(input_path: &Path) {
     assert_eq!(
         Rgba8Data::new(&actual),
         Rgba8Data::new(&expected),
-        "Input: {:?}",
-        input_path
+        "Input: {input_path:?}"
     );
 }
 

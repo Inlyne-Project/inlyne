@@ -876,7 +876,7 @@ fn image_loading_fails_gracefully() {
     // not sure why. Bump up the timeout delay to reduce the amount of spurious failures in as
     // tight of a niche as we can specify
     let mut opts = InterpreterOpts::new();
-    let is_ci = env::var("CI").map_or(false, |var| ["true", "1"].contains(&&*var.to_lowercase()));
+    let is_ci = env::var("CI").is_ok_and(|var| ["true", "1"].contains(&&*var.to_lowercase()));
     let is_windows = cfg!(target_os = "windows");
     if is_ci && is_windows {
         opts.fail_after *= 2;
