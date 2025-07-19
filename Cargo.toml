@@ -38,7 +38,7 @@ anstyle = "1.0.10"
 # Easier error handling
 anyhow = "1.0.95"
 # System preferred color scheme detection
-dark-light = "1.1.1"
+dark-light = "2.0.0"
 # System specific directories
 dirs = "6.0.0"
 # Used to open the config file with `$ inlyne config open`
