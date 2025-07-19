@@ -47,9 +47,13 @@ impl ResolvedTheme {
 
     fn try_detect() -> Option<Self> {
         match dark_light::detect() {
-            dark_light::Mode::Default => None,
-            dark_light::Mode::Dark => Some(Self::Dark),
-            dark_light::Mode::Light => Some(Self::Light),
+            Ok(dark_light::Mode::Unspecified) => None,
+            Ok(dark_light::Mode::Dark) => Some(Self::Dark),
+            Ok(dark_light::Mode::Light) => Some(Self::Light),
+            Err(e) => {
+                tracing::warn!("Failed to detect system theme: {}", e);
+                None
+            }
         }
     }
 }
