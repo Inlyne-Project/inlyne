@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use fxhash::{FxHashMap, FxHashSet};
 use glyphon::{
-    Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned, FontSystem, LayoutGlyph,
-    Shaping, Style, SwashCache, TextArea, TextBounds, Weight,
+    cosmic_text::Wrap, Affinity, Attrs, AttrsList, BufferLine, Color, Cursor, FamilyOwned,
+    FontSystem, LayoutGlyph, Shaping, Style, SwashCache, TextArea, TextBounds, Weight,
 };
 use parking_lot::Mutex;
 use smart_debug::SmartDebug;
@@ -749,6 +749,7 @@ impl TextCache {
             let mut buffer = glyphon::Buffer::new(font_system, metrics);
 
             buffer.set_size(font_system, key.bounds.0, key.bounds.1.max(key.line_height));
+            buffer.set_wrap(font_system, Wrap::Glyph);
 
             buffer.lines.clear();
 
