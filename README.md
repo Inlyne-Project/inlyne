@@ -12,7 +12,7 @@
 </p>
 
 ```bash
-inlyne README.md --theme dark/light
+inlyne view README.md --theme dark/light
 ```
 
 <p align="center">
