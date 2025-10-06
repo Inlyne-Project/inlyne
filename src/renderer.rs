@@ -683,10 +683,24 @@ impl Renderer {
         selection: &mut Selection,
     ) -> anyhow::Result<()> {
         selection.text.clear();
-        let frame = self
-            .surface
-            .get_current_texture()
-            .context("Failed to acquire next swap chain texture")?;
+        let frame = match self.surface.get_current_texture() {
+            std::result::Result::Ok(frame) => frame,
+            std::result::Result::Err(wgpu::SurfaceError::Lost)
+            | std::result::Result::Err(wgpu::SurfaceError::Outdated) => {
+                // Surface was lost or outdated (e.g., window resized or moved to a different output)
+                // Reconfigure and skip this frame; a new frame will be requested automatically.
+                self.surface.configure(&self.device, &self.config);
+                return Ok(());
+            }
+            std::result::Result::Err(wgpu::SurfaceError::Timeout) => {
+                // GPU is busy; skip this frame.
+                return Ok(());
+            }
+            std::result::Result::Err(wgpu::SurfaceError::OutOfMemory) => {
+                // Fatal; bubble up to allow graceful shutdown.
+                Err(anyhow::anyhow!("Out of memory while acquiring swap chain texture"))?
+            }
+        };
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
