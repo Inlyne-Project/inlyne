@@ -192,7 +192,7 @@ issues matching your own (the following link has the crash report label)
 
 - https://github.com/Inlyne-Project/inlyne/issues/new?labels=C-crash-report
 
-We take privacy seriously, and do not preform any auotmated error collection. In order to improve
+We take privacy seriously, and do not preform any automated error collection. In order to improve
 the software we, rely on people to submit reports.
 
 Thank you kindly!"
