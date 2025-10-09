@@ -698,7 +698,9 @@ impl Renderer {
             }
             std::result::Result::Err(wgpu::SurfaceError::OutOfMemory) => {
                 // Fatal; bubble up to allow graceful shutdown.
-                Err(anyhow::anyhow!("Out of memory while acquiring swap chain texture"))?
+                Err(anyhow::anyhow!(
+                    "Out of memory while acquiring swap chain texture"
+                ))?
             }
         };
         let view = frame
