@@ -325,10 +325,13 @@ impl Inlyne {
                         &mut self.elements,
                     );
                     self.renderer.set_scroll_y(self.renderer.scroll_y);
-                    self.renderer
+                    if let Err(err) = self
+                        .renderer
                         .redraw(&mut self.elements, &mut self.selection)
                         .context("Renderer failed to redraw the screen")
-                        .unwrap();
+                    {
+                        tracing::warn!("{}", err);
+                    }
 
                     histogram!(HistTag::Redraw).record(redraw_start.elapsed());
                 }
