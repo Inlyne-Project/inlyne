@@ -69,7 +69,7 @@ impl From<KeybindingsSection> for Keybindings {
 
 #[cfg(test)]
 mod tests {
-    use winit::event::ModifiersState;
+    use winit::keyboard::ModifiersState;
 
     use crate::keybindings::{action::VertDirection, Key, ModifiedKey};
 
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn from_keybinding_section_extra() {
         let combo = KeyCombo(vec![ModifiedKey(
-            Key::Resolved(winit::event::VirtualKeyCode::A),
+            Key::from_character("a"),
             ModifiersState::empty(),
         )]);
 
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn from_keybinding_section_extra_override_base() {
         let j_combo = KeyCombo(vec![ModifiedKey(
-            Key::Resolved(winit::event::VirtualKeyCode::J),
+            Key::from_character("j"),
             ModifiersState::empty(),
         )]);
 

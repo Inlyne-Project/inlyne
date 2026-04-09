@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Instant;
 use std::{
     fs,
@@ -25,7 +25,7 @@ use image::{ImageBuffer, RgbaImage};
 use parking_lot::Mutex;
 use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
-use usvg::fontdb;
+
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
 
@@ -213,7 +213,7 @@ impl Image {
         });
         queue.write_texture(
             // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -222,7 +222,7 @@ impl Image {
             // The actual pixel data
             &rgba_image,
             // The layout of the texture
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * dimensions.0),
                 rows_per_image: Some(dimensions.1),
@@ -282,7 +282,7 @@ impl Image {
             } else {
                 let opt = usvg::Options::default();
                 // TODO: yes all of this image loading is very messy and could use a refactor
-                let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
+                let Ok(tree) = usvg::Tree::from_data(&image_data, &opt) else {
                     tracing::warn!(
                         "Failed loading image:\n- src: {}\n- src_path: {}",
                         src,
@@ -295,25 +295,17 @@ impl Image {
                     image_callback.loaded_image(src, image_data_clone);
                     return;
                 };
-                tree.size = tree.size.scale_to(
-                    tiny_skia::Size::from_wh(
-                        tree.size.width() * hidpi_scale,
-                        tree.size.height() * hidpi_scale,
-                    )
-                    .unwrap(),
+                let size = tree.size();
+                let width = (size.width() * hidpi_scale) as u32;
+                let height = (size.height() * hidpi_scale) as u32;
+                let mut pixmap = tiny_skia::Pixmap::new(width, height)
+                    .context("Couldn't create svg pixmap")
+                    .unwrap();
+                resvg::render(
+                    &tree,
+                    tiny_skia::Transform::from_scale(hidpi_scale, hidpi_scale),
+                    &mut pixmap.as_mut(),
                 );
-                static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
-                let fontdb = FONTDB.get_or_init(|| {
-                    let mut db = fontdb::Database::new();
-                    db.load_system_fonts();
-                    db
-                });
-                tree.postprocess(Default::default(), fontdb);
-                let mut pixmap =
-                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
-                        .context("Couldn't create svg pixmap")
-                        .unwrap();
-                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
                 ImageData::new(
                     ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
                         .context("Svg buffer has invalid dimensions")
@@ -491,7 +483,7 @@ impl ImageRenderer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&texture_bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
@@ -509,12 +501,13 @@ impl ImageRenderer {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &vertex_buffers,
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: *format,
                     blend: Some(wgpu::BlendState {
@@ -527,11 +520,13 @@ impl ImageRenderer {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
+            cache: None,
         });
         const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -545,7 +540,7 @@ impl ImageRenderer {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         Self {

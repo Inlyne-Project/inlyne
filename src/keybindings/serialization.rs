@@ -6,7 +6,7 @@ use super::action::{Action, VertDirection, Zoom};
 use super::{Key, KeyCombo, ModifiedKey};
 
 use serde::{de, Deserialize, Deserializer};
-use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
+use winit::keyboard::ModifiersState;
 
 impl<'de> Deserialize<'de> for Action {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -64,7 +64,11 @@ impl<'de> Deserialize<'de> for Key {
 
         match StringOrNum::deserialize(deserializer)? {
             StringOrNum::Str(s) => Key::from_str(&s).map_err(de::Error::custom),
-            StringOrNum::Num(num) => Ok(Self::ScanCode(num)),
+            StringOrNum::Num(num) => {
+                // Legacy scan code support - map to a key code if possible
+                // For backwards compat, just store as a character representation
+                Ok(Self::Character(format!("<scancode:{num}>")))
+            }
         }
     }
 }
@@ -86,48 +90,48 @@ impl<'de> Deserialize<'de> for ShortKey {
             Num(u32),
         }
 
-        let shifted_key = |virt_key| {
+        let shifted_key = |c: &str| {
             Ok(Self {
-                key: Key::Resolved(virt_key),
+                key: Key::Character(c.to_lowercase()),
                 shift: true,
             })
         };
 
         match StringOrNum::deserialize(deserializer)? {
             StringOrNum::Str(s) => match &*s {
-                "A" => shifted_key(VirtKey::A),
-                "B" => shifted_key(VirtKey::B),
-                "C" => shifted_key(VirtKey::C),
-                "D" => shifted_key(VirtKey::D),
-                "E" => shifted_key(VirtKey::E),
-                "F" => shifted_key(VirtKey::F),
-                "G" => shifted_key(VirtKey::G),
-                "H" => shifted_key(VirtKey::H),
-                "I" => shifted_key(VirtKey::I),
-                "J" => shifted_key(VirtKey::J),
-                "K" => shifted_key(VirtKey::K),
-                "L" => shifted_key(VirtKey::L),
-                "M" => shifted_key(VirtKey::M),
-                "N" => shifted_key(VirtKey::N),
-                "O" => shifted_key(VirtKey::O),
-                "P" => shifted_key(VirtKey::P),
-                "Q" => shifted_key(VirtKey::Q),
-                "R" => shifted_key(VirtKey::R),
-                "S" => shifted_key(VirtKey::S),
-                "T" => shifted_key(VirtKey::T),
-                "U" => shifted_key(VirtKey::U),
-                "V" => shifted_key(VirtKey::V),
-                "W" => shifted_key(VirtKey::W),
-                "X" => shifted_key(VirtKey::X),
-                "Y" => shifted_key(VirtKey::Y),
-                "Z" => shifted_key(VirtKey::Z),
+                "A" => shifted_key("a"),
+                "B" => shifted_key("b"),
+                "C" => shifted_key("c"),
+                "D" => shifted_key("d"),
+                "E" => shifted_key("e"),
+                "F" => shifted_key("f"),
+                "G" => shifted_key("g"),
+                "H" => shifted_key("h"),
+                "I" => shifted_key("i"),
+                "J" => shifted_key("j"),
+                "K" => shifted_key("k"),
+                "L" => shifted_key("l"),
+                "M" => shifted_key("m"),
+                "N" => shifted_key("n"),
+                "O" => shifted_key("o"),
+                "P" => shifted_key("p"),
+                "Q" => shifted_key("q"),
+                "R" => shifted_key("r"),
+                "S" => shifted_key("s"),
+                "T" => shifted_key("t"),
+                "U" => shifted_key("u"),
+                "V" => shifted_key("v"),
+                "W" => shifted_key("w"),
+                "X" => shifted_key("x"),
+                "Y" => shifted_key("y"),
+                "Z" => shifted_key("z"),
                 other => match Key::from_str(other) {
                     Ok(key) => Ok(Self { key, shift: false }),
                     Err(err) => Err(de::Error::custom(err)),
                 },
             },
             StringOrNum::Num(num) => Ok(Self {
-                key: Key::ScanCode(num),
+                key: Key::Character(format!("<scancode:{num}>")),
                 shift: false,
             }),
         }
@@ -188,8 +192,8 @@ impl<'de> Deserialize<'de> for ModifiedKey {
                 for ty in mod_ {
                     modifiers |= match ty {
                         ModifierType::Alt => ModifiersState::ALT,
-                        ModifierType::Ctrl => ModifiersState::CTRL,
-                        ModifierType::Os => ModifiersState::LOGO,
+                        ModifierType::Ctrl => ModifiersState::CONTROL,
+                        ModifierType::Os => ModifiersState::SUPER,
                         ModifierType::Shift => ModifiersState::SHIFT,
                     };
                 }

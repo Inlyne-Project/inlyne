@@ -1,5 +1,5 @@
 use clap::{
-    builder::PossibleValue, command, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
+    builder::PossibleValue, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
 };
 use serde::Deserialize;
 use std::array;

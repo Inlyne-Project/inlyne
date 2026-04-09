@@ -8,21 +8,12 @@ use copypasta::wayland_clipboard;
 use copypasta::ClipboardContext;
 
 use copypasta::ClipboardProvider;
-use raw_window_handle::RawDisplayHandle;
 
 pub struct Clipboard(Box<dyn ClipboardProvider>);
 
 impl Clipboard {
-    pub unsafe fn new(display: RawDisplayHandle) -> Self {
-        match display {
-            #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
-            RawDisplayHandle::Wayland(display) => {
-                let (_, clipboard) =
-                    wayland_clipboard::create_clipboards_from_external(display.display);
-                Self(Box::new(clipboard))
-            }
-            _ => Self::default(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Used for tests and to handle missing clipboard provider when built without the `x11`

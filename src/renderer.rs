@@ -16,7 +16,7 @@ use crate::Element;
 
 use anyhow::{Context, Ok};
 use bytemuck::{Pod, Zeroable};
-use glyphon::{Resolution, SwashCache, TextArea, TextAtlas, TextRenderer};
+use glyphon::{Cache, Resolution, SwashCache, TextArea, TextAtlas, TextRenderer, Viewport};
 use lyon::geom::euclid::Point2D;
 use lyon::geom::Box2D;
 use lyon::path::Polygon;
@@ -35,7 +35,7 @@ pub struct Vertex {
 
 pub struct Renderer {
     pub config: wgpu::SurfaceConfiguration,
-    pub surface: wgpu::Surface,
+    pub surface: wgpu::Surface<'static>,
     pub surface_format: TextureFormat,
     pub device: wgpu::Device,
     pub render_pipeline: wgpu::RenderPipeline,
@@ -61,22 +61,20 @@ impl Renderer {
     }
 
     pub async fn new(
-        window: &Window,
+        window: Arc<Window>,
         theme: Theme,
         hidpi_scale: f32,
         page_width: f32,
         font_opts: FontOptions,
     ) -> anyhow::Result<Self> {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
-            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            ..Default::default()
         });
-        let surface = unsafe {
-            instance
-                .create_surface(window)
-                .expect("Could not create surface")
-        };
+        let surface = instance
+            .create_surface(window.clone())
+            .expect("Could not create surface");
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -90,10 +88,11 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
+                    memory_hints: wgpu::MemoryHints::default(),
+                    ..Default::default()
                 },
-                None,
             )
             .await?;
 
@@ -105,7 +104,7 @@ impl Renderer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let caps = surface.get_capabilities(&adapter);
@@ -127,18 +126,21 @@ impl Renderer {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &vertex_buffers,
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(surface_format.into())],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
+            cache: None,
         });
 
         let config = wgpu::SurfaceConfiguration {
@@ -149,6 +151,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
 
         surface.configure(&device, &config);
@@ -156,16 +159,20 @@ impl Renderer {
 
         let font_system = Arc::new(Mutex::new(get_fonts(&font_opts)));
         let swash_cache = SwashCache::new();
-        let mut text_atlas = TextAtlas::new(&device, &queue, surface_format);
+        let cache = Cache::new(&device);
+        let mut text_atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
         let text_renderer =
             TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
         let text_cache = Arc::new(Mutex::new(TextCache::new()));
+        let viewport = Viewport::new(&device, &cache);
         let text_system = TextSystem {
             font_system,
             swash_cache,
             text_renderer,
             text_atlas,
             text_cache,
+            cache,
+            viewport,
         };
 
         let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
@@ -369,7 +376,6 @@ impl Renderer {
                     );
                     let layout = table.layout(
                         &mut self.text_system,
-                        &mut self.positioner.taffy,
                         bounds,
                         self.zoom,
                     )?;
@@ -702,6 +708,12 @@ impl Renderer {
                     "Out of memory while acquiring swap chain texture"
                 ))?
             }
+            std::result::Result::Err(e) => {
+                // Handle any other surface errors
+                tracing::warn!("Surface error: {e:?}");
+                self.surface.configure(&self.device, &self.config);
+                return Ok(());
+            }
         };
         let view = frame
             .texture
@@ -714,20 +726,22 @@ impl Renderer {
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         let cached_text_areas = self.render_elements(elements, selection)?;
-        let vertex_buf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&self.lyon_buffer.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-        let index_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let lyon_vertex_buf = (!self.lyon_buffer.vertices.is_empty()).then(|| {
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&self.lyon_buffer.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                })
+        });
+        let lyon_index_buffer = (!self.lyon_buffer.indices.is_empty()).then(|| {
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                })
+        });
 
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
@@ -739,15 +753,19 @@ impl Renderer {
                 .map(|c| c.text_area(&text_cache))
                 .collect();
 
+            self.text_system.viewport.update(
+                &self.queue,
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+            );
             self.text_system.text_renderer.prepare(
                 &self.device,
                 &self.queue,
                 &mut self.text_system.font_system.lock(),
                 &mut self.text_system.text_atlas,
-                Resolution {
-                    width: self.config.width,
-                    height: self.config.height,
-                },
+                &self.text_system.viewport,
                 text_areas,
                 &mut self.text_system.swash_cache,
             )?;
@@ -771,31 +789,38 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(background_color),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             // Draw lyon elements
-            rpass.set_pipeline(&self.render_pipeline);
-            rpass.set_vertex_buffer(0, vertex_buf.slice(..));
-            rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.lyon_buffer.indices.len() as u32, 0, 0..1);
+            if let (Some(vertex_buf), Some(index_buffer)) =
+                (&lyon_vertex_buf, &lyon_index_buffer)
+            {
+                rpass.set_pipeline(&self.render_pipeline);
+                rpass.set_vertex_buffer(0, vertex_buf.slice(..));
+                rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.lyon_buffer.indices.len() as u32, 0, 0..1);
+            }
 
             // Draw images
             rpass.set_pipeline(&self.image_renderer.render_pipeline);
             rpass.set_index_buffer(self.image_renderer.index_buf.slice(..), IndexFormat::Uint16);
             for (bindgroup, vertex_buf) in image_bindgroups.iter() {
-                rpass.set_bind_group(0, bindgroup, &[]);
+                rpass.set_bind_group(0, &**bindgroup, &[]);
                 rpass.set_vertex_buffer(0, vertex_buf.slice(..));
                 rpass.draw_indexed(0..6, 0, 0..1);
             }
 
             self.text_system
                 .text_renderer
-                .render(&self.text_system.text_atlas, &mut rpass)
-                .unwrap();
+                .render(&self.text_system.text_atlas, &self.text_system.viewport, &mut rpass)?;
         }
 
         self.queue.submit(Some(encoder.finish()));
