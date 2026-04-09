@@ -28,7 +28,7 @@ categories = ["gui"]
 [features]
 default = ["wayland", "x11"]
 x11 = ["copypasta/x11", "winit/x11"]
-wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita"]
+wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita", "winit/wayland-dlopen"]
 
 [dependencies]
 # `anstream` and `anstyle` are both terminal helper crates used for our custom
@@ -46,7 +46,7 @@ edit = "0.1.5"
 # Faster hash for the text cache
 fxhash = "0.2.1"
 # GPU text rendering
-glyphon = "0.3"
+glyphon = "0.10"
 # Used to values used in YAML frontmatter when converting to HTML
 html-escape = "0.2.13"
 # Parsing the HTML document that the markdown+html was converted into
@@ -71,10 +71,9 @@ open = "5.3.2"
 parking_lot = "0.12.3"
 # Dead simple way to handle some async operations
 pollster = "0.4.0"
-# Used to get a handle to the display, so that we can setup a clipboard
-raw-window-handle = "0.5.2"
+# raw-window-handle no longer needed directly; winit and wgpu handle this internally
 # SVG rendering
-resvg = "0.39.0"
+resvg = "0.45.0"
 # Parses the optional YAML frontmatter (replace with just a yaml parser)
 serde_yaml = "0.9.34"
 # Easy `Debug` formatting changes used to keep snapshot tests more succinct
@@ -83,7 +82,7 @@ smart-debug = "0.0.3"
 syntect = "5.2.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
-taffy = "0.3.19"
+taffy = "0.9"
 # For parsing our config file
 toml = "0.8.19"
 # In application tracing (aka logging on steroids)
@@ -95,7 +94,8 @@ twox-hash = "1.6.3"
 # HTTP client for requesting images from urls
 ureq = "2.12.1"
 # Cross platform GPU magic sauce
-wgpu = "0.16"
+wgpu = "28"
+
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
@@ -123,7 +123,7 @@ default-features = false
 # set the feature for the transitive dep while manually making sure that we keep
 # the versions in sync ;-;
 [dependencies.fontdb]
-version = "0.14.1"
+version = "0.22"
 features = ["fontconfig"]
 
 # Common dep used from yaml that can probably be replaced with a `Vec<(_, _)>`
@@ -160,8 +160,9 @@ features = ["env-filter"]
 
 # Cross-platform window handling
 [dependencies.winit]
-version = "0.28.7"
+version = "0.30"
 default-features = false
+features = ["rwh_06"]
 
 [dev-dependencies]
 # Succinct and more readable binary blobs

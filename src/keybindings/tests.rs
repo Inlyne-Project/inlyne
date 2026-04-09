@@ -3,7 +3,7 @@ use super::{KeyCombos, Keybindings, ModifiedKey};
 use crate::opts::Config;
 use crate::test_utils::log;
 
-use winit::event::{ModifiersState, VirtualKeyCode as VirtKey};
+use winit::keyboard::ModifiersState;
 
 #[test]
 fn sanity() {
@@ -23,18 +23,19 @@ base = [
     let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
     let mut key_combos = KeyCombos::new(keybindings).unwrap();
 
-    let g: ModifiedKey = VirtKey::G.into();
-    let l_shift = VirtKey::LShift.into();
-    let cap_g = ModifiedKey(g.0, ModifiersState::SHIFT);
-    let j = VirtKey::J.into();
+    let g = ModifiedKey(super::Key::from_character("g"), ModifiersState::empty());
+    let l_shift = ModifiedKey(super::Key::from_named(winit::keyboard::NamedKey::Shift), ModifiersState::empty());
+    let cap_g = ModifiedKey(super::Key::from_character("g"), ModifiersState::SHIFT);
+    let j = ModifiedKey(super::Key::from_character("j"), ModifiersState::empty());
+    // Note: Key contains String so we clone when reusing
 
     let test_vectors = [
         // Invalid combo 'gG' where the key that broke us out is a singlekey combo
-        (g, None),
+        (g.clone(), None),
         (l_shift, None),
         (cap_g, Some(Action::ToEdge(VertDirection::Down))),
         // Valid combo 'gg' that shares a branch with 'gj'
-        (g, None),
+        (g.clone(), None),
         (g, Some(Action::ToEdge(VertDirection::Up))),
         // Valid singlekey combo for a shared action
         (j, Some(Action::Scroll(VertDirection::Down))),

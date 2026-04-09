@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use anyhow::Context;
-use taffy::Taffy;
+use taffy::TaffyTree;
 
 use crate::image::Image;
 use crate::text::TextSystem;
@@ -45,12 +45,12 @@ pub struct Positioner {
     pub hidpi_scale: f32,
     pub page_width: f32,
     pub anchors: HashMap<String, f32>,
-    pub taffy: Taffy,
+    pub taffy: TaffyTree<()>,
 }
 
 impl Positioner {
     pub fn new(screen_size: Size, hidpi_scale: f32, page_width: f32) -> Self {
-        let mut taffy = Taffy::new();
+        let mut taffy = TaffyTree::new();
         taffy.disable_rounding();
         Self {
             reserved_height: DEFAULT_PADDING * hidpi_scale,
@@ -114,7 +114,6 @@ impl Positioner {
                 let pos = (DEFAULT_MARGIN + centering, self.reserved_height);
                 let layout = table.layout(
                     text_system,
-                    &mut self.taffy,
                     (
                         self.screen_size.0 - pos.0 - DEFAULT_MARGIN - centering,
                         f32::INFINITY,

@@ -13,47 +13,65 @@ use std::slice::Iter;
 use std::str::FromStr;
 use std::vec;
 
-use winit::event::{ModifiersState, ScanCode, VirtualKeyCode as VirtKey};
+use winit::keyboard::{ModifiersState, NamedKey, PhysicalKey, KeyCode};
 
 use action::Action;
 pub use keybindings::Keybindings;
 
 use crate::opts::KeybindingsSection;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
-    Resolved(VirtKey),
-    ScanCode(ScanCode),
+    Named(NamedKey),
+    Character(String),
+    KeyCode(KeyCode),
 }
 
 impl Key {
-    pub fn new(resolved: Option<VirtKey>, scan_code: ScanCode) -> Self {
-        match resolved {
-            Some(key_code) => Self::Resolved(key_code),
-            None => Self::ScanCode(scan_code),
+    pub fn from_named(named: NamedKey) -> Self {
+        Self::Named(named)
+    }
+
+    pub fn from_character(c: impl Into<String>) -> Self {
+        Self::Character(c.into())
+    }
+
+    pub fn from_winit_key(
+        logical_key: &winit::keyboard::Key,
+        physical_key: &PhysicalKey,
+    ) -> Self {
+        match logical_key {
+            winit::keyboard::Key::Named(named) => Key::Named(named.clone()),
+            winit::keyboard::Key::Character(c) => Key::Character(c.to_string()),
+            _ => {
+                if let PhysicalKey::Code(code) = physical_key {
+                    Key::KeyCode(*code)
+                } else {
+                    Key::Character(String::new())
+                }
+            }
         }
     }
 }
 
-impl From<VirtKey> for Key {
-    fn from(key_code: VirtKey) -> Self {
-        Self::Resolved(key_code)
+impl From<NamedKey> for Key {
+    fn from(named: NamedKey) -> Self {
+        Self::Named(named)
     }
 }
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Key::Resolved(resolved) => {
-                let maybe_key = mappings::STR_TO_VIRT_KEY
-                    .iter()
-                    .find_map(|&(key_str, key)| (*resolved == key).then_some(key_str));
-                match maybe_key {
-                    Some(key) => f.write_str(key),
-                    None => write!(f, "<unsupported: {resolved:?}>"),
+            Key::Named(named) => {
+                let mapped = mappings::MappedKey::Named(named.clone());
+                match mappings::mapped_key_to_str(&mapped) {
+                    Some(s) => f.write_str(s),
+                    None => write!(f, "<unsupported: {named:?}>"),
                 }
             }
-            Key::ScanCode(scan_code) => write!(f, "<scan code: {scan_code}>"),
+            Key::Character(c) => f.write_str(c),
+            Key::KeyCode(code) => write!(f, "<key code: {code:?}>"),
         }
     }
 }
@@ -62,50 +80,32 @@ impl FromStr for Key {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        mappings::STR_TO_VIRT_KEY
-            .iter()
-            .find_map(|&(key_str, key)| (s == key_str).then_some(Key::Resolved(key)))
-            .ok_or_else(|| anyhow::anyhow!("Unsupported key: {s}"))
+        match mappings::str_to_mapped_key(s) {
+            Some(mappings::MappedKey::Named(named)) => Ok(Key::Named(named)),
+            Some(mappings::MappedKey::Character(c)) => Ok(Key::Character(c)),
+            None => Err(anyhow::anyhow!("Unsupported key: {s}")),
+        }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModifiedKey(pub Key, pub ModifiersState);
 
 impl fmt::Display for ModifiedKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.1 == ModifiersState::default() {
-            let is_not_visible = [
-                VirtKey::F1,
-                VirtKey::F2,
-                VirtKey::F3,
-                VirtKey::F4,
-                VirtKey::F5,
-                VirtKey::F6,
-                VirtKey::F7,
-                VirtKey::F8,
-                VirtKey::F9,
-                VirtKey::F10,
-                VirtKey::F11,
-                VirtKey::F12,
-                VirtKey::Up,
-                VirtKey::Right,
-                VirtKey::Down,
-                VirtKey::Left,
-                VirtKey::Escape,
-                VirtKey::Tab,
-                VirtKey::Insert,
-                VirtKey::Delete,
-                VirtKey::Back,
-                VirtKey::Return,
-                VirtKey::Home,
-                VirtKey::End,
-                VirtKey::PageUp,
-                VirtKey::PageDown,
-                VirtKey::Space,
-            ]
-            .map(Key::from)
-            .contains(&self.0);
+        if self.1 == ModifiersState::empty() {
+            let is_not_visible = matches!(
+                &self.0,
+                Key::Named(
+                    NamedKey::F1 | NamedKey::F2 | NamedKey::F3 | NamedKey::F4 |
+                    NamedKey::F5 | NamedKey::F6 | NamedKey::F7 | NamedKey::F8 |
+                    NamedKey::F9 | NamedKey::F10 | NamedKey::F11 | NamedKey::F12 |
+                    NamedKey::ArrowUp | NamedKey::ArrowRight | NamedKey::ArrowDown | NamedKey::ArrowLeft |
+                    NamedKey::Escape | NamedKey::Tab | NamedKey::Insert | NamedKey::Delete |
+                    NamedKey::Backspace | NamedKey::Enter | NamedKey::Home | NamedKey::End |
+                    NamedKey::PageUp | NamedKey::PageDown | NamedKey::Space
+                )
+            );
 
             if is_not_visible {
                 write!(f, "<{}>", self.0)
@@ -115,16 +115,16 @@ impl fmt::Display for ModifiedKey {
         } else {
             let mut mod_list = Vec::new();
 
-            if self.1.alt() {
+            if self.1.alt_key() {
                 mod_list.push("Alt");
             }
-            if self.1.ctrl() {
+            if self.1.control_key() {
                 mod_list.push("Ctrl");
             }
-            if self.1.logo() {
+            if self.1.super_key() {
                 mod_list.push("Os");
             }
-            if self.1.shift() {
+            if self.1.shift_key() {
                 mod_list.push("Shift");
             }
 
@@ -134,9 +134,15 @@ impl fmt::Display for ModifiedKey {
     }
 }
 
-impl From<VirtKey> for ModifiedKey {
-    fn from(keycode: VirtKey) -> Self {
-        Self(Key::from(keycode), ModifiersState::empty())
+impl From<NamedKey> for ModifiedKey {
+    fn from(named: NamedKey) -> Self {
+        Self(Key::from(named), ModifiersState::empty())
+    }
+}
+
+impl From<Key> for ModifiedKey {
+    fn from(key: Key) -> Self {
+        Self(key, ModifiersState::empty())
     }
 }
 
@@ -171,9 +177,15 @@ impl KeyCombo {
     }
 }
 
-impl From<VirtKey> for KeyCombo {
-    fn from(key_code: VirtKey) -> Self {
-        KeyCombo(vec![ModifiedKey::from(key_code)])
+impl From<NamedKey> for KeyCombo {
+    fn from(named: NamedKey) -> Self {
+        KeyCombo(vec![ModifiedKey::from(named)])
+    }
+}
+
+impl From<Key> for KeyCombo {
+    fn from(key: Key) -> Self {
+        KeyCombo(vec![ModifiedKey::from(key)])
     }
 }
 
@@ -278,19 +290,11 @@ impl KeyCombos {
     /// Processes a modified key and emits the corresponding action if this completes a keycombo
     pub fn munch(&mut self, modified_key: ModifiedKey) -> Option<Action> {
         // We ignore modifier keys since they aren't considered part of combos
-        if let Key::Resolved(key) = &modified_key.0 {
-            if [
-                VirtKey::LAlt,
-                VirtKey::RAlt,
-                VirtKey::LControl,
-                VirtKey::RControl,
-                VirtKey::LWin,
-                VirtKey::RWin,
-                VirtKey::LShift,
-                VirtKey::RShift,
-            ]
-            .contains(key)
-            {
+        if let Key::Named(named) = &modified_key.0 {
+            if matches!(
+                named,
+                NamedKey::Alt | NamedKey::Control | NamedKey::Super | NamedKey::Shift
+            ) {
                 return None;
             }
         }

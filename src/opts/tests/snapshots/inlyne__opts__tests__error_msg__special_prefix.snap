@@ -4,5 +4,5 @@ description: "\n[keybindings]\nbase = [\n    [\"ToBottom\", { key = \"Space\", m
 expression: err
 ---
 A keycombo starts with another keycombo making it unreachable
-	Combo: <Ctrl+Shift+Space><Enter><scan code: 39>
+	Combo: <Ctrl+Shift+Space><Enter><scancode:39>
 	Prefix: <Ctrl+Shift+Space>
