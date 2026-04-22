@@ -143,6 +143,8 @@ pub struct Inlyne {
     element_queue: Arc<Mutex<Vec<Element>>>,
     elements: Vec<Positioned<Element>>,
     lines_to_scroll: f32,
+    font_size: f32,
+    line_height_mult: f32,
     image_cache: ImageCache,
     interpreter_sender: mpsc::Sender<String>,
     keycombos: KeyCombos,
@@ -193,6 +195,10 @@ impl Inlyne {
         let md_string = read_to_string(&file_path)
             .with_context(|| format!("Could not read file at '{}'", file_path.display()))?;
 
+        let lines_to_scroll = opts.lines_to_scroll;
+        let font_size = opts.font_size;
+        let line_height_mult = opts.line_height_mult;
+
         let interpreter = HtmlInterpreter::new(
             window.clone(),
             element_queue.clone(),
@@ -202,14 +208,14 @@ impl Inlyne {
             image_cache.clone(),
             event_loop.create_proxy(),
             opts.color_scheme,
+            font_size,
+            line_height_mult,
         );
 
         let (interpreter_sender, interpreter_receiver) = channel();
         std::thread::spawn(move || interpreter.interpret_md(interpreter_receiver));
 
         interpreter_sender.send(md_string)?;
-
-        let lines_to_scroll = opts.lines_to_scroll;
 
         let watcher = Watcher::spawn(event_loop.create_proxy(), file_path.clone());
 
@@ -223,6 +229,8 @@ impl Inlyne {
             element_queue,
             elements: Vec::new(),
             lines_to_scroll,
+            font_size,
+            line_height_mult,
             interpreter_sender,
             image_cache,
             keycombos,
@@ -345,6 +353,8 @@ impl Inlyne {
                         MouseScrollDelta::LineDelta(_, y_delta) => Self::scroll_lines(
                             &mut self.renderer,
                             &self.window,
+                            self.font_size,
+                            self.line_height_mult,
                             self.lines_to_scroll,
                             y_delta,
                         ),
@@ -557,6 +567,8 @@ impl Inlyne {
                                     Self::scroll_lines(
                                         &mut self.renderer,
                                         &self.window,
+                                        self.font_size,
+                                        self.line_height_mult,
                                         self.lines_to_scroll,
                                         lines,
                                     )
@@ -658,10 +670,12 @@ impl Inlyne {
     fn scroll_lines(
         renderer: &mut Renderer,
         window: &Window,
+        font_size: f32,
+        line_height_mult: f32,
         lines_to_scroll: f32,
         num_lines: f32,
     ) {
-        let num_pixels = num_lines * 16.0 * lines_to_scroll * renderer.hidpi_scale * renderer.zoom;
+        let num_pixels = num_lines * font_size * line_height_mult * lines_to_scroll * renderer.hidpi_scale * renderer.zoom;
         Self::scroll_pixels(renderer, window, num_pixels);
     }
 

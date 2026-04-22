@@ -104,6 +104,8 @@ impl HtmlInterpreter {
         image_cache: ImageCache,
         event_proxy: EventLoopProxy<InlyneEvent>,
         color_scheme: Option<ResolvedTheme>,
+        font_size: f32,
+        line_height_mult: f32,
     ) -> Self {
         let live_window = LiveWindow {
             window,
@@ -117,6 +119,8 @@ impl HtmlInterpreter {
             image_cache,
             Arc::new(Mutex::new(live_window)),
             color_scheme,
+            font_size,
+            line_height_mult,
         )
     }
 
@@ -130,6 +134,8 @@ impl HtmlInterpreter {
         image_cache: ImageCache,
         window: Arc<Mutex<dyn WindowInteractor + Send>>,
         color_scheme: Option<ResolvedTheme>,
+        font_size: f32,
+        line_height_mult: f32,
     ) -> Self {
         let ast = Ast::new(
             AstOpts {
@@ -140,6 +146,8 @@ impl HtmlInterpreter {
                 image_cache,
                 window: Arc::clone(&window),
                 color_scheme,
+                font_size,
+                line_height_mult,
             },
             element_queue,
         );

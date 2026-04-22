@@ -20,6 +20,16 @@ theme = "Auto"
 # lines-to-scroll = 4.5
 lines-to-scroll = 3.0
 
+# Font size
+# Example:
+# font-size = 18.0
+# Default: 16.0
+
+# Line height
+# Example:
+# line-height = 1.5
+# Default: 1.1
+
 # [window]
 # position = [500, 200] #[x, y]
 # size = [600, 500] #[width, height]

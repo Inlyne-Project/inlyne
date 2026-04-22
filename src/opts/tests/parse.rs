@@ -38,6 +38,8 @@ impl Opts {
             page_width: None,
             font_opts: FontOptions::default(),
             lines_to_scroll: LinesToScroll::default().0,
+            font_size: 16.0,
+            line_height_mult: 1.1,
             keybindings: Default::default(),
             color_scheme: None,
             metrics: Default::default(),
