@@ -77,6 +77,8 @@ struct InterpreterOpts {
     theme: Theme,
     fail_after: Duration,
     color_scheme: Option<ResolvedTheme>,
+    font_size: f32,
+    line_height_mult: f32,
 }
 
 impl Default for InterpreterOpts {
@@ -85,6 +87,8 @@ impl Default for InterpreterOpts {
             theme: Theme::light_default(),
             fail_after: Duration::from_secs(8),
             color_scheme: None,
+            font_size: 16.0,
+            line_height_mult: 1.1,
         }
     }
 }
@@ -114,6 +118,8 @@ impl InterpreterOpts {
             theme,
             fail_after: _,
             color_scheme,
+            font_size,
+            line_height_mult,
         } = self;
         let element_queue = Arc::default();
         let surface_format = TextureFormat::Bgra8UnormSrgb;
@@ -128,6 +134,8 @@ impl InterpreterOpts {
             image_cache,
             window,
             color_scheme,
+            font_size,
+            line_height_mult,
         );
 
         (interpreter, element_queue)
