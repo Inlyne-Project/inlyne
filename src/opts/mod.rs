@@ -67,6 +67,8 @@ pub struct Opts {
     pub scale: Option<f32>,
     pub page_width: Option<f32>,
     pub lines_to_scroll: f32,
+    pub font_size: f32,
+    pub line_height_mult: f32,
     pub font_opts: FontOptions,
     pub keybindings: KeybindingsSection,
     pub color_scheme: Option<ResolvedTheme>,
@@ -110,6 +112,8 @@ impl Opts {
             scale: config_scale,
             page_width: config_page_width,
             lines_to_scroll,
+            font_size: config_font_size,
+            line_height: config_line_height_mult,
             light_theme,
             dark_theme,
             font_options,
@@ -124,6 +128,8 @@ impl Opts {
             decorations,
             scale: args_scale,
             config: _,
+            font_size: args_font_size,
+            line_height: args_line_height_mult,
             page_width: args_page_width,
             size: v_size,
             position: v_position,
@@ -158,6 +164,8 @@ impl Opts {
         let font_opts = font_options.unwrap_or_default();
         let page_width = args_page_width.or(config_page_width);
         let lines_to_scroll = lines_to_scroll.into();
+        let font_size = args_font_size.or(config_font_size).unwrap_or(16.0);
+        let line_height_mult = args_line_height_mult.or(config_line_height_mult).unwrap_or(1.1);
 
         let (position, size) = if let Some(window) = window {
             (v_position.or(window.position), v_size.or(window.size))
@@ -172,6 +180,8 @@ impl Opts {
             scale,
             page_width,
             lines_to_scroll,
+            font_size,
+            line_height_mult,
             font_opts,
             keybindings,
             color_scheme: resolved_theme,
@@ -206,6 +216,16 @@ impl Opts {
         if let Some(page_width) = current_args.page_width {
             args.push("-w".to_owned());
             args.push(page_width.to_string());
+        }
+
+        if let Some(font_size) = current_args.font_size {
+            args.push("--font-size".to_owned());
+            args.push(font_size.to_string());
+        }
+
+        if let Some(line_height) = current_args.line_height {
+            args.push("--line-height".to_owned());
+            args.push(line_height.to_string());
         }
 
         args

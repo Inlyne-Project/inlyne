@@ -58,6 +58,7 @@ impl TextBoxMeasure {
 #[debug(skip_defaults)]
 pub struct TextBox {
     pub font_size: f32,
+    pub line_height_mult: f32,
     pub align: Align,
     pub indent: f32,
     pub padding_height: f32,
@@ -81,6 +82,7 @@ impl Default for TextBox {
         Self {
             indent: 0.0,
             font_size: 16.0,
+            line_height_mult: 1.1,
             texts: Vec::new(),
             is_code_block: false,
             is_quote_block: None,
@@ -162,7 +164,7 @@ impl TextBox {
     }
 
     pub fn line_height(&self, zoom: f32) -> f32 {
-        self.font_size * 1.1 * self.hidpi_scale * zoom
+        self.font_size * self.line_height_mult * self.hidpi_scale * zoom
     }
 
     pub fn key(&self, bounds: Size, zoom: f32) -> Key<'_> {

@@ -106,6 +106,8 @@ pub struct Config {
     pub light_theme: Option<OptionalTheme>,
     pub dark_theme: Option<OptionalTheme>,
     pub font_options: Option<FontOptions>,
+    pub font_size: Option<f32>,
+    pub line_height: Option<f32>,
     pub keybindings: KeybindingsSection,
     pub debug: DebugSection,
     pub window: Option<Window>,

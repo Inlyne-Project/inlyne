@@ -82,7 +82,7 @@ impl Push<Element> for Vec<Element> {
         self.push_element(Spacer::invisible())
     }
     fn push_text_box(&mut self, global: &Static, element: &mut TextBox, state: State) {
-        let mut tb = std::mem::replace(element, TextBox::new(vec![], global.opts.hidpi_scale));
+        let mut tb = std::mem::replace(element, global.opts.default_text_box(vec![]));
         element.indent = state.global_indent;
 
         if !tb.texts.is_empty() {
@@ -144,6 +144,8 @@ impl Push<Element> for Dummy {
 pub struct AstOpts {
     pub anchorizer: Mutex<Anchorizer>,
     pub theme: Theme,
+    pub font_size: f32,
+    pub line_height_mult: f32,
     pub hidpi_scale: f32,
     pub surface_format: TextureFormat,
 
@@ -155,6 +157,16 @@ pub struct AstOpts {
 impl AstOpts {
     fn native_color(&self, color: u32) -> [f32; 4] {
         native_color(color, &self.surface_format)
+    }
+
+    fn default_text_box(&self, texts: Vec<Text>) -> TextBox {
+        TextBox {
+            texts,
+            font_size: self.font_size,
+            line_height_mult: self.line_height_mult,
+            hidpi_scale: self.hidpi_scale,
+            ..Default::default()
+        }
     }
 }
 
@@ -185,7 +197,7 @@ impl Ast {
             .filter_map(|ton| match ton {
                 TextOrHirNode::Hir(node) => {
                     let mut out = vec![];
-                    let mut tb = TextBox::new(vec![], self.opts.hidpi_scale);
+                    let mut tb = global.opts.default_text_box(vec![]);
                     let state = State::Borrowed(&state);
                     FlowProcess::process(
                         &global,
@@ -204,7 +216,7 @@ impl Ast {
                     let hidpi_scale = self.opts.hidpi_scale;
                     let color = global.opts.native_color(global.opts.theme.text_color);
                     let paragraph = Text::new(text, hidpi_scale, color);
-                    let text_box = TextBox::new(vec![paragraph], self.opts.hidpi_scale);
+                    let text_box = global.opts.default_text_box(vec![paragraph]);
                     self.elements.lock().push(text_box.into());
                     None
                 }
@@ -364,7 +376,7 @@ trait Process {
             }
 
             if state.text_options.small {
-                element.font_size = 12.;
+                element.font_size *= 0.75;
             }
             element.texts.push(text);
         }
@@ -636,7 +648,7 @@ impl Process for DetailsProcess {
         *section.hidden.get_mut() = true;
 
         let mut content = node.content.iter();
-        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
+        let mut tb = global.opts.default_text_box(vec![]);
 
         let Some(first) = node.content.first() else {
             return;
@@ -658,14 +670,14 @@ impl Process for DetailsProcess {
                 *section.summary = Some(Positioned::new(tb));
             }
             _ => {
-                let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
+                let mut tb = global.opts.default_text_box(vec![]);
                 Self::text(global, &mut tb, state.borrow(), "Details");
                 *section.summary = Some(Positioned::new(Element::TextBox(tb)))
             }
         }
 
         let mut section_content: Vec<Element> = vec![];
-        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
+        let mut tb = global.opts.default_text_box(vec![]);
 
         FlowProcess::process_content(
             global,
@@ -1024,7 +1036,7 @@ impl Process for TableCellProcess {
             state.text_options.bold = true;
         }
 
-        let mut tb = TextBox::new(vec![], global.opts.hidpi_scale);
+        let mut tb = global.opts.default_text_box(vec![]);
         tb.set_align_or_default(state.text_options.align);
 
         FlowProcess::process_content(

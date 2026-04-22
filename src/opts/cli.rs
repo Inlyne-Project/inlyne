@@ -152,6 +152,14 @@ pub struct View {
     /// Size of the opened window <width>x<height>
     #[arg(long = "win-size", value_parser = value_parser!(Size))]
     pub size: Option<Size>,
+
+    /// Font size [default: 16]
+    #[arg(long = "font-size")]
+    pub font_size: Option<f32>,
+
+    /// Line height [default: 1.1]
+    #[arg(long = "line-height")]
+    pub line_height: Option<f32>,
 }
 
 /// Configuration related things
