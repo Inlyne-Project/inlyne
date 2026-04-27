@@ -814,6 +814,62 @@ fn find_image(elements: &[Element]) -> Option<&Image> {
     })
 }
 
+const MERMAID_FLOWCHART: &str = "\
+```mermaid
+flowchart TD
+  A[Start] --> B[Done]
+```
+";
+
+#[cfg(feature = "mermaid")]
+const INVALID_MERMAID: &str = "\
+```mermaid
+this is not a mermaid diagram
+```
+";
+
+#[cfg(feature = "mermaid")]
+#[test]
+fn mermaid_code_block_renders_image() {
+    log::init();
+
+    let elems = interpret_md(MERMAID_FLOWCHART);
+    let image = find_image(&elems).expect("Mermaid code block should render as image");
+    let image_data = image.image_data.lock();
+    let image_data = image_data.as_ref().expect("Mermaid image data");
+    assert!(!image_data.to_bytes().is_empty());
+}
+
+#[cfg(feature = "mermaid")]
+#[test]
+fn invalid_mermaid_code_block_stays_readable() {
+    log::init();
+
+    let elems = interpret_md(INVALID_MERMAID);
+    assert!(find_image(&elems).is_none());
+    let code_blocks = elems
+        .iter()
+        .filter_map(elem_as_text_box)
+        .filter(|text_box| text_box.is_code_block)
+        .count();
+    assert_eq!(code_blocks, 1);
+}
+
+#[cfg(not(feature = "mermaid"))]
+#[test]
+fn mermaid_code_block_without_feature_stays_code_block() {
+    log::init();
+
+    let elems = interpret_md(MERMAID_FLOWCHART);
+    assert!(find_image(&elems).is_none());
+    let code_blocks = elems
+        .iter()
+        .filter_map(elem_as_text_box)
+        .filter(|text_box| text_box.is_code_block)
+        .count();
+    assert_eq!(code_blocks, 1);
+}
+
 #[test]
 fn centered_image_with_size_align_and_link() {
     log::init();

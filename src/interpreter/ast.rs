@@ -1,4 +1,6 @@
 use crate::color::{native_color, Theme};
+#[cfg(feature = "mermaid")]
+use crate::image::ImageData;
 use crate::image::{Image, ImageSize};
 use crate::interpreter::hir::{Hir, HirNode, TextOrHirNode};
 use crate::interpreter::html::attr::PrefersColorScheme;
@@ -528,6 +530,24 @@ impl Process for FlowProcess {
             }
             TagName::PreformattedText => {
                 output.push_text_box(global, element, state.borrow());
+                #[cfg(feature = "mermaid")]
+                if let Some(source) = mermaid_source(global, node) {
+                    match render_mermaid_image(global, &source) {
+                        Ok(image) => {
+                            output.push_element(
+                                image.with_align(state.text_options.align.unwrap_or_default()),
+                            );
+                            output.push_spacer();
+                            return;
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                "Failed rendering Mermaid diagram. Falling back to code block. Error: {err}"
+                            );
+                        }
+                    }
+                }
+
                 let style = attributes
                     .iter()
                     .find_map(|attr| attr.to_style())
@@ -617,6 +637,58 @@ impl Process for FlowProcess {
                         output,
                     );
                 }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "mermaid")]
+fn render_mermaid_image(global: &Static, source: &str) -> anyhow::Result<Image> {
+    let svg = crate::mermaid::render_svg(source)?;
+    let image_data = ImageData::load_svg(svg.as_bytes(), global.opts.hidpi_scale)?;
+    Ok(Image::from_image_data(
+        Arc::new(Mutex::new(Some(image_data))),
+        global.opts.hidpi_scale,
+    ))
+}
+
+#[cfg(feature = "mermaid")]
+fn mermaid_source(global: &Static, node: &HirNode) -> Option<String> {
+    if has_mermaid_class(&node.attributes) {
+        return Some(collect_text_content(global, &node.content));
+    }
+
+    node.content.iter().find_map(|child| {
+        let TextOrHirNode::Hir(index) = child else {
+            return None;
+        };
+        let child = global.input.get(*index);
+        (child.tag == TagName::Code && has_mermaid_class(&child.attributes))
+            .then(|| collect_text_content(global, &child.content))
+    })
+}
+
+#[cfg(feature = "mermaid")]
+fn has_mermaid_class(attributes: &[Attr]) -> bool {
+    attributes
+        .iter()
+        .any(|attr| attr.has_class("mermaid") || attr.has_class("language-mermaid"))
+}
+
+#[cfg(feature = "mermaid")]
+fn collect_text_content(global: &Static, content: &[TextOrHirNode]) -> String {
+    let mut out = String::new();
+    collect_text_content_into(global, content, &mut out);
+    out
+}
+
+#[cfg(feature = "mermaid")]
+fn collect_text_content_into(global: &Static, content: &[TextOrHirNode], out: &mut String) {
+    for node in content {
+        match node {
+            TextOrHirNode::Text(text) => out.push_str(text),
+            TextOrHirNode::Hir(index) => {
+                collect_text_content_into(global, &global.input.get(*index).content, out)
             }
         }
     }

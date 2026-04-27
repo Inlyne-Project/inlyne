@@ -24,6 +24,7 @@ impl Iterator for Iter<'_> {
                 local_name!("id") => Some(Attr::Anchor(format!("#{value}"))),
                 local_name!("width") => value.parse().ok().map(Attr::Width),
                 local_name!("height") => value.parse().ok().map(Attr::Height),
+                local_name!("class") => Some(Attr::Class(value.to_string())),
                 local_name!("src") => Some(Attr::Src(value.to_string())),
                 local_name!("start") => value.parse().ok().map(Attr::Start),
                 local_name!("style") => Some(Attr::Style(value.to_string())),
@@ -50,6 +51,8 @@ pub enum Attr {
     Anchor(String),
     Width(Px),
     Height(Px),
+    #[cfg_attr(not(feature = "mermaid"), allow(dead_code))]
+    Class(String),
     Src(String),
     Start(usize),
     Style(String),
@@ -79,6 +82,16 @@ impl Attr {
             Some(name.to_owned())
         } else {
             None
+        }
+    }
+    #[cfg_attr(not(feature = "mermaid"), allow(dead_code))]
+    pub fn has_class(&self, class_name: &str) -> bool {
+        if let Self::Class(classes) = self {
+            classes
+                .split_ascii_whitespace()
+                .any(|class| class == class_name)
+        } else {
+            false
         }
     }
 }

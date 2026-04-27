@@ -15,7 +15,7 @@ authors = [
 ]
 license = "MIT"
 repository = "https://github.com/Inlyne-Project/inlyne"
-rust-version = "1.81.0"
+rust-version = "1.85.0"
 exclude = [
     "/ci/*",
     "/.github/*",
@@ -27,6 +27,7 @@ categories = ["gui"]
 
 [features]
 default = ["wayland", "x11"]
+mermaid = ["dep:mermaid-rs-renderer"]
 x11 = ["copypasta/x11", "winit/x11"]
 wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita"]
 
@@ -130,6 +131,12 @@ features = ["fontconfig"]
 [dependencies.indexmap]
 version = "2.7.1"
 features = ["serde"]
+
+# Browserless Mermaid rendering
+[dependencies.mermaid-rs-renderer]
+version = "0.2.2"
+default-features = false
+optional = true
 
 # Metrics helpers used for our custom metric logger
 [dependencies.metrics-util]

@@ -1,2 +1,6 @@
 /target
 /flamegraph.svg
+
+# RustRover / JetBrains IDE metadata
+/.idea/
+*.iml

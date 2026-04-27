@@ -18,6 +18,8 @@ pub mod history;
 pub mod image;
 pub mod interpreter;
 mod keybindings;
+#[cfg(feature = "mermaid")]
+mod mermaid;
 mod metrics;
 pub mod opts;
 mod panic_hook;

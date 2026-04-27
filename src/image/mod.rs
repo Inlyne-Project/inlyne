@@ -82,6 +82,34 @@ impl ImageData {
         })
     }
 
+    pub fn load_svg(bytes: &[u8], hidpi_scale: f32) -> anyhow::Result<Self> {
+        let opt = usvg::Options::default();
+        let mut tree = usvg::Tree::from_data(bytes, &opt)?;
+        let scaled_size = tiny_skia::Size::from_wh(
+            tree.size.width() * hidpi_scale,
+            tree.size.height() * hidpi_scale,
+        )
+        .context("SVG image dimensions are invalid")?;
+        tree.size = tree.size.scale_to(scaled_size);
+
+        static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
+        let fontdb = FONTDB.get_or_init(|| {
+            let mut db = fontdb::Database::new();
+            db.load_system_fonts();
+            db
+        });
+        tree.postprocess(Default::default(), fontdb);
+
+        let mut pixmap =
+            tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
+                .context("Couldn't create svg pixmap")?;
+        resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+
+        let image = ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
+            .context("Svg buffer has invalid dimensions")?;
+        Ok(ImageData::new(image, false))
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         decode::lz4_decompress(&self.lz4_blob, self.rgba_image_byte_size())
             .expect("Size matches and I/O is in memory")
@@ -279,47 +307,20 @@ impl Image {
 
             let image = if let Ok(image) = ImageData::load(&image_data, true) {
                 image
+            } else if let Ok(image) = ImageData::load_svg(&image_data, hidpi_scale) {
+                image
             } else {
-                let opt = usvg::Options::default();
                 // TODO: yes all of this image loading is very messy and could use a refactor
-                let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
-                    tracing::warn!(
-                        "Failed loading image:\n- src: {}\n- src_path: {}",
-                        src,
-                        src_path.display()
-                    );
-                    let image =
-                        ImageData::load(include_bytes!("../../assets/img/broken.png"), false)
-                            .unwrap();
-                    *image_data_clone.lock() = Some(image);
-                    image_callback.loaded_image(src, image_data_clone);
-                    return;
-                };
-                tree.size = tree.size.scale_to(
-                    tiny_skia::Size::from_wh(
-                        tree.size.width() * hidpi_scale,
-                        tree.size.height() * hidpi_scale,
-                    )
-                    .unwrap(),
+                tracing::warn!(
+                    "Failed loading image:\n- src: {}\n- src_path: {}",
+                    src,
+                    src_path.display()
                 );
-                static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
-                let fontdb = FONTDB.get_or_init(|| {
-                    let mut db = fontdb::Database::new();
-                    db.load_system_fonts();
-                    db
-                });
-                tree.postprocess(Default::default(), fontdb);
-                let mut pixmap =
-                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
-                        .context("Couldn't create svg pixmap")
-                        .unwrap();
-                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-                ImageData::new(
-                    ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.data().into())
-                        .context("Svg buffer has invalid dimensions")
-                        .unwrap(),
-                    false,
-                )
+                let image =
+                    ImageData::load(include_bytes!("../../assets/img/broken.png"), false).unwrap();
+                *image_data_clone.lock() = Some(image);
+                image_callback.loaded_image(src, image_data_clone);
+                return;
             };
 
             *image_data_clone.lock() = Some(image);
