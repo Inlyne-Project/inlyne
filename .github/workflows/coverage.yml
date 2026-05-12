@@ -18,6 +18,8 @@ jobs:
           rustup update --no-self-update stable
           rustup default stable
           rustup component add llvm-tools-preview
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
