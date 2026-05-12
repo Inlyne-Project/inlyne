@@ -1,6 +1,4 @@
-use clap::{
-    builder::PossibleValue, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum,
-};
+use clap::{builder::PossibleValue, value_parser, Args as ClapArgs, Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
 use std::array;
 use std::path::PathBuf;
