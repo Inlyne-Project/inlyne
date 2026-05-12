@@ -13,11 +13,11 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v6
-      - name: Setup toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2024-10-20
-          components: llvm-tools-preview
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update nightly-2024-10-20
+          rustup default nightly-2024-10-20
+          rustup component add llvm-tools-preview
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage

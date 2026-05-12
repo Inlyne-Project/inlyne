@@ -37,10 +37,11 @@ jobs:
       shell: bash
       run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
+    - name: Install toolchain
+      run: |
+        rustup update --no-self-update stable
+        rustup default stable
+        rustup target add ${{ matrix.target }}
 
     - name: Build
       run: |
