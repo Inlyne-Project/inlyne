@@ -61,23 +61,3 @@ jobs:
 
       - name: Linting
         run: cargo clippy --workspace --no-default-features --features x11 -- --deny warnings
-
-  build-macos-arm:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        toolchain: [stable, beta]
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install target
-        run: |
-          rustup update --no-self-update ${{ matrix.toolchain }}
-          rustup default ${{ matrix.toolchain }}
-          rustup target add aarch64-apple-darwin
-
-      - name: Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        run: cargo build --target=aarch64-apple-darwin --no-default-features --features x11
