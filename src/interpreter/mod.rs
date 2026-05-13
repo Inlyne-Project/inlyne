@@ -15,7 +15,7 @@ use crate::{Element, ImageCache, InlyneEvent};
 use html::style::{FontStyle, FontWeight, TextDecoration};
 
 use crate::interpreter::ast::{Ast, AstOpts};
-use crate::interpreter::hir::Hir;
+use crate::interpreter::hir::HirWrapper;
 use html5ever::tendril::*;
 use html5ever::tokenizer::{BufferQueue, Tokenizer, TokenizerOpts};
 use parking_lot::Mutex;
@@ -148,10 +148,10 @@ impl HtmlInterpreter {
     }
 
     pub fn interpret_md(self, receiver: mpsc::Receiver<String>) {
-        let mut input = BufferQueue::default();
+        let input = BufferQueue::default();
 
         let code_highlighter = self.theme.code_highlighter.clone();
-        let mut tok = Tokenizer::new(Hir::new(), TokenizerOpts::default());
+        let mut tok = Tokenizer::new(HirWrapper::new(), TokenizerOpts::default());
 
         for md_string in receiver {
             tracing::debug!(
@@ -168,7 +168,7 @@ impl HtmlInterpreter {
                     .unwrap(),
             );
 
-            let _ = tok.feed(&mut input);
+            let _ = tok.feed(&input);
             assert!(input.is_empty());
             tok.end();
 

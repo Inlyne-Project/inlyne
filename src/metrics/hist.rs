@@ -3,7 +3,7 @@ use std::time::Duration;
 use super::{describe_histogram, Metric, Unit, SPAN_LEVEL};
 
 use metrics::{HistogramFn, Key, KeyName};
-use metrics_util::Summary;
+use metrics_util::storage::Summary;
 use parking_lot::Mutex;
 use tracing::{debug, info, span, trace};
 

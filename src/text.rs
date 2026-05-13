@@ -19,7 +19,6 @@ use crate::selection::{Selection, SelectionKind, SelectionMode};
 use crate::utils::{Align, Line, Point, Rect, Size};
 
 type KeyHash = u64;
-type HashBuilder = twox_hash::RandomXxHashBuilder64;
 
 pub struct TextBoxMeasure {
     pub textbox: Arc<TextBox>,
@@ -715,7 +714,7 @@ pub struct Key<'a> {
 pub struct TextCache {
     entries: FxHashMap<KeyHash, glyphon::Buffer>,
     recently_used: FxHashSet<KeyHash>,
-    hasher: HashBuilder,
+    hasher: twox_hash::xxhash64::RandomState,
 }
 
 impl TextCache {
