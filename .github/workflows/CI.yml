@@ -15,7 +15,6 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
-        toolchain: [stable, beta]
 
     runs-on: ${{ matrix.os }}
 
@@ -24,8 +23,8 @@ jobs:
 
       - name: Install toolchain
         run: |
-          rustup update --no-self-update ${{ matrix.toolchain }}
-          rustup default ${{ matrix.toolchain }}
+          rustup update --no-self-update stable
+          rustup default stable
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
