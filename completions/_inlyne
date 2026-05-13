@@ -14,27 +14,226 @@ _inlyne() {
     fi
 
     local context curcontext="$curcontext" state line
-    _arguments "${_arguments_options[@]}" \
-'-t+[Theme to use when rendering]: :(auto dark light)' \
-'--theme=[Theme to use when rendering]: :(auto dark light)' \
-'-s+[Factor to scale rendered file by \[default\: OS defined window scale factor\]]: : ' \
-'--scale=[Factor to scale rendered file by \[default\: OS defined window scale factor\]]: : ' \
-'-c+[Configuration file to use]: :_files' \
-'--config=[Configuration file to use]: :_files' \
-'-w+[Maximum width of page in pixels]: : ' \
-'--page-width=[Maximum width of page in pixels]: : ' \
+    _arguments "${_arguments_options[@]}" : \
+'-t+[Theme to use when rendering]:THEME:(auto dark light)' \
+'--theme=[Theme to use when rendering]:THEME:(auto dark light)' \
+'-d+[Enable decorations]:DECORATIONS:(true false)' \
+'--decorations=[Enable decorations]:DECORATIONS:(true false)' \
+'-s+[Factor to scale rendered file by \[default\: OS defined window scale factor\]]:SCALE:_default' \
+'--scale=[Factor to scale rendered file by \[default\: OS defined window scale factor\]]:SCALE:_default' \
+'-c+[Configuration file to use]:CONFIG:_files' \
+'--config=[Configuration file to use]:CONFIG:_files' \
+'-w+[Maximum width of page in pixels]:PAGE_WIDTH:_default' \
+'--page-width=[Maximum width of page in pixels]:PAGE_WIDTH:_default' \
+'-p+[Position of the opened window <x>,<y>]:POSITION:_default' \
+'--win-pos=[Position of the opened window <x>,<y>]:POSITION:_default' \
+'--win-size=[Size of the opened window <width>x<height>]:SIZE:_default' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
 '--version[Print version]' \
-':file -- Path to the markdown file:_files' \
+':file_path -- Path to the markdown file:_files' \
+":: :_inlyne_commands" \
+"*::: :->xtask" \
 && ret=0
+    case $state in
+    (xtask)
+        words=($line[2] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:inlyne-command-$line[2]:"
+        case $line[2] in
+            (view)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Theme to use when rendering]:THEME:(auto dark light)' \
+'--theme=[Theme to use when rendering]:THEME:(auto dark light)' \
+'-d+[Enable decorations]:DECORATIONS:(true false)' \
+'--decorations=[Enable decorations]:DECORATIONS:(true false)' \
+'-s+[Factor to scale rendered file by \[default\: OS defined window scale factor\]]:SCALE:_default' \
+'--scale=[Factor to scale rendered file by \[default\: OS defined window scale factor\]]:SCALE:_default' \
+'-c+[Configuration file to use]:CONFIG:_files' \
+'--config=[Configuration file to use]:CONFIG:_files' \
+'-w+[Maximum width of page in pixels]:PAGE_WIDTH:_default' \
+'--page-width=[Maximum width of page in pixels]:PAGE_WIDTH:_default' \
+'-p+[Position of the opened window <x>,<y>]:POSITION:_default' \
+'--win-pos=[Position of the opened window <x>,<y>]:POSITION:_default' \
+'--win-size=[Size of the opened window <width>x<height>]:SIZE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file_path -- Path to the markdown file:_files' \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_inlyne__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:inlyne-config-command-$line[1]:"
+        case $line[1] in
+            (open)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_inlyne__subcmd__config__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:inlyne-config-help-command-$line[1]:"
+        case $line[1] in
+            (open)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_inlyne__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:inlyne-help-command-$line[1]:"
+        case $line[1] in
+            (view)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+":: :_inlyne__subcmd__help__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:inlyne-help-config-command-$line[1]:"
+        case $line[1] in
+            (open)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
 }
 
 (( $+functions[_inlyne_commands] )) ||
 _inlyne_commands() {
-    local commands; commands=()
+    local commands; commands=(
+'view:View a markdown file with inlyne' \
+'config:Configuration related things' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
     _describe -t commands 'inlyne commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__config_commands] )) ||
+_inlyne__subcmd__config_commands() {
+    local commands; commands=(
+'open:Opens the configuration file in the default text editor' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'inlyne config commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__config__subcmd__help_commands] )) ||
+_inlyne__subcmd__config__subcmd__help_commands() {
+    local commands; commands=(
+'open:Opens the configuration file in the default text editor' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'inlyne config help commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__config__subcmd__help__subcmd__help_commands] )) ||
+_inlyne__subcmd__config__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne config help help commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__config__subcmd__help__subcmd__open_commands] )) ||
+_inlyne__subcmd__config__subcmd__help__subcmd__open_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne config help open commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__config__subcmd__open_commands] )) ||
+_inlyne__subcmd__config__subcmd__open_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne config open commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__help_commands] )) ||
+_inlyne__subcmd__help_commands() {
+    local commands; commands=(
+'view:View a markdown file with inlyne' \
+'config:Configuration related things' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'inlyne help commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__help__subcmd__config_commands] )) ||
+_inlyne__subcmd__help__subcmd__config_commands() {
+    local commands; commands=(
+'open:Opens the configuration file in the default text editor' \
+    )
+    _describe -t commands 'inlyne help config commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__help__subcmd__config__subcmd__open_commands] )) ||
+_inlyne__subcmd__help__subcmd__config__subcmd__open_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne help config open commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__help__subcmd__help_commands] )) ||
+_inlyne__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne help help commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__help__subcmd__view_commands] )) ||
+_inlyne__subcmd__help__subcmd__view_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne help view commands' commands "$@"
+}
+(( $+functions[_inlyne__subcmd__view_commands] )) ||
+_inlyne__subcmd__view_commands() {
+    local commands; commands=()
+    _describe -t commands 'inlyne view commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_inlyne" ]; then
