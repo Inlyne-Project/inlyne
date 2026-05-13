@@ -1,3 +1,65 @@
+# 0.5.1 - 2026-05-13
+
+## Features
+
+- Percent decode URLs ([#390])
+- Make window decorations optional and use better client side decorations on Wayland ([#395])
+  - This includes the `-d --decorations` flag to control decorations
+- Bold table headers ([#402])
+
+## Fixes
+
+- Handle `wpu::SurfaceError` gracefully during rendering ([#419])
+
+## Documentation
+
+- Use the `view` subcommand in our README headline example ([#416])
+- Add a `CHANGELOG.md` ([#446])
+
+## Internal
+
+- Trivial dependency updates ([#389])
+- Dependabot CI action bumps (too many to care) 
+- Switch from `std::sync::Mutex` -> `parking_lot::Mutex` ([#399])
+- Replace `VecDeque` with `Vec` ([#401])
+- Fix recent CI failures ([#411])
+- Update `dark-light` dependency and log errors ([#412])
+- Fix typo in panic hook message ([#420])
+- Update metrics crate and remove unused import ([#429])
+- Run `$ cargo fmt` ([#440])
+- Give CI a bot of a refresher ([#441])
+- Update most dependencies ([#443])
+- Migrate to `$GITHUB_OUTPUT` in CI ([#444])
+
+## Contributors
+
+A huge thanks to our contributors
+
+- @CosmicHorrorDev
+- @kokoISnoTarget
+- @Koranir
+- @slowsage
+- @glls
+- @mrmodolo
+
+[#389]: https://github.com/Inlyne-Project/inlyne/pull/389
+[#390]: https://github.com/Inlyne-Project/inlyne/pull/390
+[#395]: https://github.com/Inlyne-Project/inlyne/pull/395
+[#399]: https://github.com/Inlyne-Project/inlyne/pull/399
+[#401]: https://github.com/Inlyne-Project/inlyne/pull/401
+[#402]: https://github.com/Inlyne-Project/inlyne/pull/402
+[#411]: https://github.com/Inlyne-Project/inlyne/pull/411
+[#412]: https://github.com/Inlyne-Project/inlyne/pull/412
+[#416]: https://github.com/Inlyne-Project/inlyne/pull/416
+[#419]: https://github.com/Inlyne-Project/inlyne/pull/419
+[#420]: https://github.com/Inlyne-Project/inlyne/pull/420
+[#429]: https://github.com/Inlyne-Project/inlyne/pull/429
+[#440]: https://github.com/Inlyne-Project/inlyne/pull/440
+[#441]: https://github.com/Inlyne-Project/inlyne/pull/441
+[#443]: https://github.com/Inlyne-Project/inlyne/pull/443
+[#444]: https://github.com/Inlyne-Project/inlyne/pull/444
+[#446]: https://github.com/Inlyne-Project/inlyne/pull/446
+
 # 0.5.0 - 2025-02-02
 
 Another breaking release with the highlight this time being the introduction of new subcommands! The existing functionality of calling `inlyne <FILE>` is still preserved as long as it doesn't conflict with an existing subcommand. You can use the new `inlyne view <FILE>` subcommand to **unambiguously** view a file
