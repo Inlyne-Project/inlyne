@@ -1,6 +1,6 @@
 use crate::color::{native_color, Theme};
 use crate::image::{Image, ImageSize};
-use crate::interpreter::hir::{Hir, HirNode, TextOrHirNode};
+use crate::interpreter::hir::{HirNode, HirWrapper, TextOrHirNode};
 use crate::interpreter::html::attr::PrefersColorScheme;
 use crate::interpreter::html::picture::Builder;
 use crate::interpreter::html::style::{FontStyle, FontWeight, Style, TextDecoration};
@@ -166,7 +166,7 @@ impl Ast {
     pub fn new(opts: AstOpts, elements: Arc<Mutex<Vec<Element>>>) -> Self {
         Self { opts, elements }
     }
-    pub fn interpret(&self, hir: Hir) {
+    pub fn interpret(&self, hir: HirWrapper) {
         let mut nodes = hir.content();
 
         assert!(!nodes.is_empty(), "Hir should contain root");

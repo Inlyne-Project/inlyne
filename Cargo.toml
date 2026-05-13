@@ -50,7 +50,7 @@ glyphon = "0.3"
 # Used to values used in YAML frontmatter when converting to HTML
 html-escape = "0.2.13"
 # Parsing the HTML document that the markdown+html was converted into
-html5ever = "0.27.0"
+html5ever = "0.31.0"
 # Provides some extra helpers that we use for our custom panic hook
 human-panic = "2.0.2"
 # Generic image decoding
@@ -91,9 +91,9 @@ tracing = "0.1.41"
 # Extra syntax and theme definitions for `syntect`
 two-face = "0.4.2"
 # More text hashing...
-twox-hash = "1.6.3"
+twox-hash = "2.1.2"
 # HTTP client for requesting images from urls
-ureq = "2.12.1"
+ureq = "3.3.0"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
 
@@ -133,9 +133,9 @@ features = ["serde"]
 
 # Metrics helpers used for our custom metric logger
 [dependencies.metrics-util]
-version = "0.18.0"
+version = "0.20.3"
 default-features = false
-features = ["registry", "summary"]
+features = ["registry", "storage"]
 
 # Debouncer that papers over some issues with various ways that editors save
 # files

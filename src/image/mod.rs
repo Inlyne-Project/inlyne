@@ -25,6 +25,7 @@ use image::{ImageBuffer, RgbaImage};
 use parking_lot::Mutex;
 use resvg::{tiny_skia, usvg};
 use smart_debug::SmartDebug;
+use ureq::http::header;
 use usvg::fontdb;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Device, TextureFormat};
@@ -428,12 +429,16 @@ pub fn http_get_image(url: &str) -> anyhow::Result<Vec<u8>> {
 
     const LIMIT: usize = 20 * 1_024 * 1_024;
 
-    let resp = ureq::get(url).set("User-Agent", USER_AGENT).call()?;
+    let resp = ureq::get(url)
+        .header(header::USER_AGENT, USER_AGENT)
+        .call()?;
     let len = resp
-        .header("Content-Length")
-        .and_then(|len| len.parse::<usize>().ok());
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|len| len.to_str().ok()?.parse::<usize>().ok());
     let mut body = Vec::with_capacity(len.unwrap_or(0).clamp(0, LIMIT));
-    resp.into_reader()
+    resp.into_body()
+        .into_reader()
         .take(u64::try_from(LIMIT).unwrap())
         .read_to_end(&mut body)?;
     Ok(body)

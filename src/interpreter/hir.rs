@@ -1,7 +1,10 @@
 use crate::interpreter::html::{self, Attr, TagName};
 use html5ever::tokenizer::{Tag, TagKind, Token, TokenSink, TokenSinkResult};
 use smart_debug::SmartDebug;
-use std::fmt::{Display, Formatter};
+use std::{
+    cell::RefCell,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Debug, Clone)]
 pub enum TextOrHirNode {
@@ -22,6 +25,25 @@ impl HirNode {
             attributes,
             content: vec![],
         }
+    }
+}
+
+// `RefCell` because the token sink uses `&self`, but we want to be mutable
+pub struct HirWrapper(RefCell<Hir>);
+
+impl HirWrapper {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn content(self) -> Vec<HirNode> {
+        self.0.into_inner().content()
+    }
+}
+
+impl Default for HirWrapper {
+    fn default() -> Self {
+        Self(RefCell::new(Hir::new()))
     }
 }
 
@@ -124,23 +146,25 @@ impl Hir {
     }
 }
 
-impl TokenSink for Hir {
+impl TokenSink for HirWrapper {
     type Handle = ();
 
-    fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
+    fn process_token(&self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
+        let mut hir = self.0.borrow_mut();
         match token {
             Token::TagToken(tag) => match tag.kind {
-                TagKind::StartTag => self.process_start_tag(tag),
-                TagKind::EndTag => self.process_end_tag(tag),
+                TagKind::StartTag => hir.process_start_tag(tag),
+                TagKind::EndTag => hir.process_end_tag(tag),
             },
-            Token::CharacterTokens(str) => self.on_text(str.to_string()),
-            Token::EOFToken => self.on_end(),
+            Token::CharacterTokens(s) => hir.on_text(s.to_string()),
+            Token::EOFToken => hir.on_end(),
             Token::ParseError(err) => tracing::warn!("HTML parser emitted error: {err}"),
             Token::DoctypeToken(_) | Token::CommentToken(_) | Token::NullCharacterToken => {}
         }
         TokenSinkResult::Continue
     }
 }
+
 impl Default for Hir {
     fn default() -> Self {
         Self::new()
