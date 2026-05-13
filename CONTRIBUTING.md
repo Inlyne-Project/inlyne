@@ -32,16 +32,20 @@ _If you're wondering 'Is this relevant to me?' Then the answer is probably no
 - [ ] Bump `version` in `Cargo.toml`
 - [ ] Propagate the change to `Cargo.lock`
   - `$ cargo check -p inlyne`
+- [ ] Run the test suite to update version-dependent snapshots
+  - `$ cargo test`
+  - If needed: `$ cargo insta review`
 - [ ] Optional: If making a breaking release update the `example.png` link in
   the README to point to the appropriate release branch
 - [ ] Update static assets
   - `$ cargo xtask gen`
 - [ ] Update `rust-version` in `Cargo.toml`
-  - `$ cargo msrv --min 1.60 -- cargo check`
+  - `$ cargo msrv find --min 1.80 -- cargo check`
+- [ ] Update the `CHANGELOG.md`
 - [ ] Merge changes through a PR or directly to make sure CI passes
-- [ ] Publish on crates.io
-  - `$ cargo publish`
 - [ ] Publish on GitHub by pushing a version tag
   - `$ git tag v{VERSION}` (make sure the branch you are on is up to date)
   - `$ git push upstream/origin v{VERSION}`
 - [ ] Make a release announcement on GitHub after the release workflow finishes
+- [ ] Publish on crates.io
+  - `$ cargo publish`

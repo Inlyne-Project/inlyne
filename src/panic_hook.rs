@@ -226,7 +226,7 @@ mod tests {
 
         | Name | `inlyne` |
         | ---: | :--- |
-        | Version | `0.5.1-beta` |
+        | Version | `0.5.1` |
         | Operating System | [REDACTED] |
 
         `````text
