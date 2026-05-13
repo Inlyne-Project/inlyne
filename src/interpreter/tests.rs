@@ -719,21 +719,21 @@ const BOLD_IN_CODEBLOCK: &str = "\
 fn bold_in_codeblock() {
     log::init();
 
-    let elems = interpret_md_with_opts(BOLD_IN_CODEBLOCK, ThemeDefaults::Zenburn.into());
+    let elems = interpret_md_with_opts(BOLD_IN_CODEBLOCK, ThemeDefaults::DarkNeon.into());
     let bold_3000 = elems
         .iter()
         .find_map(find_text_within_elem("3000"))
         .unwrap();
     assert_eq!(Styles::from(bold_3000), Styles::new().bold());
-    insta::assert_debug_snapshot!(bold_3000, @r###"
+    insta::assert_debug_snapshot!(bold_3000, @r#"
     Text {
         text: "3000",
         font_family: Monospace,
-        color: Some(Color { r: 0.24, g: 0.67, b: 0.67 }),
+        color: Some(Color { r: 1.00, g: 0.17, b: 0.98 }),
         style: BOLD ,
         ..
     }
-    "###);
+    "#);
 }
 
 const HANDLES_COMMA_IN_INFO_STR: &str = "\

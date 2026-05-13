@@ -807,7 +807,7 @@ fn main() -> anyhow::Result<()> {
                 edit::Builder::new()
                     .prefix("inlyne_temp")
                     .suffix(".toml")
-                    .keep(true),
+                    .disable_cleanup(true),
             )?;
 
             _ = Config::load_from_str(&new_config)?;

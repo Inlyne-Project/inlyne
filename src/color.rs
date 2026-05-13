@@ -257,6 +257,8 @@ impl From<ThemeDefaults> for EmbeddedThemeName {
             ThemeDefaults::SolarizedLight => Self::SolarizedLight,
             ThemeDefaults::SublimeSnazzy => Self::SublimeSnazzy,
             ThemeDefaults::TwoDark => Self::TwoDark,
+            // TODO(cosmic): remove in 0.6.0
+            #[allow(deprecated)]
             ThemeDefaults::VisualStudioDarkPlus => Self::VisualStudioDarkPlus,
             ThemeDefaults::Zenburn => Self::Zenburn,
         }
