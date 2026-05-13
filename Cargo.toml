@@ -33,7 +33,7 @@ wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita"]
 [dependencies]
 # `anstream` and `anstyle` are both terminal helper crates used for our custom
 # panic hook (and already used by `clap`, so it's a "free" dependency)
-anstream = "0.6.18"
+anstream = "1.0.0"
 anstyle = "1.0.10"
 # Easier error handling
 anyhow = "1.0.95"
@@ -58,7 +58,7 @@ image = "0.25.5"
 # 2D GPU graphics rendering
 lyon = "1.0.1"
 # Images are compressed to in-memory lz4 blobs
-lz4_flex = "0.11.3"
+lz4_flex = "0.13.1"
 # Generic metrics facade for our metrics recording/emission infra
 metrics = "0.24.1"
 # File event notifications for the live reloading feature
@@ -85,7 +85,7 @@ syntect = "5.2.0"
 # lacking HTML ones
 taffy = "0.3.19"
 # For parsing our config file
-toml = "0.8.19"
+toml = "1.1.2"
 # In application tracing (aka logging on steroids)
 tracing = "0.1.41"
 # Extra syntax and theme definitions for `syntect`
@@ -109,7 +109,7 @@ features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
 [dependencies.comrak]
-version = "0.35.0"
+version = "0.41.1"
 default-features = false
 features = ["shortcodes", "syntect"]
 
