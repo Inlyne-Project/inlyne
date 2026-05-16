@@ -89,7 +89,7 @@ toml = "1.1.2"
 # In application tracing (aka logging on steroids)
 tracing = "0.1.41"
 # Extra syntax and theme definitions for `syntect`
-two-face = "0.4.2"
+two-face = "0.5.1"
 # More text hashing...
 twox-hash = "2.1.2"
 # HTTP client for requesting images from urls
