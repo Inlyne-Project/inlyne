@@ -1,13 +1,14 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::io;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use crate::image::ImageData;
 
 use comrak::adapters::SyntaxHighlighterAdapter;
+use comrak::markdown_to_html_with_plugins;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
-use comrak::{markdown_to_html_with_plugins, ComrakOptions};
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -156,33 +157,33 @@ struct CustomSyntectAdapter(SyntectAdapter);
 impl SyntaxHighlighterAdapter for CustomSyntectAdapter {
     fn write_highlighted(
         &self,
-        output: &mut dyn io::Write,
+        output: &mut dyn fmt::Write,
         lang: Option<&str>,
         code: &str,
-    ) -> io::Result<()> {
+    ) -> fmt::Result {
         let norm_lang = lang.map(|l| l.split_once(',').map(|(lang, _)| lang).unwrap_or(l));
         self.0.write_highlighted(output, norm_lang, code)
     }
 
     fn write_pre_tag(
         &self,
-        output: &mut dyn io::Write,
-        attributes: HashMap<String, String>,
-    ) -> io::Result<()> {
+        output: &mut dyn fmt::Write,
+        attributes: HashMap<&'static str, Cow<'_, str>>,
+    ) -> fmt::Result {
         self.0.write_pre_tag(output, attributes)
     }
 
     fn write_code_tag(
         &self,
-        output: &mut dyn io::Write,
-        attributes: HashMap<String, String>,
-    ) -> io::Result<()> {
+        output: &mut dyn fmt::Write,
+        attributes: HashMap<&'static str, Cow<'_, str>>,
+    ) -> fmt::Result {
         self.0.write_code_tag(output, attributes)
     }
 }
 
 pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
-    let mut options = ComrakOptions::default();
+    let mut options = comrak::Options::default();
     options.extension.autolink = true;
     options.extension.table = true;
     options.extension.strikethrough = true;
@@ -191,7 +192,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
     options.extension.front_matter_delimiter = Some("---".to_owned());
     options.extension.shortcodes = true;
     options.parse.smart = true;
-    options.render.unsafe_ = true;
+    options.render.r#unsafe = true;
 
     // TODO(cosmic): gonna send a PR so that a plugin can pass in a single theme too
     let dummy_name = "theme";
@@ -210,7 +211,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
         .theme(dummy_name)
         .build();
 
-    let mut plugins = comrak::ComrakPlugins::default();
+    let mut plugins = comrak::options::Plugins::default();
     let custom = CustomSyntectAdapter(adapter);
     plugins.render.codefence_syntax_highlighter = Some(&custom);
 

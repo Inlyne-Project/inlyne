@@ -109,7 +109,7 @@ features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
 [dependencies.comrak]
-version = "0.41.1"
+version = "0.52.0"
 default-features = false
 features = ["shortcodes", "syntect"]
 
