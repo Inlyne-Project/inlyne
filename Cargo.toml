@@ -34,9 +34,9 @@ wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita"]
 # `anstream` and `anstyle` are both terminal helper crates used for our custom
 # panic hook (and already used by `clap`, so it's a "free" dependency)
 anstream = "1.0.0"
-anstyle = "1.0.10"
+anstyle = "1.0.14"
 # Easier error handling
-anyhow = "1.0.95"
+anyhow = "1.0.102"
 # System preferred color scheme detection
 dark-light = "2.0.0"
 # System specific directories
@@ -52,22 +52,22 @@ html-escape = "0.2.13"
 # Parsing the HTML document that the markdown+html was converted into
 html5ever = "0.31.0"
 # Provides some extra helpers that we use for our custom panic hook
-human-panic = "2.0.2"
+human-panic = "2.0.8"
 # Generic image decoding
-image = "0.25.5"
+image = "0.25.10"
 # 2D GPU graphics rendering
-lyon = "1.0.1"
+lyon = "1.0.19"
 # Images are compressed to in-memory lz4 blobs
 lz4_flex = "0.13.1"
 # Generic metrics facade for our metrics recording/emission infra
-metrics = "0.24.1"
+metrics = "0.24.6"
 # File event notifications for the live reloading feature
 notify = "6.1.1"
-percent-encoding = "2.3.1"
+percent-encoding = "2.3.2"
 # Used to open external links like in the user's browser
-open = "5.3.2"
+open = "5.3.5"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
-parking_lot = "0.12.3"
+parking_lot = "0.12.5"
 # Dead simple way to handle some async operations
 pollster = "0.4.0"
 # Used to get a handle to the display, so that we can setup a clipboard
@@ -79,14 +79,14 @@ serde_yaml = "0.9.34"
 # Easy `Debug` formatting changes used to keep snapshot tests more succinct
 smart-debug = "0.0.3"
 # Helps power our syntax highlighting
-syntect = "5.2.0"
+syntect = "5.3.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
 taffy = "0.3.19"
 # For parsing our config file
 toml = "1.1.2"
 # In application tracing (aka logging on steroids)
-tracing = "0.1.41"
+tracing = "0.1.44"
 # Extra syntax and theme definitions for `syntect`
 two-face = "0.5.1"
 # More text hashing...
@@ -98,12 +98,12 @@ wgpu = "0.16"
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
-version = "1.21.0"
+version = "1.25.0"
 features = ["derive"]
 
 # Command line arg parsing
 [dependencies.clap]
-version = "4.5.28"
+version = "4.6.1"
 features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
@@ -114,7 +114,7 @@ features = ["shortcodes", "syntect"]
 
 # Clipboard handling
 [dependencies.copypasta]
-version = "0.10.1"
+version = "0.10.2"
 default-features = false
 
 # NOTE: We need `fontconfig` enabled to pick up fonts on some systems, but
@@ -127,12 +127,12 @@ features = ["fontconfig"]
 
 # Common dep used from yaml that can probably be replaced with a `Vec<(_, _)>`
 [dependencies.indexmap]
-version = "2.7.1"
+version = "2.14.0"
 features = ["serde"]
 
 # Metrics helpers used for our custom metric logger
 [dependencies.metrics-util]
-version = "0.20.3"
+version = "0.20.4"
 default-features = false
 features = ["registry", "storage"]
 
@@ -144,7 +144,7 @@ default-features = false
 
 # For dealing with both TOML and YAML
 [dependencies.serde]
-version = "1.0.217"
+version = "1.0.228"
 features = ["derive"]
 
 # Common dep used by `html5ever`
@@ -154,7 +154,7 @@ default-features = false
 
 # Our specific tracing implementation
 [dependencies.tracing-subscriber]
-version = "0.3.19"
+version = "0.3.23"
 features = ["env-filter"]
 
 # Cross-platform window handling
@@ -166,19 +166,19 @@ default-features = false
 # Succinct and more readable binary blobs
 base64 = "0.22.1"
 # Used to update file's modified time for tests
-filetime = "0.2.25"
+filetime = "0.2.29"
 # Snapshot testing
-insta = "1.42.1"
+insta = "1.47.2"
 # Assertions displayed as diffs which is immensely helpful for some of our large
 # values
 pretty_assertions = "1.4.1"
 # Throwaway files/dirs for isolated test environments
-tempfile = "3.16.0"
+tempfile = "3.27.0"
 # Use for setting up a local http server to test image requests in isolation
 tiny_http = "0.12.0"
 
 [target.'cfg(inlyne_tcp_metrics)'.dependencies]
-metrics-exporter-tcp = "0.11.0"
+metrics-exporter-tcp = "0.11.2"
 
 [profile.release]
 strip = true
