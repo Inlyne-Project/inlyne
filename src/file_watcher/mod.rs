@@ -8,9 +8,9 @@ use std::time::Duration;
 use crate::InlyneEvent;
 
 use notify::event::{EventKind, ModifyKind};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
-    new_debouncer, DebounceEventHandler, DebounceEventResult, Debouncer, FileIdMap,
+    new_debouncer, DebounceEventHandler, DebounceEventResult, Debouncer, RecommendedCache,
 };
 use winit::event_loop::EventLoopProxy;
 
@@ -103,11 +103,11 @@ impl Watcher {
         let (msg_tx, msg_rx) = mpsc::channel();
         let watcher = Self(msg_tx.clone());
 
-        let notify_watcher =
+        let mut notify_watcher =
             new_debouncer(Duration::from_millis(10), None, MsgHandler(msg_tx)).unwrap();
 
         std::thread::spawn(move || {
-            endlessly_handle_messages(notify_watcher, msg_rx, reload_callback, file_path);
+            endlessly_handle_messages(&mut notify_watcher, msg_rx, reload_callback, file_path);
         });
 
         watcher
@@ -120,27 +120,27 @@ impl Watcher {
 }
 
 fn endlessly_handle_messages<C: Callback>(
-    mut watcher: Debouncer<RecommendedWatcher, FileIdMap>,
+    watcher: &mut Debouncer<RecommendedWatcher, RecommendedCache>,
     msg_rx: mpsc::Receiver<WatcherMsg>,
     reload_callback: C,
     mut file_path: PathBuf,
 ) {
-    let watcher = watcher.watcher();
     watcher
         .watch(&file_path, RecursiveMode::NonRecursive)
         .unwrap();
 
-    let poll_registering_watcher = |watcher: &mut RecommendedWatcher, file_path: &Path| loop {
-        std::thread::sleep(Duration::from_millis(15));
+    let poll_registering_watcher =
+        |watcher: &mut Debouncer<RecommendedWatcher, RecommendedCache>, file_path: &Path| loop {
+            std::thread::sleep(Duration::from_millis(15));
 
-        let _ = watcher.unwatch(file_path);
-        if watcher
-            .watch(file_path, RecursiveMode::NonRecursive)
-            .is_ok()
-        {
-            break;
-        }
-    };
+            let _ = watcher.unwatch(file_path);
+            if watcher
+                .watch(file_path, RecursiveMode::NonRecursive)
+                .is_ok()
+            {
+                break;
+            }
+        };
 
     while let Ok(msg) = msg_rx.recv() {
         match msg {
