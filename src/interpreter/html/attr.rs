@@ -27,9 +27,7 @@ impl Iterator for Iter<'_> {
                 local_name!("src") => Some(Attr::Src(value.to_string())),
                 local_name!("start") => value.parse().ok().map(Attr::Start),
                 local_name!("style") => Some(Attr::Style(value.to_string())),
-                local_name!("type") => {
-                    (value.to_string() == "checkbox").then_some(Attr::IsCheckbox)
-                }
+                local_name!("type") => (value == "checkbox").then_some(Attr::IsCheckbox),
                 local_name!("checked") => Some(Attr::IsChecked),
                 local_name!("media") => PrefersColorScheme::new(value).map(Attr::Media),
                 local_name!("srcset") => Some(Attr::SrcSet(value.to_string())),
