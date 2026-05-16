@@ -288,9 +288,11 @@ impl Image {
                     Arc::new(db)
                 });
 
-                let mut opt = usvg::Options::default();
-                opt.dpi = hidpi_scale;
-                opt.fontdb = Arc::clone(fontdb);
+                let opt = usvg::Options {
+                    dpi: hidpi_scale,
+                    fontdb: Arc::clone(fontdb),
+                    ..usvg::Options::default()
+                };
 
                 // TODO: yes all of this image loading is very messy and could use a refactor
                 let Ok(tree) = usvg::Tree::from_data(&image_data, &opt) else {
