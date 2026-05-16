@@ -1,12 +1,14 @@
-use std::{sync::mpsc::Sender, thread};
+use std::{
+    sync::{mpsc::Sender, LazyLock},
+    thread,
+};
 
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
 
 type HandlerFn = fn(&State, &Request, &str) -> ResponseBox;
 
-static META_SERVER: Lazy<MetaServer> = Lazy::new(|| {
+static META_SERVER: LazyLock<MetaServer> = LazyLock::new(|| {
     let server = Server::http("127.0.0.1:0").unwrap();
 
     let ip = server
