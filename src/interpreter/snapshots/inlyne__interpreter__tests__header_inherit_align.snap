@@ -10,18 +10,13 @@ expression: "interpret_md_with_opts(text, opts)"
     TextBox(
         TextBox {
             align: Center,
-            is_anchor: Some("#install---------usage-"),
+            is_anchor: Some("#install------------usage----"),
             texts: [
                 Text {
-                    text: "Install",
+                    text: "Install\n    ",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     style: BOLD ,
                     link: Some("#install"),
-                    ..
-                },
-                Text {
-                    text: " ",
-                    default_color: Color(BLACK),
                     ..
                 },
                 Text {
@@ -31,15 +26,10 @@ expression: "interpret_md_with_opts(text, opts)"
                     ..
                 },
                 Text {
-                    text: "      Usage",
+                    text: "      Usage\n    ",
                     color: Some(Color { r: 0.09, g: 0.13, b: 1.00 }),
                     style: BOLD ,
                     link: Some("#usage"),
-                    ..
-                },
-                Text {
-                    text: " ",
-                    default_color: Color(BLACK),
                     ..
                 },
             ],
