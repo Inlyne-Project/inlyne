@@ -281,9 +281,19 @@ impl Image {
             let image = if let Ok(image) = ImageData::load(&image_data, true) {
                 image
             } else {
-                let opt = usvg::Options::default();
+                static FONTDB: OnceLock<Arc<fontdb::Database>> = OnceLock::new();
+                let fontdb = FONTDB.get_or_init(|| {
+                    let mut db = fontdb::Database::new();
+                    db.load_system_fonts();
+                    Arc::new(db)
+                });
+
+                let mut opt = usvg::Options::default();
+                opt.dpi = hidpi_scale;
+                opt.fontdb = Arc::clone(fontdb);
+
                 // TODO: yes all of this image loading is very messy and could use a refactor
-                let Ok(mut tree) = usvg::Tree::from_data(&image_data, &opt) else {
+                let Ok(tree) = usvg::Tree::from_data(&image_data, &opt) else {
                     tracing::warn!(
                         "Failed loading image:\n- src: {}\n- src_path: {}",
                         src,
@@ -296,22 +306,8 @@ impl Image {
                     image_callback.loaded_image(src, image_data_clone);
                     return;
                 };
-                tree.size = tree.size.scale_to(
-                    tiny_skia::Size::from_wh(
-                        tree.size.width() * hidpi_scale,
-                        tree.size.height() * hidpi_scale,
-                    )
-                    .unwrap(),
-                );
-                static FONTDB: OnceLock<fontdb::Database> = OnceLock::new();
-                let fontdb = FONTDB.get_or_init(|| {
-                    let mut db = fontdb::Database::new();
-                    db.load_system_fonts();
-                    db
-                });
-                tree.postprocess(Default::default(), fontdb);
                 let mut pixmap =
-                    tiny_skia::Pixmap::new(tree.size.width() as u32, tree.size.height() as u32)
+                    tiny_skia::Pixmap::new(tree.size().width() as u32, tree.size().height() as u32)
                         .context("Couldn't create svg pixmap")
                         .unwrap();
                 resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
