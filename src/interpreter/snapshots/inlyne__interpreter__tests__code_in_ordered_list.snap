@@ -45,14 +45,9 @@ expression: "interpret_md_with_opts(text, opts)"
                     ..
                 },
                 Text {
-                    text: "() {}",
+                    text: "() {}\n",
                     font_family: Monospace,
                     color: Some(Color { r: 0.03, g: 0.03, b: 0.03 }),
-                    ..
-                },
-                Text {
-                    text: "\n",
-                    default_color: Color(BLACK),
                     ..
                 },
             ],

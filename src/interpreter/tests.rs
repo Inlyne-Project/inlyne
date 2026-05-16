@@ -272,7 +272,7 @@ const ALIGNED_TABLE: &str = "\
 | text         | text        |   text   |  text | text         |
 ";
 
-// TODO: this still has all sorts of issues (the anchor and extra whitespace)
+// TODO: this still has all sorts of issues (the anchor should be set per `a` and extra whitespace)
 const HEADER_INHERIT_ALIGN: &str = r##"
 <div align="center">
   <h4>
