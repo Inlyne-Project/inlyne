@@ -62,7 +62,7 @@ lz4_flex = "0.13.1"
 # Generic metrics facade for our metrics recording/emission infra
 metrics = "0.24.6"
 # File event notifications for the live reloading feature
-notify = "6.1.1"
+notify = "8.2.0"
 percent-encoding = "2.3.2"
 # Used to open external links like in the user's browser
 open = "5.3.5"
@@ -139,7 +139,7 @@ features = ["registry", "storage"]
 # Debouncer that papers over some issues with various ways that editors save
 # files
 [dependencies.notify-debouncer-full]
-version = "0.3.2"
+version = "0.7.0"
 default-features = false
 
 # For dealing with both TOML and YAML
