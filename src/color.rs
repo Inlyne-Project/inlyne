@@ -50,7 +50,7 @@ impl Theme {
         static CACHED_CODE_HIGHLIGHTER: OnceLock<SyntectTheme> = OnceLock::new();
         // Initializing this is non-trivial. Cache so it only runs once
         let code_highlighter = CACHED_CODE_HIGHLIGHTER
-            .get_or_init(|| ThemeDefaults::Base16OceanDark.into())
+            .get_or_init(|| ThemeDefaults::dark_default().into())
             .to_owned();
         Self {
             text_color: 0x9DACBB,
@@ -68,7 +68,7 @@ impl Theme {
         static CACHED_CODE_HIGHLIGHTER: OnceLock<SyntectTheme> = OnceLock::new();
         // Initializing this is non-trivial. Cache so it only runs once
         let code_highlighter = CACHED_CODE_HIGHLIGHTER
-            .get_or_init(|| ThemeDefaults::Github.into())
+            .get_or_init(|| ThemeDefaults::light_default().into())
             .to_owned();
         Self {
             text_color: 0x000000,
@@ -172,6 +172,10 @@ pub enum ThemeDefaults {
     Base16MochaDark,
     Base16OceanDark,
     Base16OceanLight,
+    CatppuccinFrappe,
+    CatppuccinLatte,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
     ColdarkCold,
     ColdarkDark,
     DarkNeon,
@@ -194,12 +198,24 @@ pub enum ThemeDefaults {
 }
 
 impl ThemeDefaults {
+    fn light_default() -> Self {
+        Self::Github
+    }
+
+    fn dark_default() -> Self {
+        Self::Base16OceanDark
+    }
+
     fn kebab_pairs() -> &'static [(&'static str, Self)] {
         &[
             ("base16-eighties-dark", Self::Base16EightiesDark),
             ("base16-mocha-dark", Self::Base16MochaDark),
             ("base16-ocean-dark", Self::Base16OceanDark),
             ("base16-ocean-light", Self::Base16OceanLight),
+            ("catppuccin-frappe", Self::CatppuccinFrappe),
+            ("catppuccin-latte", Self::CatppuccinLatte),
+            ("catppuccin-macchiato", Self::CatppuccinMacchiato),
+            ("catppuccin-mocha", Self::CatppuccinMocha),
             ("coldark-cold", Self::ColdarkCold),
             ("coldark-dark", Self::ColdarkDark),
             ("dark-neon", Self::DarkNeon),
@@ -240,6 +256,10 @@ impl From<ThemeDefaults> for EmbeddedThemeName {
             ThemeDefaults::Base16MochaDark => Self::Base16MochaDark,
             ThemeDefaults::Base16OceanDark => Self::Base16OceanDark,
             ThemeDefaults::Base16OceanLight => Self::Base16OceanLight,
+            ThemeDefaults::CatppuccinFrappe => Self::CatppuccinFrappe,
+            ThemeDefaults::CatppuccinLatte => Self::CatppuccinLatte,
+            ThemeDefaults::CatppuccinMacchiato => Self::CatppuccinMacchiato,
+            ThemeDefaults::CatppuccinMocha => Self::CatppuccinMocha,
             ThemeDefaults::ColdarkCold => Self::ColdarkCold,
             ThemeDefaults::ColdarkDark => Self::ColdarkDark,
             ThemeDefaults::DarkNeon => Self::DarkNeon,
@@ -258,8 +278,14 @@ impl From<ThemeDefaults> for EmbeddedThemeName {
             ThemeDefaults::SublimeSnazzy => Self::SublimeSnazzy,
             ThemeDefaults::TwoDark => Self::TwoDark,
             // TODO(cosmic): remove in 0.6.0
-            #[allow(deprecated)]
-            ThemeDefaults::VisualStudioDarkPlus => Self::VisualStudioDarkPlus,
+            ThemeDefaults::VisualStudioDarkPlus => {
+                tracing::warn!(
+                    "Visual Studio Dark+ has been removed from the default set. Falling back to \
+                    the default dark theme. The config option that is set will be removed in a \
+                    future version."
+                );
+                ThemeDefaults::dark_default().into()
+            }
             ThemeDefaults::Zenburn => Self::Zenburn,
         }
     }
