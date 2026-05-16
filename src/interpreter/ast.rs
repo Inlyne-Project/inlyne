@@ -494,8 +494,8 @@ impl Process for FlowProcess {
                     output,
                 );
 
-                let anchor = element.texts.iter().flat_map(|t| t.text.chars()).collect();
-                let anchor = global.opts.anchorizer.lock().anchorize(anchor);
+                let anchor: String = element.texts.iter().flat_map(|t| t.text.chars()).collect();
+                let anchor = global.opts.anchorizer.lock().anchorize(&anchor);
                 element.set_anchor(format!("#{anchor}"));
                 output.push_text_box(global, element, state);
                 output.push_spacer();
