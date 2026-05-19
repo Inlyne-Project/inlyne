@@ -985,7 +985,7 @@ fn custom_user_agent() {
     let server::FromServer::UserAgent(Some(user_agent)) = recv_ua.recv().unwrap() else {
         panic!();
     };
-    insta::assert_snapshot!(user_agent, @"inlyne 0.5.1 https://github.com/Inlyne-Project/inlyne");
+    insta::assert_snapshot!(user_agent, @"inlyne 0.5.2 https://github.com/Inlyne-Project/inlyne");
 }
 
 const SPACERS_IN_COLLAPSED_SECTION: &str = "\
