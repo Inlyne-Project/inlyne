@@ -1,3 +1,24 @@
+# 0.5.2 - 2026-05-19
+
+Adds back the macOS x64 target that was dropped the past release, and updates
+_most_ of our dependencies.
+
+## Deprecations
+
+- Replaces the Visual Studio Dark+ syntax highlighting theme with the default dark theme, and emit a deprecation warning ([`6ce93ce`])
+
+## Releases
+
+- Add x86_64 (intel-based) macOS back to CI ([#451])
+
+## Internal
+
+- Update all of the dependencies outside of rendering related ones ([#448])
+
+[#448]: https://github.com/Inlyne-Project/inlyne/pull/448
+[#451]: https://github.com/Inlyne-Project/inlyne/pull/451
+[`6ce93ce`]: https://github.com/Inlyne-Project/inlyne/commit/6ce93ceb35a25d45c55011b3044727d1252f5446
+
 # 0.5.1 - 2026-05-13
 
 ## Features
