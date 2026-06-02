@@ -229,7 +229,7 @@ pub fn markdown_to_html(md: &str, syntax_theme: SyntectTheme) -> String {
         parts
             .next()
             .and_then(
-                |front_matter| match serde_yaml::from_str::<FrontMatter>(front_matter) {
+                |front_matter| match yaml_serde::from_str::<FrontMatter>(front_matter) {
                     Ok(front_matter) => Some(front_matter.to_table()),
                     Err(err) => {
                         tracing::warn!(

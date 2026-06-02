@@ -74,8 +74,6 @@ pollster = "0.4.0"
 raw-window-handle = "0.5.2"
 # SVG rendering
 resvg = "0.47.0"
-# Parses the optional YAML frontmatter (replace with just a yaml parser)
-serde_yaml = "0.9.34"
 # Easy `Debug` formatting changes used to keep snapshot tests more succinct
 smart-debug = "0.0.3"
 # Helps power our syntax highlighting
@@ -95,6 +93,8 @@ twox-hash = "2.1.2"
 ureq = "3.3.0"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
+# Parses the optional YAML frontmatter
+yaml_serde = "0.10.4"
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
