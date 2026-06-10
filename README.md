@@ -5,10 +5,6 @@
   <a href="https://crates.io/crates/inlyne">
     <img src="https://img.shields.io/crates/v/inlyne.svg" alt="crates.io" />
   </a>
-  <!-- Codecov.io -->
-  <a href="https://codecov.io/github/Inlyne-Project/inlyne">
-    <img src="https://codecov.io/github/Inlyne-Project/inlyne/graph/badge.svg?token=PAQUKH5JOV" alt="codecov.io" />
-  </a>
 </p>
 
 ```bash
