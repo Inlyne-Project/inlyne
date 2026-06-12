@@ -58,9 +58,10 @@ use utils::{ImageCache, Point, Rect, Size};
 
 use crate::opts::{Commands, ConfigCmd, MetricsExporter};
 use crate::selection::Selection;
+use crate::text::TextBoxMeasure;
 use anyhow::Context;
 use clap::Parser;
-use taffy::Taffy;
+use taffy::TaffyTree;
 use winit::event::{
     ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent,
 };
@@ -672,7 +673,7 @@ impl Inlyne {
 
     fn find_hoverable<'a>(
         text_system: &mut TextSystem,
-        taffy: &mut Taffy,
+        taffy: &mut TaffyTree<TextBoxMeasure>,
         elements: &'a [Positioned<Element>],
         loc: Point,
         screen_size: Size,

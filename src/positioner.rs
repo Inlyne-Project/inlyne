@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::fmt;
 
 use anyhow::Context;
-use taffy::Taffy;
+use taffy::TaffyTree;
 
 use crate::image::Image;
-use crate::text::TextSystem;
+use crate::text::{TextBoxMeasure, TextSystem};
 use crate::utils::{Align, Point, Rect, Size};
 use crate::{debug_impls, Element};
 
@@ -38,19 +38,18 @@ impl<T> Positioned<T> {
     }
 }
 
-#[derive(Default)]
 pub struct Positioner {
     pub screen_size: Size,
     pub reserved_height: f32,
     pub hidpi_scale: f32,
     pub page_width: f32,
     pub anchors: HashMap<String, f32>,
-    pub taffy: Taffy,
+    pub taffy: TaffyTree<TextBoxMeasure>,
 }
 
 impl Positioner {
     pub fn new(screen_size: Size, hidpi_scale: f32, page_width: f32) -> Self {
-        let mut taffy = Taffy::new();
+        let mut taffy = TaffyTree::new();
         taffy.disable_rounding();
         Self {
             reserved_height: DEFAULT_PADDING * hidpi_scale,
