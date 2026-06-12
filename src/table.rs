@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crate::text::{Text, TextBox, TextBoxMeasure, TextSystem};
 use crate::utils::{default, Point, Rect, Size};
 
-use taffy::node::MeasureFunc;
 use taffy::prelude::{
-    auto, line, points, AvailableSpace, Display, Layout, Size as TaffySize, Style, Taffy,
+    auto, length, line, AvailableSpace, Display, Layout, Size as TaffySize, Style,
 };
 use taffy::style::JustifyContent;
+use taffy::TaffyTree;
 
 pub const TABLE_ROW_GAP: f32 = 20.;
 pub const TABLE_COL_GAP: f32 = 20.;
@@ -31,7 +31,7 @@ impl Table {
     pub fn find_hoverable<'a>(
         &'a self,
         text_system: &mut TextSystem,
-        taffy: &mut Taffy,
+        taffy: &mut TaffyTree<TextBoxMeasure>,
         loc: Point,
         pos: Point,
         bounds: Size,
@@ -63,7 +63,7 @@ impl Table {
     pub fn layout(
         &self,
         text_system: &mut TextSystem,
-        taffy: &mut Taffy,
+        taffy: &mut TaffyTree<TextBoxMeasure>,
         bounds: Size,
         zoom: f32,
     ) -> anyhow::Result<TableLayout> {
@@ -76,18 +76,18 @@ impl Table {
         let root_style = Style {
             display: Display::Flex,
             size: TaffySize {
-                width: points(bounds.0),
+                width: length(bounds.0),
                 height: auto(),
             },
-            justify_content: Some(JustifyContent::Start),
+            justify_content: Some(JustifyContent::START),
             ..default()
         };
 
         let grid_style = Style {
             display: Display::Grid,
             gap: TaffySize {
-                width: points(TABLE_COL_GAP),
-                height: points(TABLE_ROW_GAP),
+                width: length(TABLE_COL_GAP),
+                height: length(TABLE_ROW_GAP),
             },
             grid_template_columns: vec![auto(); max_columns],
             ..default()
@@ -105,16 +105,14 @@ impl Table {
                     textbox: Arc::new(item.clone()),
                     zoom,
                 };
-                node_row.push(taffy.new_leaf_with_measure(
-                    Style {
-                        grid_row: line(1 + y as i16 + 1),
-                        grid_column: line(x as i16 + 1),
-                        ..default()
-                    },
-                    MeasureFunc::Boxed(Box::new(move |known_dimensions, available_space| {
-                        textbox_measure.measure(known_dimensions, available_space)
-                    })),
-                )?);
+
+                let layout = Style {
+                    grid_row: line(1 + y as i16 + 1),
+                    grid_column: line(x as i16 + 1),
+                    ..Style::DEFAULT
+                };
+
+                node_row.push(taffy.new_leaf_with_context(layout, textbox_measure)?);
             }
             nodes.push(node_row.clone());
             node_row.clear();
@@ -128,11 +126,17 @@ impl Table {
         let grid = taffy.new_with_children(grid_style, &flattened_nodes)?;
         let root = taffy.new_with_children(root_style, &[grid])?;
 
-        taffy.compute_layout(
+        taffy.compute_layout_with_measure(
             root,
             TaffySize::<AvailableSpace> {
                 width: AvailableSpace::Definite(bounds.0),
                 height: AvailableSpace::MaxContent,
+            },
+            |known_dimensions, available_space, _node_id, context, _style| {
+                let Some(context) = context else {
+                    return TaffySize::zero();
+                };
+                context.measure(known_dimensions, available_space)
             },
         )?;
 
