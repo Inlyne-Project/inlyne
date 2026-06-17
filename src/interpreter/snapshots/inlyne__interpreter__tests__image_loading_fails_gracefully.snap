@@ -1,6 +1,6 @@
 ---
 source: src/interpreter/tests.rs
-description: "![This actually returns JSON 😈](http://127.0.0.1:37929/2/snapshot.png)"
+description: "![This actually returns JSON 😈](http://127.0.0.1:40155/2/snapshot.png)"
 expression: "interpret_md_with_opts(&text, opts)"
 ---
 [
@@ -13,7 +13,7 @@ expression: "interpret_md_with_opts(&text, opts)"
                             image_data: Mutex {
                                 data: Some(
                                     ImageData {
-                                        lz4_blob: { len: 7759, data: [4, 34, 77, ..] },
+                                        pixels: { len: 4536, data: [Rgba(a1, a0, a1, ff), Rgba(a0, 9f, a0, ff), Rgba(a0, 9f, a0, ff), ..] },
                                         scale: false,
                                         dimensions: (63, 72),
                                     },

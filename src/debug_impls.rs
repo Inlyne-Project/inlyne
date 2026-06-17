@@ -58,14 +58,16 @@ fn debug_inline_some<T: fmt::Debug>(
     }
 }
 
-pub struct DebugBytesPrefix<'a>(pub &'a [u8]);
+pub struct DebugPrefix<'a, T>(pub &'a [T]);
 
-impl fmt::Debug for DebugBytesPrefix<'_> {
+impl<T: fmt::Debug> fmt::Debug for DebugPrefix<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             [x, y, z, _, ..] => {
                 let len = self.0.len();
-                f.write_fmt(format_args!("{{ len: {len}, data: [{x}, {y}, {z}, ..] }}"))
+                f.write_fmt(format_args!(
+                    "{{ len: {len}, data: [{x:?}, {y:?}, {z:?}, ..] }}"
+                ))
             }
             three_or_less => f.write_fmt(format_args!("{three_or_less:?}")),
         }

@@ -842,7 +842,7 @@ fn centered_image_with_size_align_and_link() {
         image_data: Mutex {
             data: Some(
                 ImageData {
-                    lz4_blob: { len: 21244, data: [4, 34, 77, ..] },
+                    pixels: { len: 137412, data: [Rgba(0, 0, 0, 0), Rgba(0, 0, 0, 0), Rgba(0, 0, 0, 0), ..] },
                     scale: true,
                     dimensions: (396, 347),
                 },
