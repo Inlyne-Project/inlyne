@@ -13,7 +13,7 @@ expression: "interpret_md_with_opts(text, opts)"
                             image_data: Mutex {
                                 data: Some(
                                     ImageData {
-                                        lz4_blob: { len: 30, data: [4, 34, 77, ..] },
+                                        pixels: { len: 4, data: [Rgba(ff, 0, 0, ff), Rgba(0, ff, 0, ff), Rgba(0, 0, ff, ff), ..] },
                                         scale: true,
                                         dimensions: (2, 2),
                                     },

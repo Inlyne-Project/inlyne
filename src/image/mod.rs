@@ -3,6 +3,7 @@ mod decode;
 mod tests;
 
 use std::borrow::Cow;
+use std::fmt;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -13,7 +14,7 @@ use std::{
     io::{self, Read},
 };
 
-use crate::debug_impls::{DebugBytesPrefix, DebugInline};
+use crate::debug_impls::{DebugInline, DebugPrefix};
 use crate::interpreter::ImageCallback;
 use crate::metrics::{histogram, HistTag};
 use crate::positioner::DEFAULT_MARGIN;
@@ -64,13 +65,53 @@ impl ImageSize {
     }
 }
 
-#[derive(SmartDebug, Default, Clone, PartialEq)]
+struct DebugRgba([u8; 4]);
+
+impl fmt::Debug for DebugRgba {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_tuple("Rgba");
+        for b in self.0 {
+            debug.field(&format_args!("{b:x}"));
+        }
+        debug.finish()
+    }
+}
+
+struct DebugPixels(Vec<DebugRgba>);
+
+impl From<&ImageData> for DebugPixels {
+    fn from(data: &ImageData) -> Self {
+        let decompressed =
+            decode::lz4_decompress(&data.lz4_blob, data.rgba_image_byte_size()).unwrap();
+        let (pixels, rem) = decompressed.as_chunks();
+        assert_eq!(rem.len(), 0);
+        let pixels = pixels.iter().map(|&arr| DebugRgba(arr)).collect();
+        Self(pixels)
+    }
+}
+
+#[derive(Default, Clone, PartialEq)]
 pub struct ImageData {
-    #[debug(wrapper = DebugBytesPrefix)]
     lz4_blob: Vec<u8>,
     scale: bool,
-    #[debug(wrapper = DebugInline)]
     dimensions: (u32, u32),
+}
+
+impl fmt::Debug for ImageData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            // handled through `DebugImageData`
+            lz4_blob: _,
+            scale,
+            dimensions,
+        } = &self;
+        let debug_pixels: DebugPixels = self.into();
+        f.debug_struct("ImageData")
+            .field("pixels", &DebugPrefix(&debug_pixels.0))
+            .field("scale", scale)
+            .field("dimensions", &DebugInline(dimensions))
+            .finish()
+    }
 }
 
 impl ImageData {
