@@ -114,7 +114,7 @@ features = ["shortcodes", "syntect"]
 
 # Clipboard handling
 [dependencies.copypasta]
-version = "0.10.2"
+version = "0.8.2"
 default-features = false
 
 # NOTE: We need `fontconfig` enabled to pick up fonts on some systems, but
