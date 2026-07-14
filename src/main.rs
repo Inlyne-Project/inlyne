@@ -480,8 +480,19 @@ impl Inlyne {
                                             } else {
                                                 match read_to_string(&path) {
                                                     Ok(contents) => {
-                                                        self.update_file(&path, contents);
-                                                        self.opts.history.make_next(path);
+                                                        // Canonicalize before changing the CWD so
+                                                        // that the watcher and history always store
+                                                        // absolute paths, independent of CWD.
+                                                        let abs_path = path
+                                                            .canonicalize()
+                                                            .unwrap_or(path);
+                                                        self.update_file(&abs_path, contents);
+                                                        let parent = abs_path
+                                                            .parent()
+                                                            .expect("File should have parent directory");
+                                                        std::env::set_current_dir(parent)
+                                                            .expect("Could not set current directory.");
+                                                        self.opts.history.make_next(abs_path);
                                                     }
                                                     Err(err) => {
                                                         tracing::warn!(
