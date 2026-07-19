@@ -94,16 +94,16 @@ impl Cli {
         if let Some(view) = self.view_file {
             Commands::View(view)
         } else {
-            self.command.expect("Command should be Some!")
+            self.command.expect("due to `arg_required_else_help`")
         }
     }
-    pub fn into_view(self) -> Result<View, &'static str> {
-        Ok(if let Some(view) = self.view_file {
+    pub fn into_view(self) -> Option<View> {
+        Some(if let Some(view) = self.view_file {
             view
         } else if let Some(Commands::View(view)) = self.command {
             view
         } else {
-            return Err("Cli options do not contain an view option");
+            return None;
         })
     }
 }

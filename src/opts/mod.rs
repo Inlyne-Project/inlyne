@@ -182,8 +182,10 @@ impl Opts {
     }
 
     /// Arguments to supply to program that are opened externally.
-    pub fn program_args(file_path: &Path) -> Vec<String> {
-        let current_args = Cli::parse().into_view().expect("Should contain an view!");
+    pub fn view_args(file_path: &Path) -> Vec<String> {
+        let current_args = Cli::parse()
+            .into_view()
+            .expect("Only call from an existing `View`");
 
         let mut args = Vec::new();
 

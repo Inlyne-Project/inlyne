@@ -471,7 +471,7 @@ impl Inlyne {
                                                         std::env::current_exe()
                                                             .unwrap_or_else(|_| "inlyne".into()),
                                                     )
-                                                        .args(Opts::program_args(&path))
+                                                        .args(Opts::view_args(&path))
                                                         .spawn()
                                                         .expect("Couldn't spawn inlyne instance")
                                                         .wait()
