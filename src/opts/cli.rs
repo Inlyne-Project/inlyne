@@ -92,6 +92,10 @@ pub struct Cli {
 impl Cli {
     pub fn into_commands(self) -> Commands {
         if let Some(view) = self.view_file {
+            tracing::warn!(
+                "DEPRECATED: viewing a file by calling `inlyne <PATH>` instead of the `inlyne view \
+                <PATH>` subcommand is deprecated in favor of the `view` subcommand"
+            );
             Commands::View(view)
         } else {
             self.command.expect("due to `arg_required_else_help`")
