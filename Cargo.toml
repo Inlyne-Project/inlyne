@@ -1,14 +1,19 @@
 [workspace]
+package.edition = "2021"
 members = [
     ".",
     "xtask",
 ]
 
+[workspace.dependencies]
+# In application tracing (aka logging on steroids)
+tracing = "0.1.44"
+
 [package]
 name = "inlyne"
 version = "0.5.2"
 description = "Introducing Inlyne, a GPU powered yet browserless tool to help you quickly view markdown files in the blink of an eye."
-edition = "2021"
+edition.workspace = true
 authors = [
     "trimental",
     "Cosmic <CosmicHorrorDev@pm.me>",
@@ -83,8 +88,7 @@ syntect = "5.3.0"
 taffy = "0.11.0"
 # For parsing our config file
 toml = "1.1.2"
-# In application tracing (aka logging on steroids)
-tracing = "0.1.44"
+tracing.workspace = true
 # Extra syntax and theme definitions for `syntect`
 two-face = "0.5.1"
 # More text hashing...
