@@ -35,7 +35,12 @@ jobs:
         # on the runner. Avoid using that feature for ubuntu CI
       - name: Run test suite (ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: cargo test --workspace --no-default-features --features x11
+        run: |
+          cargo test --workspace --no-default-features --features x11
+          # and test on 32-bit too
+          rustup target add x86_64-unknown-linux-gnu
+          cargo test --target x86_64-unknown-linux-gnu
+
       - name: Run test suite (non-ubuntu)
         if: matrix.os != 'ubuntu-latest'
         run: cargo test --workspace
