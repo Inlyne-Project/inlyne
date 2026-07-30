@@ -88,7 +88,14 @@ impl Theme {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(
+    untagged,
+    expecting = "\
+    Expects either a default theme name or a path to a custom theme. E.g.\n\
+    default: \"inspired-github\"\ncustom:  { path = \"/path/to/custom.tmTheme\" }\
+    "
+)]
 pub enum SyntaxTheme {
     Defaults(ThemeDefaults),
     Custom(ThemeCustom),
@@ -122,51 +129,8 @@ impl TryFrom<SyntaxTheme> for SyntectTheme {
     }
 }
 
-// Give better error messages than regular `#[serde(untagged)]`
-impl<'de> Deserialize<'de> for SyntaxTheme {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Untagged {
-            Defaults(String),
-            Custom(ThemeCustom),
-        }
-
-        let Ok(untagged) = Untagged::deserialize(deserializer) else {
-            return Err(serde::de::Error::custom(
-                "Expects either a default theme name or a path to a custom theme. E.g.\n\
-                default: \"inspired-github\"\n\
-                custom:  { path = \"/path/to/custom.tmTheme\" }",
-            ));
-        };
-
-        match untagged {
-            // Unfortunately #[serde(untagged)] uses private internals to reuse a deserializer
-            // multiple times. We can't so now we have to fall back to other means to give a good
-            // error message ;-;
-            Untagged::Defaults(theme_name) => match ThemeDefaults::from_kebab(&theme_name) {
-                Some(theme) => Ok(Self::Defaults(theme)),
-                None => {
-                    let variants = ThemeDefaults::kebab_pairs()
-                        .iter()
-                        .map(|(kebab, _)| format!("\"{kebab}\""))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let msg = format!(
-                        "\"{theme_name}\" didn't match any of the expected variants: [{variants}]"
-                    );
-                    Err(serde::de::Error::custom(msg))
-                }
-            },
-            Untagged::Custom(custom) => Ok(Self::Custom(custom)),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum ThemeDefaults {
     Base16EightiesDark,
     Base16MochaDark,
@@ -204,44 +168,6 @@ impl ThemeDefaults {
 
     fn dark_default() -> Self {
         Self::Base16OceanDark
-    }
-
-    fn kebab_pairs() -> &'static [(&'static str, Self)] {
-        &[
-            ("base16-eighties-dark", Self::Base16EightiesDark),
-            ("base16-mocha-dark", Self::Base16MochaDark),
-            ("base16-ocean-dark", Self::Base16OceanDark),
-            ("base16-ocean-light", Self::Base16OceanLight),
-            ("catppuccin-frappe", Self::CatppuccinFrappe),
-            ("catppuccin-latte", Self::CatppuccinLatte),
-            ("catppuccin-macchiato", Self::CatppuccinMacchiato),
-            ("catppuccin-mocha", Self::CatppuccinMocha),
-            ("coldark-cold", Self::ColdarkCold),
-            ("coldark-dark", Self::ColdarkDark),
-            ("dark-neon", Self::DarkNeon),
-            ("dracula", Self::Dracula),
-            ("github", Self::Github),
-            ("gruvbox-dark", Self::GruvboxDark),
-            ("gruvbox-light", Self::GruvboxLight),
-            ("leet", Self::Leet),
-            ("monokai-extended", Self::MonokaiExtended),
-            ("monokai-extended-light", Self::MonokaiExtendedLight),
-            ("nord", Self::Nord),
-            ("one-half-dark", Self::OneHalfDark),
-            ("one-half-light", Self::OneHalfLight),
-            ("solarized-dark", Self::SolarizedDark),
-            ("solarized-light", Self::SolarizedLight),
-            ("sublime-snazzy", Self::SublimeSnazzy),
-            ("two-dark", Self::TwoDark),
-            ("visual-studio-dark-plus", Self::VisualStudioDarkPlus),
-            ("zenburn", Self::Zenburn),
-        ]
-    }
-
-    fn from_kebab(kebab: &str) -> Option<Self> {
-        Self::kebab_pairs()
-            .iter()
-            .find_map(|&(hay, var)| (kebab == hay).then_some(var))
     }
 
     pub fn as_syntect_name(self) -> &'static str {

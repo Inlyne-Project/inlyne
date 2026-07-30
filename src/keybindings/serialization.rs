@@ -209,7 +209,10 @@ impl<'de> Deserialize<'de> for KeyCombo {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(untagged)]
+        #[serde(
+            untagged,
+            expecting = "Expecting a key \"a\" or sequence of keys [\"a\", \"b\"]"
+        )]
         enum ModifiedKeyOrModifiedKeys {
             Key(ModifiedKey),
             Keys(Vec<ModifiedKey>),

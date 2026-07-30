@@ -23,19 +23,18 @@ macro_rules! snapshot_config_parse_error {
 const UNKNOWN_THEME: &str = r#"light-theme.code-highlighter = "doesnt-exist""#;
 const INVALID_THEME_TY: &str = "light-theme.code-highlighter = []";
 
-const FIX_THIS_SUCKY_ERROR_MESSAGE: &str = r#"
+const BAD_KEY: &str = r#"
 [keybindings]
 base = [
-    ["ToBottom", { key = " ", mod = ["Ctrl", "shift"] }],
-    ["ZoomOut", [{ key = " ", mod = ["ctrl", "shift"] }, "Enter"]],
+    ["ToBottom", "B"],
+    ["ZoomOut", [{ key = " ", mod = ["ctrl", "Shift"] }, "Enter"]],
 ]
 "#;
 
 snapshot_config_parse_error!(
     (unknown_theme, UNKNOWN_THEME),
     (invalid_theme_ty, INVALID_THEME_TY),
-    // FIXME: vv
-    (fix_this_sucky_error_message, FIX_THIS_SUCKY_ERROR_MESSAGE),
+    (bad_key, BAD_KEY),
 );
 
 fn keycombo_conflict_from_config(s: &str) -> anyhow::Result<anyhow::Error> {
