@@ -1,11 +1,10 @@
 ---
 source: src/opts/tests/error_msg.rs
-description: "\n[keybindings]\nbase = [\n    [\"ToBottom\", { key = \" \", mod = [\"Ctrl\", \"shift\"] }],\n    [\"ZoomOut\", [{ key = \" \", mod = [\"ctrl\", \"shift\"] }, \"Enter\"]],\n]\n"
+description: "\n[keybindings]\nbase = [\n    [\"ToBottom\", \"B\"],\n    [\"ZoomOut\", [{ key = \" \", mod = [\"ctrl\", \"Shift\"] }, \"Enter\"]],\n]\n"
 expression: err
 ---
-TOML parse error at line 4, column 5
+TOML parse error at line 5, column 5
   |
-4 |     ["ToBottom", { key = " ", mod = ["Ctrl", "shift"] }],
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-data did not match any variant of untagged enum ModifiedKeyOrModifiedKeys
-
+5 |     ["ZoomOut", [{ key = " ", mod = ["ctrl", "Shift"] }, "Enter"]],
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Expecting a key "a" or sequence of keys ["a", "b"]

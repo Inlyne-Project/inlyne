@@ -1,0 +1,10 @@
+---
+source: src/opts/tests/error_msg.rs
+description: "\n[keybindings]\nbase = [\n    [\"ToBottom\", \"B\"],\n    [\"ZoomOut\", [{ key = \" \", mod = [\"ctrl\", \"Shift\"] }, \"Enter\"]],\n]\n"
+expression: err
+---
+TOML parse error at line 5, column 5
+  |
+5 |     ["ZoomOut", [{ key = " ", mod = ["ctrl", "Shift"] }, "Enter"]],
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Expecting a key "a" or sequence of keys ["a", "b"]
