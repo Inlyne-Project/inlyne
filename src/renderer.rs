@@ -33,6 +33,13 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
+/// Time constant of the exponential ease used for smooth scrolling, in seconds.
+/// Time based instead of per frame so that scrolling behaves the same at any
+/// refresh rate.
+const SCROLL_EASE_TIME_CONSTANT: f32 = 0.05;
+/// Remaining distance, in physical pixels, at which the ease snaps to its target
+const SCROLL_SETTLE_DISTANCE: f32 = 0.5;
+
 pub struct Renderer {
     pub config: wgpu::SurfaceConfiguration,
     pub surface: wgpu::Surface,
@@ -42,6 +49,8 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     pub text_system: TextSystem,
     pub scroll_y: f32,
+    target_scroll_y: f32,
+    last_scroll_frame: Option<Instant>,
     pub lyon_buffer: VertexBuffers<Vertex, u16>,
     pub hidpi_scale: f32,
     pub page_width: f32,
@@ -180,6 +189,8 @@ impl Renderer {
             queue,
             text_system,
             scroll_y: 0.,
+            target_scroll_y: 0.,
+            last_scroll_frame: None,
             lyon_buffer,
             hidpi_scale,
             page_width,
@@ -814,12 +825,57 @@ impl Renderer {
         res
     }
 
-    pub fn set_scroll_y(&mut self, scroll_y: f32) {
-        self.scroll_y = scroll_y.clamp(
+    fn clamped_scroll_y(&self, scroll_y: f32) -> f32 {
+        scroll_y.clamp(
             0.,
             (self.positioner.reserved_height - self.screen_height()).max(0.),
         )
     }
+
+    /// Jumps straight to `scroll_y`, cancelling any smooth scrolling in flight
+    pub fn set_scroll_y(&mut self, scroll_y: f32) {
+        self.scroll_y = self.clamped_scroll_y(scroll_y);
+        self.target_scroll_y = self.scroll_y;
+        self.last_scroll_frame = None;
+    }
+
+    /// Eases the view `num_pixels` up the document, negative being down
+    pub fn scroll_by(&mut self, num_pixels: f32) {
+        self.target_scroll_y = self.clamped_scroll_y(self.target_scroll_y - num_pixels);
+        // Timing the ease from the input rather than from the first frame it
+        // reaches keeps that frame from being spent standing still
+        self.last_scroll_frame.get_or_insert_with(Instant::now);
+    }
+
+    /// Keeps the scroll position within the bounds of content that may have
+    /// been repositioned or resized since the last frame
+    pub fn clamp_scroll(&mut self) {
+        self.scroll_y = self.clamped_scroll_y(self.scroll_y);
+        self.target_scroll_y = self.clamped_scroll_y(self.target_scroll_y);
+    }
+
+    /// Advances the eased scroll position, returning whether it is still moving
+    pub fn update_scroll(&mut self) -> bool {
+        let remaining = self.target_scroll_y - self.scroll_y;
+        // A non-finite position settles too, otherwise it would ease forever
+        if !remaining.is_finite() || remaining.abs() <= SCROLL_SETTLE_DISTANCE {
+            self.scroll_y = self.target_scroll_y;
+            self.last_scroll_frame = None;
+            return false;
+        }
+
+        let now = Instant::now();
+        if let Some(previous) = self.last_scroll_frame.replace(now) {
+            let elapsed = now.saturating_duration_since(previous).as_secs_f32();
+            self.scroll_y += remaining * ease_fraction(elapsed);
+        }
+        true
+    }
+}
+
+/// Fraction of the remaining scroll distance to cover over `elapsed` seconds
+fn ease_fraction(elapsed: f32) -> f32 {
+    1. - (-elapsed / SCROLL_EASE_TIME_CONSTANT).exp()
 }
 
 // Translates points from pixel coordinates to wgpu coordinates
@@ -829,4 +885,24 @@ pub fn point(x: f32, y: f32, screen: Size) -> [f32; 2] {
     let new_x = -1. + (x * scale_x);
     let new_y = 1. - (y * scale_y);
     [new_x, new_y]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ease_never_overshoots() {
+        for elapsed in [0., 1e-6, 1. / 240., 1. / 60., 1., 10.] {
+            assert!((0. ..=1.).contains(&ease_fraction(elapsed)));
+        }
+        assert_eq!(ease_fraction(0.), 0.);
+    }
+
+    #[test]
+    fn ease_is_frame_rate_independent() {
+        let one_step = 1. - ease_fraction(1. / 60.);
+        let four_steps = (1. - ease_fraction(1. / 240.)).powi(4);
+        assert!((one_step - four_steps).abs() < 1e-6);
+    }
 }

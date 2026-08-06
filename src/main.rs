@@ -325,13 +325,17 @@ impl Inlyne {
                         &mut self.renderer,
                         &mut self.elements,
                     );
-                    self.renderer.set_scroll_y(self.renderer.scroll_y);
+                    self.renderer.clamp_scroll();
+                    let scrolling = self.renderer.update_scroll();
                     if let Err(err) = self
                         .renderer
                         .redraw(&mut self.elements, &mut self.selection)
                         .context("Renderer failed to redraw the screen")
                     {
                         tracing::warn!("{}", err);
+                    }
+                    if scrolling {
+                        self.window.request_redraw();
                     }
 
                     histogram!(HistTag::Redraw).record(redraw_start.elapsed());
@@ -340,8 +344,12 @@ impl Inlyne {
                     WindowEvent::Resized(size) => pending_resize = Some(size),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::MouseWheel { delta, .. } => match delta {
+                        // Devices that report pixels are already fine grained, so
+                        // easing them would only add lag
                         MouseScrollDelta::PixelDelta(pos) => {
-                            Self::scroll_pixels(&mut self.renderer, &self.window, pos.y as f32)
+                            self.renderer
+                                .set_scroll_y(self.renderer.scroll_y - pos.y as f32);
+                            self.window.request_redraw();
                         }
                         MouseScrollDelta::LineDelta(_, y_delta) => Self::scroll_lines(
                             &mut self.renderer,
@@ -678,7 +686,7 @@ impl Inlyne {
     }
 
     fn scroll_pixels(renderer: &mut Renderer, window: &Window, num_pixels: f32) {
-        renderer.set_scroll_y(renderer.scroll_y - num_pixels);
+        renderer.scroll_by(num_pixels);
         window.request_redraw();
     }
 
