@@ -824,7 +824,7 @@ fn main() -> anyhow::Result<()> {
 
             _ = Config::load_from_str(&new_config)?;
 
-            std::fs::write(config_path, new_config)?;
+            Config::write_to_file(&config_path, &new_config)?;
         }
     }
 

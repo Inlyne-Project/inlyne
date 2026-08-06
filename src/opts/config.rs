@@ -1,6 +1,5 @@
-use std::fs::{create_dir_all, read_to_string};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::fs::{create_dir_all, read_to_string, write};
+use std::path::Path;
 
 use super::{Position, Size, ThemeType};
 use crate::color;
@@ -133,21 +132,29 @@ impl Config {
         let config_path = config_dir.join("inlyne").join("inlyne.toml");
 
         if !config_path.is_file() {
-            Self::create_default_config(&config_path)?
+            Self::write_to_file(&config_path, Self::default_config())?
         }
 
         Self::load_from_file(&config_path)
     }
 
-    pub fn create_default_config(path: &PathBuf) -> anyhow::Result<()> {
-        create_dir_all(
-            path.parent()
-                .context("Could not find parent directory of path.")?,
-        )?;
+    /// The one place the config file gets written.
+    ///
+    /// Creates the config directory so that a fresh install can be configured
+    /// before it has ever been used to view a file.
+    pub fn write_to_file(path: &Path, contents: &str) -> anyhow::Result<()> {
+        let parent = path
+            .parent()
+            .context("Could not find parent directory of path.")?;
+        create_dir_all(parent).context(format!(
+            "Failed to create the configuration directory at '{}'",
+            parent.display()
+        ))?;
 
-        let mut file = std::fs::File::create(path)?;
-        file.write_all(Self::default_config().as_bytes())?;
-        Ok(())
+        write(path, contents).context(format!(
+            "Failed to write configuration file at '{}'",
+            path.display()
+        ))
     }
 
     pub const fn default_config() -> &'static str {
@@ -180,6 +187,43 @@ mod tests {
         assert_eq!(
             light_theme.merge(color::Theme::light_default()).unwrap(),
             color::Theme::light_default()
+        );
+    }
+
+    // `write_to_file` never inspects the file name, so these deliberately use
+    // an arbitrary one rather than whatever the config file happens to be
+    // called
+    #[test]
+    fn writes_into_a_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").join("out.toml");
+
+        Config::write_to_file(&path, "page-width = 800.0").unwrap();
+
+        assert_eq!(read_to_string(&path).unwrap(), "page-width = 800.0");
+    }
+
+    #[test]
+    fn overwrites_an_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.toml");
+
+        Config::write_to_file(&path, "page-width = 800.0").unwrap();
+        Config::write_to_file(&path, "scale = 1.5").unwrap();
+
+        assert_eq!(read_to_string(&path).unwrap(), "scale = 1.5");
+    }
+
+    #[test]
+    fn writes_defaults_that_load_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").join("out.toml");
+
+        Config::write_to_file(&path, Config::default_config()).unwrap();
+
+        assert_eq!(
+            Config::load_from_file(&path).unwrap(),
+            Config::load_from_str(Config::default_config()).unwrap()
         );
     }
 }
