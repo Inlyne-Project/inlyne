@@ -1,3 +1,49 @@
+# 0.5.3 - 2026-08-06
+
+## Deprecations
+
+- Deprecate implicit `inlyne <FILE>` viewing in favor of `inlyne view <FILE>` ([#466])
+
+## Releases
+
+- Add ARM `linux` to the set of prebuilt release artifacts ([#455])
+
+## Fixes
+
+- Downgrade `copypasta` to fix wayland-client version issues ([#462])
+- Update `taffy` to fix errant rendering hangs ([#459] [#467])
+- Correctly track relative files when navigating ([#465])
+
+## Internal
+
+- Migrate YAML parsing from `serde_yaml` -> `yaml_serde` ([#454])
+- Remove codecov.io CI workflow ([#457])
+- Fix tests on 32-bit targets ([#460] [#468])
+- Update CI actions ([#463])
+- Simplify config error handling code ([#469])
+
+## Contributors
+
+A huge thanks to our contributors
+
+- @CosmicHorrorDev
+- @durbanlegend
+- @khoroo
+- @kokoISnoTarget
+
+[#454]: https://github.com/Inlyne-Project/inlyne/pull/454
+[#455]: https://github.com/Inlyne-Project/inlyne/pull/455
+[#457]: https://github.com/Inlyne-Project/inlyne/pull/457
+[#459]: https://github.com/Inlyne-Project/inlyne/pull/459
+[#460]: https://github.com/Inlyne-Project/inlyne/pull/460
+[#462]: https://github.com/Inlyne-Project/inlyne/pull/462
+[#463]: https://github.com/Inlyne-Project/inlyne/pull/463
+[#465]: https://github.com/Inlyne-Project/inlyne/pull/465
+[#466]: https://github.com/Inlyne-Project/inlyne/pull/466
+[#467]: https://github.com/Inlyne-Project/inlyne/pull/467
+[#468]: https://github.com/Inlyne-Project/inlyne/pull/468
+[#469]: https://github.com/Inlyne-Project/inlyne/pull/469
+
 # 0.5.2 - 2026-05-19
 
 Adds back the macOS x64 target that was dropped the past release, and updates
