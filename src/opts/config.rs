@@ -95,6 +95,11 @@ pub struct Window {
     pub size: Option<Size>,
 }
 
+const CONFIG_DIR_NAME: &str = "inlyne";
+const CONFIG_FILE_NAME: &str = "config.toml";
+/// Kept working indefinitely for anyone who set up a config before the rename
+const LEGACY_CONFIG_FILE_NAME: &str = "inlyne.toml";
+
 #[derive(Deserialize, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
@@ -126,11 +131,44 @@ impl Config {
         Self::load_from_str(&config_content)
     }
 
-    pub fn load_from_system() -> anyhow::Result<Self> {
+    /// Picks the config file within our config directory, preferring
+    /// `config.toml` and falling back to the legacy `inlyne.toml`.
+    ///
+    /// Returns the `config.toml` path when neither exists, so a fresh install
+    /// creates the current name. Never modifies the filesystem.
+    fn resolve_in(config_dir: &Path) -> PathBuf {
+        let path = config_dir.join(CONFIG_FILE_NAME);
+        let legacy_path = config_dir.join(LEGACY_CONFIG_FILE_NAME);
+
+        if path.is_file() {
+            if legacy_path.is_file() {
+                tracing::warn!(
+                    "Ignoring '{}' in favor of '{}'",
+                    legacy_path.display(),
+                    path.display()
+                );
+            }
+            path
+        } else if legacy_path.is_file() {
+            legacy_path
+        } else {
+            path
+        }
+    }
+
+    /// The config file to read from and write back to.
+    ///
+    /// Shared so that loading at startup and `inlyne config open` can never
+    /// disagree on which file is the user's.
+    pub fn system_path() -> anyhow::Result<PathBuf> {
         let config_dir =
             dirs::config_dir().context("Failed to find the configuration directory")?;
 
-        let config_path = config_dir.join("inlyne").join("inlyne.toml");
+        Ok(Self::resolve_in(&config_dir.join(CONFIG_DIR_NAME)))
+    }
+
+    pub fn load_from_system() -> anyhow::Result<Self> {
+        let config_path = Self::system_path()?;
 
         if !config_path.is_file() {
             Self::create_default_config(&config_path)?
@@ -181,5 +219,58 @@ mod tests {
             light_theme.merge(color::Theme::light_default()).unwrap(),
             color::Theme::light_default()
         );
+    }
+
+    fn touch(path: &Path) {
+        std::fs::File::create(path).unwrap();
+    }
+
+    #[test]
+    fn resolves_to_current_name_when_neither_exists() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let resolved = Config::resolve_in(dir.path());
+
+        assert_eq!(resolved, dir.path().join(CONFIG_FILE_NAME));
+        // Resolving is only a lookup. Creating the file is `load_from_system`'s job
+        assert!(!resolved.exists());
+    }
+
+    #[test]
+    fn resolves_to_legacy_name_when_it_is_the_only_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy_path = dir.path().join(LEGACY_CONFIG_FILE_NAME);
+        touch(&legacy_path);
+
+        assert_eq!(Config::resolve_in(dir.path()), legacy_path);
+    }
+
+    #[test]
+    fn resolves_to_current_name_when_it_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(CONFIG_FILE_NAME);
+        touch(&path);
+
+        assert_eq!(Config::resolve_in(dir.path()), path);
+    }
+
+    #[test]
+    fn current_name_wins_over_legacy_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(CONFIG_FILE_NAME);
+        touch(&path);
+        touch(&dir.path().join(LEGACY_CONFIG_FILE_NAME));
+
+        assert_eq!(Config::resolve_in(dir.path()), path);
+    }
+
+    #[test]
+    fn a_directory_does_not_shadow_the_legacy_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(CONFIG_FILE_NAME)).unwrap();
+        let legacy_path = dir.path().join(LEGACY_CONFIG_FILE_NAME);
+        touch(&legacy_path);
+
+        assert_eq!(Config::resolve_in(dir.path()), legacy_path);
     }
 }

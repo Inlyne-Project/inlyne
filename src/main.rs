@@ -806,10 +806,7 @@ fn main() -> anyhow::Result<()> {
             inlyne.run();
         }
         Commands::Config(ConfigCmd::Open) => {
-            let config_path = dirs::config_dir()
-                .context("Failed to find the configuration directory")?
-                .join("inlyne")
-                .join("inlyne.toml");
+            let config_path = Config::system_path()?;
 
             let config = std::fs::read_to_string(&config_path)
                 .unwrap_or_else(|_| Config::default_config().to_string());
