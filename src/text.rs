@@ -47,7 +47,11 @@ impl TextBoxMeasure {
 
         let size = self.internal_measure((width_bound, f32::MAX));
         TaffySize {
-            width: known_dimensions.width.unwrap_or(size.0),
+            // Ceil so the track is never fractionally narrower than the
+            // measured content. A fractional track width re-wraps
+            // break-anywhere (e.g. CJK) text when the cell is rendered at
+            // that width, overflowing the height the layout accounted for
+            width: known_dimensions.width.unwrap_or(size.0.ceil()),
             height: known_dimensions.height.unwrap_or(size.1),
         }
     }
