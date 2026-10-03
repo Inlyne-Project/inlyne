@@ -90,6 +90,13 @@ impl Table {
                 height: length(TABLE_ROW_GAP),
             },
             grid_template_columns: vec![auto(); max_columns],
+            // Never exceed the available width: without this the grid is
+            // sized to max-content and wide (e.g. long bold or CJK) columns
+            // overflow the page instead of wrapping within their cells
+            max_size: TaffySize {
+                width: length(bounds.0),
+                height: auto(),
+            },
             ..default()
         };
 
