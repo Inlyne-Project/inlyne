@@ -109,6 +109,19 @@ You weren't supposed to see this!
 
 <small><i><u>Are these text effects ~~to~~ too **much**?</u></i> Theres no such thing</small>
 
+## Keyboard link hints
+
+Press `f` to show yellow labels on visible text and image links, then type a label
+to follow it. `Esc` cancels without quitting; `Backspace` edits the typed prefix.
+Other shortcuts are suspended until hint mode ends. Scrolling, resizing, document
+updates, mouse actions, and losing focus cancel hints so labels cannot go stale.
+Links in collapsed sections are excluded. If the viewport is too crowded to fit
+readable labels, zoom in or enlarge the window.
+
+The `LinkHints` action uses the normal configurable keybindings. For example,
+`extra = [["LinkHints", "F"]]` under `[keybindings]` also binds `Shift+f`;
+a custom `base` replaces the defaults, and an `extra` binding for `f` overrides it.
+
 ## Configuration
 
 Use `inlyne --help` to see all the command line options. Some of which can be set permentantly by placing an `inlyne.toml` file into a directory called `inlyne` within the default [dirs](https://crates.io/crates/dirs) configuration folder for your respective OS:

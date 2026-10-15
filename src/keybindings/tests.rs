@@ -66,6 +66,7 @@ base = [
     ["ToBottom", "End"],
     ["Quit", "Escape"],
     # Vim-like
+    ["LinkHints", "f"],
     ["Copy", "y"],
     ["ScrollUp", "k"],
     ["ScrollDown", "j"],
@@ -78,6 +79,47 @@ base = [
     ["HistoryPrevious", ["b", "p"]],
 ]
 "#;
+
+#[test]
+fn link_hints_respects_custom_bindings() {
+    for (config, keys, expected) in [
+        ("", vec![VirtKey::F], Some(Action::LinkHints)),
+        (
+            r#"[keybindings]
+extra = [["Copy", "f"]]"#,
+            vec![VirtKey::F],
+            Some(Action::Copy),
+        ),
+        // An existing user combo beginning with f must override the new single-key default.
+        (
+            r#"[keybindings]
+extra = [["Copy", ["f", "g"]]]"#,
+            vec![VirtKey::F, VirtKey::G],
+            Some(Action::Copy),
+        ),
+        (
+            r#"[keybindings]
+base = [["LinkHints", "l"]]"#,
+            vec![VirtKey::L],
+            Some(Action::LinkHints),
+        ),
+        (
+            r#"[keybindings]
+base = [["LinkHints", "l"]]"#,
+            vec![VirtKey::F],
+            None,
+        ),
+    ] {
+        let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
+        let mut combos = KeyCombos::new(keybindings).unwrap();
+        let last = keys
+            .into_iter()
+            .map(|key| combos.munch(key.into()))
+            .last()
+            .unwrap();
+        assert_eq!(last, expected);
+    }
+}
 
 #[test]
 fn defaults() {

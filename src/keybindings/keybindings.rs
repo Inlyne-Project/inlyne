@@ -50,7 +50,7 @@ impl From<KeybindingsSection> for Keybindings {
                     .clone()
                     .into_iter()
                     .filter(|(_, combo)| {
-                        if combo.starts_with(extra_combo) {
+                        if combo.starts_with(extra_combo) || extra_combo.starts_with(combo) {
                             tracing::debug!("Base keybinding {combo} ignored in favor of extra keybinding {extra_combo}");
                             false
                         } else {

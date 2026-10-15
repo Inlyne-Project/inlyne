@@ -18,6 +18,7 @@ pub mod history;
 pub mod image;
 pub mod interpreter;
 mod keybindings;
+mod link_hints;
 mod metrics;
 pub mod opts;
 mod panic_hook;
@@ -44,6 +45,7 @@ use image::{Image, ImageData};
 use interpreter::HtmlInterpreter;
 use keybindings::action::{Action, HistDirection, VertDirection, Zoom};
 use keybindings::{Key, KeyCombos, ModifiedKey};
+use link_hints::LinkHints;
 use metrics::{histogram, HistTag};
 use opts::{Cli, Config, Opts};
 use parking_lot::Mutex;
@@ -150,6 +152,7 @@ pub struct Inlyne {
     need_repositioning: bool,
     watcher: Watcher,
     selection: Selection,
+    link_hints: Option<LinkHints>,
 }
 
 impl Inlyne {
@@ -230,6 +233,7 @@ impl Inlyne {
             need_repositioning: false,
             watcher,
             selection: Selection::new(),
+            link_hints: None,
         })
     }
 
@@ -261,6 +265,7 @@ impl Inlyne {
     }
 
     fn load_file(&mut self, contents: String) {
+        self.cancel_link_hints();
         self.element_queue.lock().clear();
         self.elements.clear();
         self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
@@ -269,6 +274,7 @@ impl Inlyne {
     }
 
     fn update_file(&mut self, path: &Path, contents: String) {
+        self.cancel_link_hints();
         self.window.set_title(&utils::format_title(path));
         self.watcher.update_file(path, contents);
         self.renderer.set_scroll_y(0.0);
@@ -288,6 +294,25 @@ impl Inlyne {
         let mut clipboard = unsafe { clipboard::Clipboard::new(event_loop.raw_display_handle()) };
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
+
+            // Hints refer to a single layout/viewport snapshot. Invalidate before handling
+            // anything that could change it, including mouse interactions and focus loss.
+            if matches!(
+                &event,
+                Event::UserEvent(_)
+                    | Event::WindowEvent {
+                        event: WindowEvent::Resized(_)
+                            | WindowEvent::ScaleFactorChanged { .. }
+                            | WindowEvent::MouseWheel { .. }
+                            | WindowEvent::MouseInput { .. }
+                            | WindowEvent::CursorMoved { .. }
+                            | WindowEvent::CursorLeft { .. }
+                            | WindowEvent::Focused(false),
+                        ..
+                    }
+            ) {
+                self.cancel_link_hints();
+            }
 
             match event {
                 Event::UserEvent(inlyne_event) => match inlyne_event {
@@ -320,6 +345,9 @@ impl Inlyne {
                 },
                 Event::RedrawRequested(_) => {
                     let redraw_start = Instant::now();
+                    if !self.element_queue.lock().is_empty() {
+                        self.cancel_link_hints();
+                    }
                     Self::position_queued_elements(
                         &self.element_queue,
                         &mut self.renderer,
@@ -328,7 +356,11 @@ impl Inlyne {
                     self.renderer.set_scroll_y(self.renderer.scroll_y);
                     if let Err(err) = self
                         .renderer
-                        .redraw(&mut self.elements, &mut self.selection)
+                        .redraw(
+                            &mut self.elements,
+                            &mut self.selection,
+                            self.link_hints.as_ref(),
+                        )
                         .context("Renderer failed to redraw the screen")
                     {
                         tracing::warn!("{}", err);
@@ -439,7 +471,9 @@ impl Inlyne {
                             if Rect::new(
                                 (screen_size.0 - DEFAULT_MARGIN / 4., 0.),
                                 (DEFAULT_MARGIN / 4., screen_size.1),
-                            ).contains((mouse_position.0, y)) {
+                            )
+                            .contains((mouse_position.0, y))
+                            {
                                 let scrollbar_height = self.renderer.scrollbar_height();
 
                                 let target_scroll = ((y - scrollbar_height / 2.) / screen_size.1)
@@ -458,61 +492,16 @@ impl Inlyne {
                                 self.renderer.zoom,
                             ) {
                                 match hoverable {
-                                    Hoverable::Image(Image { is_link: Some(link), .. }) |
-                                    Hoverable::Text(Text { link: Some(link), .. }) => {
-                                        let path = PathBuf::from(link);
-
-                                        if  path.extension().is_some_and(|ext| ext == "md")
-                                            && !path.to_str().is_some_and(|s| s.starts_with("http")) {
-                                            // Open them in a new window, akin to what a browser does
-                                            if modifiers.shift() {
-                                                std::thread::spawn(move || {
-                                                    Command::new(
-                                                        std::env::current_exe()
-                                                            .unwrap_or_else(|_| "inlyne".into()),
-                                                    )
-                                                        .args(Opts::view_args(&path))
-                                                        .spawn()
-                                                        .expect("Couldn't spawn inlyne instance")
-                                                        .wait()
-                                                        .expect("Failed waiting on child");
-                                                });
-                                            } else {
-                                                match read_to_string(&path) {
-                                                    Ok(contents) => {
-                                                        // Canonicalize before changing the CWD so
-                                                        // that the watcher and history always store
-                                                        // absolute paths, independent of CWD.
-                                                        let abs_path = path
-                                                            .canonicalize()
-                                                            .unwrap_or(path);
-                                                        self.update_file(&abs_path, contents);
-                                                        let parent = abs_path
-                                                            .parent()
-                                                            .expect("File should have parent directory");
-                                                        std::env::set_current_dir(parent)
-                                                            .expect("Could not set current directory.");
-                                                        self.opts.history.make_next(abs_path);
-                                                    }
-                                                    Err(err) => {
-                                                        tracing::warn!(
-                                                        "Failed loading markdown file at {}\nError: {}",
-                                                        path.display(),
-                                                        err,
-                                                    );
-                                                    }
-                                                }
-                                            }
-                                        } else if let Some(anchor_pos) =
-                                            self.renderer.positioner.anchors.get(&link.to_lowercase())
-                                        {
-                                            self.renderer.set_scroll_y(*anchor_pos);
-                                            self.window.request_redraw();
-                                            self.window.set_cursor_icon(CursorIcon::Default);
-                                        } else if let Err(e) = open::that(link) {
-                                            tracing::error!("Could not open link: {e} from {:?}", std::env::current_dir())
-                                        }
-                                    },
+                                    Hoverable::Image(Image {
+                                        is_link: Some(link),
+                                        ..
+                                    })
+                                    | Hoverable::Text(Text {
+                                        link: Some(link), ..
+                                    }) => {
+                                        let link = link.clone();
+                                        self.activate_link(link, modifiers.shift());
+                                    }
                                     Hoverable::Summary(summary) => {
                                         let mut hidden = summary.hidden.borrow_mut();
                                         *hidden = !*hidden;
@@ -520,7 +509,7 @@ impl Inlyne {
                                             .send_event(InlyneEvent::Reposition)
                                             .unwrap();
                                         self.selection.add_position(mouse_position);
-                                    },
+                                    }
                                     _ => {
                                         self.selection.add_position(mouse_position);
                                         self.window.request_redraw();
@@ -549,9 +538,64 @@ impl Inlyne {
                         ..
                     } => {
                         let key = Key::new(virtual_keycode, scancode);
+                        if let Some(hints) = &mut self.link_hints {
+                            use winit::event::VirtualKeyCode;
+                            match virtual_keycode {
+                                Some(VirtualKeyCode::Escape) => self.cancel_link_hints(),
+                                Some(VirtualKeyCode::Back) => {
+                                    hints.backspace();
+                                    self.window.request_redraw();
+                                }
+                                _ if !modifiers.intersects(
+                                    ModifiersState::CTRL
+                                        | ModifiersState::ALT
+                                        | ModifiersState::LOGO,
+                                ) =>
+                                {
+                                    let letter = key.to_string();
+                                    if letter.len() == 1 {
+                                        if let Some(link) =
+                                            hints.push(letter.chars().next().unwrap())
+                                        {
+                                            self.cancel_link_hints();
+                                            self.activate_link(link, false);
+                                        }
+                                        self.window.request_redraw();
+                                    }
+                                }
+                                _ => {}
+                            }
+                            // Hint keys, including quit/scroll shortcuts, must not reach the normal bindings.
+                            return;
+                        }
                         let modified_key = ModifiedKey(key, modifiers);
                         if let Some(action) = self.keycombos.munch(modified_key) {
                             match action {
+                                Action::LinkHints => {
+                                    if pending_resize.is_none()
+                                        && !self.need_repositioning
+                                        && self.element_queue.lock().is_empty()
+                                    {
+                                        let viewport = Rect::new(
+                                            (0., self.renderer.scroll_y),
+                                            self.renderer.screen_size(),
+                                        );
+                                        match LinkHints::collect(
+                                            &self.elements,
+                                            &mut self.renderer.text_system,
+                                            &mut self.renderer.positioner.taffy,
+                                            viewport,
+                                            self.renderer.page_width,
+                                            self.renderer.zoom,
+                                        ) {
+                                            Ok(hints) => self.link_hints = hints,
+                                            Err(err) => tracing::warn!(
+                                                "Could not collect link hints: {err}"
+                                            ),
+                                        }
+                                        self.window.request_redraw();
+                                    }
+                                }
                                 Action::ToEdge(direction) => {
                                     let scroll = match direction {
                                         VertDirection::Up => 0.0,
@@ -603,22 +647,27 @@ impl Inlyne {
                                     );
                                     self.window.request_redraw();
                                 }
-                                Action::Copy => clipboard
-                                    .set_contents(self.selection.text.trim().to_owned()),
+                                Action::Copy => {
+                                    clipboard.set_contents(self.selection.text.trim().to_owned())
+                                }
                                 Action::Quit => *control_flow = ControlFlow::Exit,
                                 Action::History(hist_dir) => {
                                     let changed_path = match hist_dir {
                                         HistDirection::Next => self.opts.history.next(),
                                         HistDirection::Prev => self.opts.history.previous(),
-                                    }.map(ToOwned::to_owned);
+                                    }
+                                    .map(ToOwned::to_owned);
                                     let Some(file_path) = changed_path else {
                                         return;
                                     };
                                     match read_to_string(&file_path) {
                                         Ok(contents) => {
                                             self.update_file(&file_path, contents);
-                                            let parent = file_path.parent().expect("File should have parent directory");
-                                            std::env::set_current_dir(parent).expect("Could not set current directory.");
+                                            let parent = file_path
+                                                .parent()
+                                                .expect("File should have parent directory");
+                                            std::env::set_current_dir(parent)
+                                                .expect("Could not set current directory.");
                                         }
                                         Err(err) => {
                                             tracing::warn!(
@@ -639,6 +688,7 @@ impl Inlyne {
                     // we receive a `MainEventsCleared`.  This prevents us from clogging up the queue
                     // with a bunch of costly resizes. (https://github.com/Inlyne-Project/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
+                        self.cancel_link_hints();
                         if size.width > 0 && size.height > 0 {
                             self.renderer.config.width = size.width;
                             self.renderer.config.height = size.height;
@@ -657,6 +707,7 @@ impl Inlyne {
                     }
 
                     if self.need_repositioning {
+                        self.cancel_link_hints();
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw();
                         self.need_repositioning = false;
@@ -665,6 +716,60 @@ impl Inlyne {
                 _ => {}
             }
         });
+    }
+
+    fn cancel_link_hints(&mut self) {
+        if self.link_hints.take().is_some() {
+            self.window.request_redraw();
+        }
+    }
+
+    /// Shared by mouse clicks and keyboard hints so navigation keeps identical semantics.
+    fn activate_link(&mut self, link: String, new_window: bool) {
+        let path = PathBuf::from(&link);
+        if path.extension().is_some_and(|ext| ext == "md")
+            && !path.to_str().is_some_and(|s| s.starts_with("http"))
+        {
+            if new_window {
+                std::thread::spawn(move || {
+                    Command::new(std::env::current_exe().unwrap_or_else(|_| "inlyne".into()))
+                        .args(Opts::view_args(&path))
+                        .spawn()
+                        .expect("Couldn't spawn inlyne instance")
+                        .wait()
+                        .expect("Failed waiting on child");
+                });
+            } else {
+                match read_to_string(&path) {
+                    Ok(contents) => {
+                        // Resolve before changing CWD; watcher/history paths must stay absolute.
+                        let abs_path = path.canonicalize().unwrap_or(path);
+                        self.update_file(&abs_path, contents);
+                        let parent = abs_path
+                            .parent()
+                            .expect("File should have parent directory");
+                        std::env::set_current_dir(parent)
+                            .expect("Could not set current directory.");
+                        self.opts.history.make_next(abs_path);
+                    }
+                    Err(err) => tracing::warn!(
+                        "Failed loading markdown file at {}\nError: {}",
+                        path.display(),
+                        err
+                    ),
+                }
+            }
+        } else if let Some(anchor_pos) = self.renderer.positioner.anchors.get(&link.to_lowercase())
+        {
+            self.renderer.set_scroll_y(*anchor_pos);
+            self.window.request_redraw();
+            self.window.set_cursor_icon(CursorIcon::Default);
+        } else if let Err(err) = open::that(link) {
+            tracing::error!(
+                "Could not open link: {err} from {:?}",
+                std::env::current_dir()
+            );
+        }
     }
 
     fn scroll_lines(

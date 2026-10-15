@@ -220,6 +220,70 @@ impl TextBox {
         }
     }
 
+    /// Link fragments in document coordinates, using the same shaped glyphs and alignment as rendering.
+    /// Adjacent styled spans with the same destination form one target; wrapped lines remain
+    /// separate rectangles so an off-screen first line does not hide a visible continuation.
+    pub(crate) fn link_rects(
+        &self,
+        cache: &mut TextCache,
+        font_system: &mut FontSystem,
+        pos: Point,
+        bounds: Size,
+        zoom: f32,
+    ) -> Vec<(String, Vec<Rect>)> {
+        let mut links: Vec<(String, Vec<Rect>)> = Vec::new();
+        let mut groups = Vec::with_capacity(self.texts.len());
+        let mut previous: Option<&str> = None;
+        for text in &self.texts {
+            if let Some(link) = text.link.as_deref() {
+                if previous != Some(link) {
+                    links.push((link.to_owned(), Vec::new()));
+                }
+                groups.push(Some(links.len() - 1));
+            } else {
+                groups.push(None);
+            }
+            previous = text.link.as_deref();
+        }
+        if links.is_empty() {
+            return links;
+        }
+
+        let (_, buffer) = cache.allocate(font_system, self.key(bounds, zoom));
+        let max_width = buffer
+            .layout_runs()
+            .fold(0_f32, |max, line| max.max(line.line_w));
+        let left = match self.align {
+            Align::Left => pos.0,
+            Align::Center => pos.0 + (bounds.0 - max_width) / 2.,
+            Align::Right => pos.0 + bounds.0 - max_width,
+        };
+        for (row, line) in buffer.layout_runs().enumerate() {
+            let mut fragments: Vec<Option<Rect>> = vec![None; links.len()];
+            for glyph in line.glyphs {
+                let Some(group) = groups[glyph.metadata] else {
+                    continue;
+                };
+                let x = left + glyph.x;
+                let rect = fragments[group].get_or_insert_with(|| {
+                    Rect::new(
+                        (x, pos.1 + row as f32 * self.line_height(zoom)),
+                        (glyph.w, self.line_height(zoom)),
+                    )
+                });
+                let right = rect.max().0.max(x + glyph.w);
+                rect.pos.0 = rect.pos.0.min(x);
+                rect.size.0 = right - rect.pos.0;
+            }
+            for ((_, rects), fragment) in links.iter_mut().zip(fragments) {
+                if let Some(rect) = fragment {
+                    rects.push(rect);
+                }
+            }
+        }
+        links
+    }
+
     pub fn size(&self, text_system: &mut TextSystem, bounds: Size, zoom: f32) -> Size {
         self.size_without_system(
             &text_system.text_cache,

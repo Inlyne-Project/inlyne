@@ -27,6 +27,7 @@ impl<'de> Deserialize<'de> for Action {
             ZoomOut,
             ZoomReset,
             Copy,
+            LinkHints,
             Quit,
         }
 
@@ -43,6 +44,7 @@ impl<'de> Deserialize<'de> for Action {
             FlatAction::ZoomOut => Action::Zoom(Zoom::Out),
             FlatAction::ZoomReset => Action::Zoom(Zoom::Reset),
             FlatAction::Copy => Action::Copy,
+            FlatAction::LinkHints => Action::LinkHints,
             FlatAction::Quit => Action::Quit,
         };
 

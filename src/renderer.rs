@@ -5,6 +5,7 @@ use std::time::Instant;
 use crate::color::{native_color, Theme};
 use crate::fonts::get_fonts;
 use crate::image::ImageRenderer;
+use crate::link_hints::LinkHints;
 use crate::metrics::{histogram, HistTag};
 use crate::opts::FontOptions;
 use crate::positioner::{Positioned, Positioner, DEFAULT_MARGIN};
@@ -33,6 +34,10 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
+// Both document and overlay tessellation may exceed 65,535 vertices on dense pages.
+type GeometryBuffers = VertexBuffers<Vertex, u32>;
+const GEOMETRY_INDEX_FORMAT: IndexFormat = IndexFormat::Uint32;
+
 pub struct Renderer {
     pub config: wgpu::SurfaceConfiguration,
     pub surface: wgpu::Surface,
@@ -42,13 +47,14 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     pub text_system: TextSystem,
     pub scroll_y: f32,
-    pub lyon_buffer: VertexBuffers<Vertex, u16>,
+    pub lyon_buffer: GeometryBuffers,
     pub hidpi_scale: f32,
     pub page_width: f32,
     pub image_renderer: ImageRenderer,
     pub theme: Theme,
     pub zoom: f32,
     pub positioner: Positioner,
+    hint_text_renderer: TextRenderer,
 }
 
 impl Renderer {
@@ -159,6 +165,8 @@ impl Renderer {
         let mut text_atlas = TextAtlas::new(&device, &queue, surface_format);
         let text_renderer =
             TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
+        let hint_text_renderer =
+            TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
         let text_cache = Arc::new(Mutex::new(TextCache::new()));
         let text_system = TextSystem {
             font_system,
@@ -168,7 +176,7 @@ impl Renderer {
             text_cache,
         };
 
-        let lyon_buffer: VertexBuffers<Vertex, u16> = VertexBuffers::new();
+        let lyon_buffer = GeometryBuffers::new();
 
         let positioner = Positioner::new(window.inner_size().into(), hidpi_scale, page_width);
         Ok(Self {
@@ -187,6 +195,7 @@ impl Renderer {
             image_renderer,
             theme,
             positioner,
+            hint_text_renderer,
         })
     }
 
@@ -677,10 +686,43 @@ impl Renderer {
         bind_groups
     }
 
-    pub fn redraw(
+    fn render_hint_overlays(&mut self, hints: &LinkHints) -> anyhow::Result<Vec<CachedTextArea>> {
+        let mut areas = Vec::new();
+        let screen = self.screen_size();
+        for hint in hints.matching() {
+            let padding = 3. * hint.text_box.hidpi_scale;
+            let rect = hint.label_rect.clone();
+            let pos = rect.pos;
+            self.draw_rectangle(
+                rect.clone(),
+                native_color(glyphon::Color::rgb(255, 225, 80).0, &self.surface_format),
+            )?;
+            // Stroke inside the placed box, keeping its complete footprint within the viewport.
+            let stroke = hint.text_box.hidpi_scale;
+            self.stroke_rectangle(
+                Rect::new(
+                    (pos.0 + stroke / 2., pos.1 + stroke / 2.),
+                    (rect.size.0 - stroke, rect.size.1 - stroke),
+                ),
+                [0.15, 0.12, 0., 1.],
+                stroke,
+            )?;
+            areas.push(hint.text_box.text_areas(
+                &mut self.text_system,
+                (pos.0 + padding, pos.1 + padding),
+                screen,
+                1.,
+                0.,
+            ));
+        }
+        Ok(areas)
+    }
+
+    pub(crate) fn redraw(
         &mut self,
         elements: &mut [Positioned<Element>],
         selection: &mut Selection,
+        hints: Option<&LinkHints>,
     ) -> anyhow::Result<()> {
         selection.text.clear();
         let frame = match self.surface.get_current_texture() {
@@ -729,6 +771,33 @@ impl Renderer {
                 usage: wgpu::BufferUsages::INDEX,
             });
 
+        let document_index_count = self.lyon_buffer.indices.len() as u32;
+
+        // Keep overlay geometry separate: it must be drawn after document images AND text.
+        self.lyon_buffer.indices.clear();
+        self.lyon_buffer.vertices.clear();
+        let cached_hint_areas = match hints {
+            Some(hints) => self.render_hint_overlays(hints)?,
+            None => Vec::new(),
+        };
+        let hint_index_count = self.lyon_buffer.indices.len() as u32;
+        let hint_buffers = (hint_index_count > 0).then(|| {
+            (
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Link hint vertices"),
+                        contents: bytemuck::cast_slice(&self.lyon_buffer.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    }),
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Link hint indices"),
+                        contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    }),
+            )
+        });
+
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
 
@@ -749,6 +818,20 @@ impl Renderer {
                     height: self.config.height,
                 },
                 text_areas,
+                &mut self.text_system.swash_cache,
+            )?;
+            self.hint_text_renderer.prepare(
+                &self.device,
+                &self.queue,
+                &mut self.text_system.font_system.lock(),
+                &mut self.text_system.text_atlas,
+                Resolution {
+                    width: self.config.width,
+                    height: self.config.height,
+                },
+                cached_hint_areas
+                    .iter()
+                    .map(|area| area.text_area(&text_cache)),
                 &mut self.text_system.swash_cache,
             )?;
             text_cache.trim();
@@ -780,8 +863,8 @@ impl Renderer {
             // Draw lyon elements
             rpass.set_pipeline(&self.render_pipeline);
             rpass.set_vertex_buffer(0, vertex_buf.slice(..));
-            rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.lyon_buffer.indices.len() as u32, 0, 0..1);
+            rpass.set_index_buffer(index_buffer.slice(..), GEOMETRY_INDEX_FORMAT);
+            rpass.draw_indexed(0..document_index_count, 0, 0..1);
 
             // Draw images
             rpass.set_pipeline(&self.image_renderer.render_pipeline);
@@ -796,6 +879,17 @@ impl Renderer {
                 .text_renderer
                 .render(&self.text_system.text_atlas, &mut rpass)
                 .unwrap();
+
+            if let Some((vertices, indices)) = &hint_buffers {
+                rpass.set_pipeline(&self.render_pipeline);
+                rpass.set_vertex_buffer(0, vertices.slice(..));
+                rpass.set_index_buffer(indices.slice(..), GEOMETRY_INDEX_FORMAT);
+                rpass.draw_indexed(0..hint_index_count, 0, 0..1);
+                // Separate text renderer keeps hint glyphs above their backgrounds and all content.
+                self.hint_text_renderer
+                    .render(&self.text_system.text_atlas, &mut rpass)
+                    .unwrap();
+            }
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -829,4 +923,49 @@ pub fn point(x: f32, y: f32, screen: Size) -> [f32; 2] {
     let new_x = -1. + (x * scale_x);
     let new_y = 1. - (y * scale_y);
     [new_x, new_y]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dense_hint_geometry_exceeds_u16_without_index_overflow() {
+        let mut buffer = GeometryBuffers::new();
+        let mut fill = FillTessellator::new();
+        let mut stroke = StrokeTessellator::new();
+        let rect = Box2D::new(Point2D::new(0., 0.), Point2D::new(20., 20.));
+        // Each label has a filled background and border, as in render_hint_overlays.
+        for _ in 0..6_000 {
+            fill.tessellate_rectangle(
+                &rect,
+                &FillOptions::default(),
+                &mut BuffersBuilder::new(&mut buffer, |vertex: FillVertex| Vertex {
+                    pos: [vertex.position().x, vertex.position().y, 0.],
+                    color: [1.; 4],
+                }),
+            )
+            .unwrap();
+            stroke
+                .tessellate_rectangle(
+                    &rect,
+                    &StrokeOptions::default(),
+                    &mut BuffersBuilder::new(&mut buffer, |vertex: StrokeVertex| Vertex {
+                        pos: [vertex.position().x, vertex.position().y, 0.],
+                        color: [1.; 4],
+                    }),
+                )
+                .unwrap();
+        }
+        assert!(buffer.vertices.len() > usize::from(u16::MAX));
+        assert!(buffer
+            .indices
+            .iter()
+            .any(|&index| index > u32::from(u16::MAX)));
+        assert!(buffer
+            .indices
+            .iter()
+            .all(|&index| (index as usize) < buffer.vertices.len()));
+        assert_eq!(GEOMETRY_INDEX_FORMAT, IndexFormat::Uint32);
+    }
 }
