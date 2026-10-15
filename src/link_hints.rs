@@ -3,7 +3,7 @@ use taffy::TaffyTree;
 
 use crate::positioner::{Positioned, DEFAULT_MARGIN};
 use crate::text::{Text, TextBox, TextBoxMeasure, TextSystem};
-use crate::utils::{Rect, Size};
+use crate::utils::{Point, Rect, Size};
 use crate::Element;
 
 const ALPHABET: &[u8] = b"asdfghjklqwertyuiopzxcvbnm";
@@ -69,8 +69,9 @@ impl LinkHints {
             .filter(|hint| hint.label.starts_with(&self.prefix))
     }
 
+    /// Append a letter and return the destination when it completes a label.
     /// Invalid letters are ignored, allowing Backspace to recover without relabelling targets.
-    pub fn push(&mut self, letter: char) -> Option<String> {
+    pub fn push_letter(&mut self, letter: char) -> Option<String> {
         if !letter.is_ascii() || !ALPHABET.contains(&(letter as u8)) {
             return None;
         }
@@ -160,7 +161,7 @@ impl LinkHints {
 fn add_text_targets(
     text_box: &TextBox,
     text_system: &mut TextSystem,
-    pos: (f32, f32),
+    pos: Point,
     bounds: Size,
     zoom: f32,
     viewport: &Rect,
@@ -208,7 +209,7 @@ fn visit_leaves(
 
 /// Anchor labels to their links, nudging right past same-row neighbours when space permits.
 /// Dense rows may overlap rather than disabling hints or moving them to unrelated rows.
-fn place_label(pos: (f32, f32), size: Size, viewport: Size, placed: &[Hint], gap: f32) -> Rect {
+fn place_label(pos: Point, size: Size, viewport: Size, placed: &[Hint], gap: f32) -> Rect {
     let max_x = (viewport.0 - size.0).max(0.);
     let mut rect = Rect::new(
         (
@@ -318,9 +319,9 @@ mod tests {
             .matching()
             .map(|hint| hint.label_rect.clone())
             .collect();
-        assert_eq!(hints.push('s'), None);
+        assert_eq!(hints.push_letter('s'), None);
         assert_eq!(hints.matching().count(), 1);
-        assert_eq!(hints.push('m'), None); // Invalid prefixes do not hide every hint.
+        assert_eq!(hints.push_letter('m'), None); // Invalid prefixes do not hide every hint.
         assert_eq!(hints.prefix, "s");
         assert_eq!(hints.matching().next().unwrap().label_rect, positions[26]);
         hints.backspace();
@@ -332,8 +333,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             positions
         );
-        hints.push('s');
-        assert_eq!(hints.push('a'), Some("26".into()));
+        hints.push_letter('s');
+        assert_eq!(hints.push_letter('a'), Some("26".into()));
     }
 
     #[test]

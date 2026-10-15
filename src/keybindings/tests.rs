@@ -101,7 +101,7 @@ fn link_hints_is_opt_in_and_preserves_other_defaults() {
 }
 
 #[test]
-fn character_keys_do_not_require_display_formatting() {
+fn resolved_keys_map_to_characters() {
     assert_eq!(Key::from(VirtKey::A).as_char(), Some('a'));
     assert_eq!(Key::from(VirtKey::Key1).as_char(), Some('1'));
     assert_eq!(Key::from(VirtKey::Escape).as_char(), None);

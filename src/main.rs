@@ -549,7 +549,7 @@ impl Inlyne {
                                 ) =>
                                 {
                                     if let Some(letter) = key.as_char() {
-                                        if let Some(link) = hints.push(letter) {
+                                        if let Some(link) = hints.push_letter(letter) {
                                             self.cancel_link_hints();
                                             self.activate_link(link, false);
                                         }
