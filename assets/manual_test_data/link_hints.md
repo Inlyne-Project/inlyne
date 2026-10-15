@@ -1,6 +1,9 @@
 # Link hints playground
 
-Navigate without reaching for the mouse.
+Navigate without reaching for the mouse. Link hints are opt-in: launch this
+playground with `--config assets/manual_test_data/link_hints.toml` from the
+repository root, or add `extra = [["LinkHints", "f"]]` to your config's
+`[keybindings]` section.
 
 1. Press **f** to label the links currently on screen.
 2. Type a label to follow its link.

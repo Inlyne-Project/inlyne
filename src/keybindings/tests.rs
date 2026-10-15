@@ -66,7 +66,6 @@ base = [
     ["ToBottom", "End"],
     ["Quit", "Escape"],
     # Vim-like
-    ["LinkHints", "f"],
     ["Copy", "y"],
     ["ScrollUp", "k"],
     ["ScrollDown", "j"],
@@ -81,16 +80,26 @@ base = [
 "#;
 
 #[test]
-fn link_hints_respects_custom_bindings() {
+fn link_hints_is_opt_in() {
+    assert!(!Keybindings::default()
+        .iter()
+        .any(|(action, _)| action == &Action::LinkHints));
+
     for (config, keys, expected) in [
-        ("", vec![VirtKey::F], Some(Action::LinkHints)),
+        ("", vec![VirtKey::F], None),
+        ("[keybindings]", vec![VirtKey::F], None),
+        (
+            include_str!("../../assets/manual_test_data/link_hints.toml"),
+            vec![VirtKey::F],
+            Some(Action::LinkHints),
+        ),
         (
             r#"[keybindings]
 extra = [["Copy", "f"]]"#,
             vec![VirtKey::F],
             Some(Action::Copy),
         ),
-        // An existing user combo beginning with f must override the new single-key default.
+        // Leaving hints disabled preserves existing user combos beginning with f.
         (
             r#"[keybindings]
 extra = [["Copy", ["f", "g"]]]"#,
@@ -119,6 +128,33 @@ base = [["LinkHints", "l"]]"#,
             .unwrap();
         assert_eq!(last, expected);
     }
+}
+
+#[test]
+fn opting_into_link_hints_preserves_other_defaults() {
+    let Config { keybindings, .. } = Config::load_from_str(include_str!(
+        "../../assets/manual_test_data/link_hints.toml"
+    ))
+    .unwrap();
+    let mut combos = KeyCombos::new(keybindings).unwrap();
+    assert_eq!(combos.munch(VirtKey::F.into()), Some(Action::LinkHints));
+    assert_eq!(
+        combos.munch(VirtKey::J.into()),
+        Some(Action::Scroll(VertDirection::Down))
+    );
+    assert_eq!(combos.munch(VirtKey::Escape.into()), Some(Action::Quit));
+}
+
+#[test]
+fn link_hints_supports_an_opt_in_key_sequence() {
+    let Config { keybindings, .. } = Config::load_from_str(
+        r#"[keybindings]
+extra = [["LinkHints", ["f", "g"]]]"#,
+    )
+    .unwrap();
+    let mut combos = KeyCombos::new(keybindings).unwrap();
+    assert_eq!(combos.munch(VirtKey::F.into()), None);
+    assert_eq!(combos.munch(VirtKey::G.into()), Some(Action::LinkHints));
 }
 
 #[test]

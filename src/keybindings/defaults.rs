@@ -85,8 +85,6 @@ pub fn defaults() -> Vec<(Action, KeyCombo)> {
         // Quit: Esc
         (Action::Quit, KeyCombo::from(VirtKey::Escape)),
         // vim-like bindings
-        // Follow a visible link: f
-        (Action::LinkHints, KeyCombo::from(VirtKey::F)),
         // Copy: y
         (Action::Copy, KeyCombo::from(VirtKey::Y)),
         // Scroll up: k

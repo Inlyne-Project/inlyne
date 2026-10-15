@@ -111,16 +111,30 @@ You weren't supposed to see this!
 
 ## Keyboard link hints
 
-Press `f` to show yellow labels on visible text and image links, then type a label
+Link hints are opt-in and have no default shortcut. Enable them in your config:
+
+```toml
+[keybindings]
+extra = [["LinkHints", "f"]]
+```
+
+Then press `f` to show yellow labels on visible text and image links, and type a label
 to follow it. `Esc` cancels without quitting; `Backspace` edits the typed prefix.
 Other shortcuts are suspended until hint mode ends. Scrolling, resizing, document
 updates, mouse actions, and losing focus cancel hints so labels cannot go stale.
 Links in collapsed sections are excluded. If the viewport is too crowded to fit
 readable labels, zoom in or enlarge the window.
 
-The `LinkHints` action uses the normal configurable keybindings. For example,
-`extra = [["LinkHints", "F"]]` under `[keybindings]` also binds `Shift+f`;
-a custom `base` replaces the defaults, and an `extra` binding for `f` overrides it.
+The `LinkHints` action uses the normal configurable keybindings, so you can choose
+a different shortcut. Remove its binding to disable hints again; no other shortcuts
+need to change. A custom `base` replaces the defaults, while `extra` preserves
+nonconflicting defaults.
+
+Try the included playground with its opt-in config:
+
+```sh
+inlyne view assets/manual_test_data/link_hints.md --config assets/manual_test_data/link_hints.toml
+```
 
 ## Configuration
 
