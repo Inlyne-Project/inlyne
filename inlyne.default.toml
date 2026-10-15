@@ -132,9 +132,6 @@ code-highlighter = "github"
 
 # Extra will be applied on top of base/defaults. Useful for when you want to
 # just add some extra keybindings on top of the defaults
-# Link hints are opt-in (no default shortcut). Enable them with:
+# Opt into keyboard link hints (no default shortcut):
 # extra = [["LinkHints", "f"]]
-# Type a yellow label to follow a visible link. Escape cancels and Backspace
-# edits the prefix. Other shortcuts are suspended while hints are visible.
-# Mouse/viewport/document changes cancel hints. Remove the binding to disable.
 # Default: Not set

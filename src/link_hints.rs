@@ -10,10 +10,8 @@ const ALPHABET: &[u8] = b"asdfghjklqwertyuiopzxcvbnm";
 
 #[derive(Debug)]
 pub(crate) struct Hint {
-    pub label: String,
-    pub link: String,
-    /// Visible part of the target in viewport coordinates.
-    pub rect: Rect,
+    label: String,
+    link: String,
     /// Computed from the full target set before hint mode starts; filtering never moves labels.
     pub label_rect: Rect,
     pub text_box: TextBox,
@@ -21,37 +19,46 @@ pub(crate) struct Hint {
 
 #[derive(Debug)]
 pub(crate) struct LinkHints {
-    pub hints: Vec<Hint>,
-    pub prefix: String,
+    hints: Vec<Hint>,
+    prefix: String,
 }
 
 impl LinkHints {
-    fn new(targets: Vec<(String, Rect, f32)>) -> Option<Self> {
+    fn new(
+        targets: Vec<(String, Rect, f32)>,
+        text_system: &mut TextSystem,
+        viewport: Size,
+    ) -> Option<Self> {
         if targets.is_empty() {
             return None;
         }
         let labels = labels(targets.len());
+        let mut hints = Vec::with_capacity(targets.len());
+        for ((link, target, hidpi_scale), label) in targets.into_iter().zip(labels) {
+            let text_box = TextBox {
+                font_size: 13.,
+                texts: vec![Text::new(label.clone(), hidpi_scale, [0., 0., 0., 1.]).make_bold(true)],
+                hidpi_scale,
+                ..Default::default()
+            };
+            let size = text_box.size(text_system, (f32::MAX, f32::INFINITY), 1.);
+            let padding = 3. * hidpi_scale;
+            let label_rect = place_label(
+                target.pos,
+                (size.0 + padding * 2., size.1 + padding * 2.),
+                viewport,
+                &hints,
+                hidpi_scale,
+            );
+            hints.push(Hint {
+                label,
+                link,
+                label_rect,
+                text_box,
+            });
+        }
         Some(Self {
-            hints: targets
-                .into_iter()
-                .zip(labels)
-                .map(|((link, rect, hidpi_scale), label)| {
-                    let text =
-                        Text::new(label.clone(), hidpi_scale, [0., 0., 0., 1.]).make_bold(true);
-                    Hint {
-                        label,
-                        link,
-                        rect,
-                        label_rect: Rect::new((0., 0.), (0., 0.)),
-                        text_box: TextBox {
-                            font_size: 13.,
-                            texts: vec![text],
-                            hidpi_scale,
-                            ..Default::default()
-                        },
-                    }
-                })
-                .collect(),
+            hints,
             prefix: String::new(),
         })
     }
@@ -146,40 +153,7 @@ impl LinkHints {
             }
             Ok(())
         })?;
-        let Some(mut hints) = Self::new(targets) else {
-            return Ok(None);
-        };
-        hints.place(text_system, viewport.size)?;
-        Ok(Some(hints))
-    }
-
-    fn place(&mut self, text_system: &mut TextSystem, viewport: Size) -> anyhow::Result<()> {
-        let mut gap = 0_f32;
-        let targets: Vec<_> = self
-            .hints
-            .iter()
-            .map(|hint| {
-                let padding = 3. * hint.text_box.hidpi_scale;
-                gap = gap.max(hint.text_box.hidpi_scale);
-                let size = hint
-                    .text_box
-                    .size(text_system, (f32::MAX, f32::INFINITY), 1.);
-                (
-                    hint.rect.clone(),
-                    (size.0 + padding * 2., size.1 + padding * 2.),
-                )
-            })
-            .collect();
-        let placements = place_labels(&targets, viewport, gap).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Cannot fit {} link hints without overlap; zoom in or resize the window",
-                self.hints.len()
-            )
-        })?;
-        for (hint, rect) in self.hints.iter_mut().zip(placements) {
-            hint.label_rect = rect;
-        }
-        Ok(())
+        Ok(Self::new(targets, text_system, viewport.size))
     }
 }
 
@@ -232,82 +206,28 @@ fn visit_leaves(
     Ok(())
 }
 
-/// Greedily place full-sized labels as close to their targets as space permits. For each
-/// candidate row, occupied rectangles define blocked horizontal intervals; choose the closest
-/// free interval. Rows at obstacle edges plus viewport edges cover all possible free regions.
-/// The full target set is placed once, not only the labels matching the current prefix.
-/// Failure is explicit: callers must not enter hint mode with missing or overlapping labels.
-fn place_labels(targets: &[(Rect, Size)], viewport: Size, gap: f32) -> Option<Vec<Rect>> {
-    if targets
-        .iter()
-        .any(|(_, size)| size.0 > viewport.0 || size.1 > viewport.1)
-        || targets
-            .iter()
-            .map(|(_, size)| f64::from(size.0) * f64::from(size.1))
-            .sum::<f64>()
-            > f64::from(viewport.0) * f64::from(viewport.1)
-    {
-        return None;
-    }
-    let mut placed: Vec<Rect> = Vec::with_capacity(targets.len());
-    for (target, size) in targets {
-        let preferred = (
-            target.pos.0.clamp(0., viewport.0 - size.0),
-            target.pos.1.clamp(0., viewport.1 - size.1),
-        );
-        let mut rows = vec![preferred.1, 0., viewport.1 - size.1];
-        for rect in &placed {
-            rows.push((rect.pos.1 - size.1 - gap).clamp(0., viewport.1 - size.1));
-            rows.push((rect.max().1 + gap).clamp(0., viewport.1 - size.1));
+/// Anchor labels to their links, nudging right past same-row neighbours when space permits.
+/// Dense rows may overlap rather than disabling hints or moving them to unrelated rows.
+fn place_label(pos: (f32, f32), size: Size, viewport: Size, placed: &[Hint], gap: f32) -> Rect {
+    let max_x = (viewport.0 - size.0).max(0.);
+    let mut rect = Rect::new(
+        (
+            pos.0.clamp(0., max_x),
+            pos.1.clamp(0., (viewport.1 - size.1).max(0.)),
+        ),
+        size,
+    );
+    for hint in placed {
+        let other = &hint.label_rect;
+        if (rect.pos.1 - other.pos.1).abs() < gap
+            && rect.pos.0 < other.max().0 + gap
+            && rect.max().0 + gap > other.pos.0
+            && other.max().0 + gap <= max_x
+        {
+            rect.pos.0 = other.max().0 + gap;
         }
-        rows.sort_unstable_by(|a, b| {
-            (a - preferred.1)
-                .abs()
-                .total_cmp(&(b - preferred.1).abs())
-                .then(a.total_cmp(b))
-        });
-        rows.dedup();
-        let mut best: Option<(f32, Rect)> = None;
-        for y in rows {
-            let dy_squared = (y - preferred.1).powi(2);
-            if best
-                .as_ref()
-                .is_some_and(|(distance, _)| dy_squared > *distance)
-            {
-                break;
-            }
-            let mut blocked: Vec<_> = placed
-                .iter()
-                .filter(|rect| y < rect.max().1 + gap && y + size.1 + gap > rect.pos.1)
-                .map(|rect| {
-                    (
-                        (rect.pos.0 - gap).max(0.),
-                        (rect.max().0 + gap).min(viewport.0),
-                    )
-                })
-                .collect();
-            blocked.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-            let mut left = 0_f32;
-            for (start, end) in blocked
-                .into_iter()
-                .chain(std::iter::once((viewport.0, viewport.0)))
-            {
-                if start - left >= size.0 {
-                    let x = preferred.0.clamp(left, start - size.0);
-                    let distance = (x - preferred.0).powi(2) + dy_squared;
-                    if best
-                        .as_ref()
-                        .is_none_or(|(previous, _)| distance < *previous)
-                    {
-                        best = Some((distance, Rect::new((x, y), *size)));
-                    }
-                }
-                left = left.max(end);
-            }
-        }
-        placed.push(best?.1);
     }
-    Some(placed)
+    rect
 }
 
 /// Clip both axes, reject empty/offscreen targets, then convert to viewport coordinates.
@@ -371,123 +291,76 @@ mod tests {
         }
     }
 
+    fn hint(label: String, label_rect: Rect) -> Hint {
+        Hint {
+            label,
+            link: String::new(),
+            label_rect,
+            text_box: TextBox::default(),
+        }
+    }
+
     #[test]
-    fn prefix_filter_and_backspace_keep_labels_stable() {
-        let mut hints = LinkHints::new(
-            (0..27)
-                .map(|i| (i.to_string(), Rect::new((0., 0.), (10., 10.)), 1.))
+    fn filtering_and_backspace_preserve_labels_and_positions() {
+        let mut hints = LinkHints {
+            hints: labels(27)
+                .into_iter()
+                .enumerate()
+                .map(|(i, label)| {
+                    let mut hint = hint(label, Rect::new((i as f32, 10.), (20., 20.)));
+                    hint.link = i.to_string();
+                    hint
+                })
                 .collect(),
-        )
-        .unwrap();
+            prefix: String::new(),
+        };
+        let positions: Vec<_> = hints
+            .matching()
+            .map(|hint| hint.label_rect.clone())
+            .collect();
         assert_eq!(hints.push('s'), None);
         assert_eq!(hints.matching().count(), 1);
-        assert_eq!(hints.push('m'), None); // No such prefix, preserve "s".
+        assert_eq!(hints.push('m'), None); // Invalid prefixes do not hide every hint.
         assert_eq!(hints.prefix, "s");
+        assert_eq!(hints.matching().next().unwrap().label_rect, positions[26]);
         hints.backspace();
-        hints.backspace();
-        assert_eq!(hints.matching().count(), 27);
-        assert_eq!(hints.push('s'), None);
-        assert_eq!(hints.push('a'), Some("26".into()));
-    }
-
-    fn assert_usable_placements(placements: &[Rect], viewport: Size) {
-        for (i, rect) in placements.iter().enumerate() {
-            assert!(rect.pos.0 >= 0. && rect.pos.1 >= 0.);
-            assert!(rect.max().0 <= viewport.0 + 0.001 && rect.max().1 <= viewport.1 + 0.001);
-            for other in &placements[..i] {
-                assert!(
-                    rect.max().0 <= other.pos.0
-                        || other.max().0 <= rect.pos.0
-                        || rect.max().1 <= other.pos.1
-                        || other.max().1 <= rect.pos.1,
-                    "overlapping labels: {rect:?} and {other:?}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn placement_separates_tightly_spaced_links_at_normal_and_reduced_zoom() {
-        let viewport = (400., 240.);
-        for zoom in [1., 0.5, 0.25] {
-            // Label font stays readable at reduced document zoom, independent of tiny targets.
-            let targets: Vec<_> = (0..40)
-                .map(|i| {
-                    (
-                        Rect::new(
-                            (
-                                20. + (i % 10) as f32 * 18. * zoom,
-                                20. + (i / 10) as f32 * 18. * zoom,
-                            ),
-                            (5. * zoom, 12. * zoom),
-                        ),
-                        (22., 20.),
-                    )
-                })
-                .collect();
-            let placements = place_labels(&targets, viewport, 1.).unwrap();
-            assert_usable_placements(&placements, viewport);
-            assert_eq!(placements, place_labels(&targets, viewport, 1.).unwrap());
-            assert!(placements
-                .iter()
-                .zip(&targets)
-                .all(
-                    |(rect, (target, _))| (rect.pos.0 - target.pos.0).abs() < 200.
-                        && (rect.pos.1 - target.pos.1).abs() < 200.
-                ));
-        }
-    }
-
-    #[test]
-    fn placement_preserves_clear_targets_and_keeps_edge_labels_inside() {
-        let viewport = (100., 100.);
-        let targets = vec![
-            (Rect::new((5., 10.), (5., 5.)), (20., 15.)),
-            (Rect::new((50., 50.), (5., 5.)), (20., 15.)),
-            (Rect::new((99., 99.), (1., 1.)), (20., 15.)),
-        ];
-        let placements = place_labels(&targets, viewport, 1.).unwrap();
-        assert_eq!(placements[0].pos, targets[0].0.pos);
-        assert_eq!(placements[1].pos, targets[1].0.pos);
-        assert_eq!(placements[2].pos, (80., 85.));
-        assert_usable_placements(&placements, viewport);
-    }
-
-    #[test]
-    fn filtering_and_backspace_preserve_precomputed_placements() {
-        let mut hints = LinkHints::new(
-            (0..27)
-                .map(|i| (i.to_string(), Rect::new((i as f32, 10.), (1., 5.)), 1.))
-                .collect(),
-        )
-        .unwrap();
-        let inputs: Vec<_> = hints
-            .hints
-            .iter()
-            .map(|hint| (hint.rect.clone(), (20., 20.)))
-            .collect();
-        let placements = place_labels(&inputs, (240., 180.), 1.).unwrap();
-        for (hint, rect) in hints.hints.iter_mut().zip(&placements) {
-            hint.label_rect = rect.clone();
-        }
-        hints.push('s');
-        assert_eq!(hints.matching().next().unwrap().label_rect, placements[26]);
         hints.backspace();
         assert_eq!(
             hints
                 .matching()
                 .map(|hint| hint.label_rect.clone())
                 .collect::<Vec<_>>(),
-            placements
+            positions
         );
+        hints.push('s');
+        assert_eq!(hints.push('a'), Some("26".into()));
     }
 
     #[test]
-    fn impossible_layout_fails_instead_of_omitting_or_overlapping_labels() {
-        let target = Rect::new((0., 0.), (1., 1.));
-        assert!(place_labels(&[(target.clone(), (101., 20.))], (100., 100.), 1.).is_none());
-        assert!(place_labels(&vec![(target, (20., 20.)); 26], (100., 100.), 1.).is_none());
-        assert_eq!(place_labels(&[], (100., 100.), 1.), Some(Vec::new()));
+    fn placement_nudges_neighbours_and_clamps_without_rejecting_dense_rows() {
+        let viewport = (100., 100.);
+        let first = place_label((10., 10.), (20., 20.), viewport, &[], 1.);
+        assert_eq!(first.pos, (10., 10.));
+        let placed = [hint("a".into(), first)];
+        assert_eq!(
+            place_label((10., 10.), (20., 20.), viewport, &placed, 1.).pos,
+            (31., 10.)
+        );
+        // Consecutive lines must keep their anchors, even if the label backgrounds overlap.
+        assert_eq!(
+            place_label((10., 27.6), (20., 20.), viewport, &placed, 1.).pos,
+            (10., 27.6)
+        );
+        assert_eq!(
+            place_label((99., 99.), (20., 20.), viewport, &placed, 1.).pos,
+            (80., 80.)
+        );
+        // At the right edge, keep a colliding label anchored rather than hiding the mode.
+        let edge = [hint("a".into(), Rect::new((80., 80.), (20., 20.)))];
+        assert_eq!(
+            place_label((99., 99.), (20., 20.), viewport, &edge, 1.).pos,
+            (80., 80.)
+        );
     }
 
     #[test]

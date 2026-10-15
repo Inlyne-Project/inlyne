@@ -756,6 +756,16 @@ impl Renderer {
         self.lyon_buffer.indices.clear();
         self.lyon_buffer.vertices.clear();
         let cached_text_areas = self.render_elements(elements, selection)?;
+        let document_index_count = u32::try_from(self.lyon_buffer.indices.len())
+            .context("Too many document geometry indices")?;
+        // Append overlays to the same buffers, but draw them after document images and text.
+        let cached_hint_areas = match hints {
+            Some(hints) => self.render_hint_overlays(hints)?,
+            None => Vec::new(),
+        };
+        let index_count =
+            u32::try_from(self.lyon_buffer.indices.len()).context("Too many geometry indices")?;
+        let has_hints = !cached_hint_areas.is_empty();
         let vertex_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -770,33 +780,6 @@ impl Renderer {
                 contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
-
-        let document_index_count = self.lyon_buffer.indices.len() as u32;
-
-        // Keep overlay geometry separate: it must be drawn after document images AND text.
-        self.lyon_buffer.indices.clear();
-        self.lyon_buffer.vertices.clear();
-        let cached_hint_areas = match hints {
-            Some(hints) => self.render_hint_overlays(hints)?,
-            None => Vec::new(),
-        };
-        let hint_index_count = self.lyon_buffer.indices.len() as u32;
-        let hint_buffers = (hint_index_count > 0).then(|| {
-            (
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Link hint vertices"),
-                        contents: bytemuck::cast_slice(&self.lyon_buffer.vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    }),
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Link hint indices"),
-                        contents: bytemuck::cast_slice(&self.lyon_buffer.indices),
-                        usage: wgpu::BufferUsages::INDEX,
-                    }),
-            )
-        });
 
         // Prepare image bind groups for drawing
         let image_bindgroups = self.image_bindgroups(elements);
@@ -820,20 +803,22 @@ impl Renderer {
                 text_areas,
                 &mut self.text_system.swash_cache,
             )?;
-            self.hint_text_renderer.prepare(
-                &self.device,
-                &self.queue,
-                &mut self.text_system.font_system.lock(),
-                &mut self.text_system.text_atlas,
-                Resolution {
-                    width: self.config.width,
-                    height: self.config.height,
-                },
-                cached_hint_areas
-                    .iter()
-                    .map(|area| area.text_area(&text_cache)),
-                &mut self.text_system.swash_cache,
-            )?;
+            if has_hints {
+                self.hint_text_renderer.prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.text_system.font_system.lock(),
+                    &mut self.text_system.text_atlas,
+                    Resolution {
+                        width: self.config.width,
+                        height: self.config.height,
+                    },
+                    cached_hint_areas
+                        .iter()
+                        .map(|area| area.text_area(&text_cache)),
+                    &mut self.text_system.swash_cache,
+                )?;
+            }
             text_cache.trim();
         }
 
@@ -880,11 +865,11 @@ impl Renderer {
                 .render(&self.text_system.text_atlas, &mut rpass)
                 .unwrap();
 
-            if let Some((vertices, indices)) = &hint_buffers {
+            if has_hints {
                 rpass.set_pipeline(&self.render_pipeline);
-                rpass.set_vertex_buffer(0, vertices.slice(..));
-                rpass.set_index_buffer(indices.slice(..), GEOMETRY_INDEX_FORMAT);
-                rpass.draw_indexed(0..hint_index_count, 0, 0..1);
+                rpass.set_vertex_buffer(0, vertex_buf.slice(..));
+                rpass.set_index_buffer(index_buffer.slice(..), GEOMETRY_INDEX_FORMAT);
+                rpass.draw_indexed(document_index_count..index_count, 0, 0..1);
                 // Separate text renderer keeps hint glyphs above their backgrounds and all content.
                 self.hint_text_renderer
                     .render(&self.text_system.text_atlas, &mut rpass)

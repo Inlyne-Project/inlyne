@@ -27,6 +27,17 @@ pub enum Key {
 }
 
 impl Key {
+    pub fn as_char(self) -> Option<char> {
+        let Self::Resolved(key) = self else {
+            return None;
+        };
+        mappings::STR_TO_VIRT_KEY
+            .iter()
+            .find_map(|&(name, candidate)| {
+                (candidate == key && name.len() == 1).then(|| char::from(name.as_bytes()[0]))
+            })
+    }
+
     pub fn new(resolved: Option<VirtKey>, scan_code: ScanCode) -> Self {
         match resolved {
             Some(key_code) => Self::Resolved(key_code),

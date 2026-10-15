@@ -265,7 +265,6 @@ impl Inlyne {
     }
 
     fn load_file(&mut self, contents: String) {
-        self.cancel_link_hints();
         self.element_queue.lock().clear();
         self.elements.clear();
         self.renderer.positioner.reserved_height = DEFAULT_PADDING * self.renderer.hidpi_scale;
@@ -274,7 +273,6 @@ impl Inlyne {
     }
 
     fn update_file(&mut self, path: &Path, contents: String) {
-        self.cancel_link_hints();
         self.window.set_title(&utils::format_title(path));
         self.watcher.update_file(path, contents);
         self.renderer.set_scroll_y(0.0);
@@ -305,8 +303,6 @@ impl Inlyne {
                             | WindowEvent::ScaleFactorChanged { .. }
                             | WindowEvent::MouseWheel { .. }
                             | WindowEvent::MouseInput { .. }
-                            | WindowEvent::CursorMoved { .. }
-                            | WindowEvent::CursorLeft { .. }
                             | WindowEvent::Focused(false),
                         ..
                     }
@@ -552,11 +548,8 @@ impl Inlyne {
                                         | ModifiersState::LOGO,
                                 ) =>
                                 {
-                                    let letter = key.to_string();
-                                    if letter.len() == 1 {
-                                        if let Some(link) =
-                                            hints.push(letter.chars().next().unwrap())
-                                        {
+                                    if let Some(letter) = key.as_char() {
+                                        if let Some(link) = hints.push(letter) {
                                             self.cancel_link_hints();
                                             self.activate_link(link, false);
                                         }
@@ -572,7 +565,8 @@ impl Inlyne {
                         if let Some(action) = self.keycombos.munch(modified_key) {
                             match action {
                                 Action::LinkHints => {
-                                    if pending_resize.is_none()
+                                    if !mouse_down
+                                        && pending_resize.is_none()
                                         && !self.need_repositioning
                                         && self.element_queue.lock().is_empty()
                                     {
@@ -688,7 +682,6 @@ impl Inlyne {
                     // we receive a `MainEventsCleared`.  This prevents us from clogging up the queue
                     // with a bunch of costly resizes. (https://github.com/Inlyne-Project/inlyne/issues/25)
                     if let Some(size) = pending_resize.take() {
-                        self.cancel_link_hints();
                         if size.width > 0 && size.height > 0 {
                             self.renderer.config.width = size.width;
                             self.renderer.config.height = size.height;
@@ -707,7 +700,6 @@ impl Inlyne {
                     }
 
                     if self.need_repositioning {
-                        self.cancel_link_hints();
                         self.renderer.reposition(&mut self.elements).unwrap();
                         self.window.request_redraw();
                         self.need_repositioning = false;

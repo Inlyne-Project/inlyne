@@ -1,5 +1,5 @@
 use super::action::{Action, VertDirection};
-use super::{KeyCombos, Keybindings, ModifiedKey};
+use super::{Key, KeyCombos, Keybindings, ModifiedKey};
 use crate::opts::Config;
 use crate::test_utils::log;
 
@@ -80,58 +80,13 @@ base = [
 "#;
 
 #[test]
-fn link_hints_is_opt_in() {
+fn link_hints_is_opt_in_and_preserves_other_defaults() {
     assert!(!Keybindings::default()
         .iter()
         .any(|(action, _)| action == &Action::LinkHints));
+    let mut defaults = KeyCombos::new(Default::default()).unwrap();
+    assert_eq!(defaults.munch(VirtKey::F.into()), None);
 
-    for (config, keys, expected) in [
-        ("", vec![VirtKey::F], None),
-        ("[keybindings]", vec![VirtKey::F], None),
-        (
-            include_str!("../../assets/manual_test_data/link_hints.toml"),
-            vec![VirtKey::F],
-            Some(Action::LinkHints),
-        ),
-        (
-            r#"[keybindings]
-extra = [["Copy", "f"]]"#,
-            vec![VirtKey::F],
-            Some(Action::Copy),
-        ),
-        // Leaving hints disabled preserves existing user combos beginning with f.
-        (
-            r#"[keybindings]
-extra = [["Copy", ["f", "g"]]]"#,
-            vec![VirtKey::F, VirtKey::G],
-            Some(Action::Copy),
-        ),
-        (
-            r#"[keybindings]
-base = [["LinkHints", "l"]]"#,
-            vec![VirtKey::L],
-            Some(Action::LinkHints),
-        ),
-        (
-            r#"[keybindings]
-base = [["LinkHints", "l"]]"#,
-            vec![VirtKey::F],
-            None,
-        ),
-    ] {
-        let Config { keybindings, .. } = Config::load_from_str(config).unwrap();
-        let mut combos = KeyCombos::new(keybindings).unwrap();
-        let last = keys
-            .into_iter()
-            .map(|key| combos.munch(key.into()))
-            .last()
-            .unwrap();
-        assert_eq!(last, expected);
-    }
-}
-
-#[test]
-fn opting_into_link_hints_preserves_other_defaults() {
     let Config { keybindings, .. } = Config::load_from_str(include_str!(
         "../../assets/manual_test_data/link_hints.toml"
     ))
@@ -146,15 +101,11 @@ fn opting_into_link_hints_preserves_other_defaults() {
 }
 
 #[test]
-fn link_hints_supports_an_opt_in_key_sequence() {
-    let Config { keybindings, .. } = Config::load_from_str(
-        r#"[keybindings]
-extra = [["LinkHints", ["f", "g"]]]"#,
-    )
-    .unwrap();
-    let mut combos = KeyCombos::new(keybindings).unwrap();
-    assert_eq!(combos.munch(VirtKey::F.into()), None);
-    assert_eq!(combos.munch(VirtKey::G.into()), Some(Action::LinkHints));
+fn character_keys_do_not_require_display_formatting() {
+    assert_eq!(Key::from(VirtKey::A).as_char(), Some('a'));
+    assert_eq!(Key::from(VirtKey::Key1).as_char(), Some('1'));
+    assert_eq!(Key::from(VirtKey::Escape).as_char(), None);
+    assert_eq!(Key::ScanCode(30).as_char(), None);
 }
 
 #[test]

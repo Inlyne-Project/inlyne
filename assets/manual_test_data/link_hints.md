@@ -1,9 +1,6 @@
 # Link hints playground
 
-Navigate without reaching for the mouse. Link hints are opt-in: launch this
-playground with `--config assets/manual_test_data/link_hints.toml` from the
-repository root, or add `extra = [["LinkHints", "f"]]` to your config's
-`[keybindings]` section.
+Launch from the repository root with `--config assets/manual_test_data/link_hints.toml`.
 
 1. Press **f** to label the links currently on screen.
 2. Type a label to follow its link.
@@ -58,7 +55,8 @@ you are typing a label.
 
 ### Tightly packed targets
 
-Labels should remain readable even when links are only one character wide:
+Try these at normal and reduced zoom. Labels nudge right where space permits;
+very crowded rows may overlap.
 
 [A](#link-hints-playground)[B](#crowded-links)[C](#tables-and-images)[D](#try-these-first)[E](#link-hints-playground)[F](#crowded-links)[G](#tables-and-images)[H](#try-these-first).
 
