@@ -683,6 +683,39 @@ fn find_text_within_elem(text: &str) -> impl Fn(&Element) -> Option<&Text> + '_ 
     }
 }
 
+const SOFT_LINE_BREAKS: &str = "\
+first line
+second line
+
+before
+`code` after";
+
+#[test]
+fn soft_line_breaks_render_as_spaces() {
+    log::init();
+
+    let elems = interpret_md(SOFT_LINE_BREAKS);
+    let paragraphs: Vec<String> = elems
+        .iter()
+        .filter_map(|elem| {
+            let text_box = elem_as_text_box(elem)?;
+            assert!(
+                text_box.texts.iter().all(|text| !text.text.contains('\n')),
+                "a soft line break was kept as a newline: {:?}",
+                text_box.texts,
+            );
+            Some(
+                text_box
+                    .texts
+                    .iter()
+                    .map(|text| text.text.as_str())
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(paragraphs, ["first line second line", "before code after"]);
+}
+
 const ITALICS_IN_CODEBLOCK: &str = "\
 ```rust
 let foo;

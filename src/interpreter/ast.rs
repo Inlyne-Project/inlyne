@@ -323,11 +323,17 @@ trait Process {
                 string = string.trim_start();
             }
 
-            let mut text = Text::new(
-                string.to_string(),
-                global.opts.hidpi_scale,
-                text_native_color,
-            );
+            // Local patch (pi, 2026-10-28): a soft line break in markdown source reaches us as a
+            // '\n' inside the text; render it as a space, as CommonMark specifies. Unpatched, a
+            // mid-run newline vanishes ("the\nslice" -> "theslice") and a trailing one forces a
+            // line break (text.rs, TextBox::key).
+            let content = if state.text_options.pre_formatted {
+                string.to_string()
+            } else {
+                string.replace("\r\n", " ").replace('\n', " ")
+            };
+
+            let mut text = Text::new(content, global.opts.hidpi_scale, text_native_color);
 
             if state.text_options.block_quote >= 1 {
                 element.set_quote_block(state.text_options.block_quote as usize);
