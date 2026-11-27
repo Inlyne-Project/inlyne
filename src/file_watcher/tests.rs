@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use super::{Callback, Watcher};
 
@@ -18,8 +18,8 @@ impl Callback for mpsc::Sender<()> {
 }
 
 fn touch(file: &Path) {
-    let now = filetime::FileTime::now();
-    filetime::set_file_mtime(file, now).unwrap();
+    let now = SystemTime::now();
+    fs::set_times(file, fs::FileTimes::new().set_modified(now)).unwrap();
 }
 
 #[derive(Clone)]
