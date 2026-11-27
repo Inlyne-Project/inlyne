@@ -2044,8 +2044,8 @@ dependencies = [
  "string_cache",
  "syntect",
  "taffy",
+ "teeny-http",
  "tempfile",
- "tiny_http",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -4385,6 +4385,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "teeny-http"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6fcd8f767f1f59a18ad0a79665730caf2f10da8a0533690ead80f6659b74fcf"
+dependencies = [
+ "ascii",
+ "chunked_transfer",
+ "httpdate",
+ "log",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4558,18 +4570,6 @@ dependencies = [
  "arrayref",
  "bytemuck",
  "strict-num",
-]
-
-[[package]]
-name = "tiny_http"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389915df6413a2e74fb181895f933386023c71110878cd0825588928e64cdc82"
-dependencies = [
- "ascii",
- "chunked_transfer",
- "httpdate",
- "log",
 ]
 
 [[package]]

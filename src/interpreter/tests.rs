@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 use pretty_assertions::assert_eq;
 use smart_debug::SmartDebug;
 use syntect::highlighting::Theme as SyntectTheme;
-use tiny_http::{Header, Response};
+use teeny_http::{Header, Response};
 use wgpu::TextureFormat;
 
 // We use a dummy window with an internal counter that keeps track of when rendering a single md
@@ -966,7 +966,7 @@ fn custom_user_agent() {
     let state = server::State::new().send(send_ua);
     let send_ua_server = server::spawn(state, |state, req, _req_url| {
         let maybe_ua = req.headers().iter().find_map(|Header { field, value }| {
-            field.equiv("user-agent").then(|| value.as_str().to_owned())
+            (field == "user-agent").then(|| value.as_str().to_owned())
         });
         let _ = state
             .send
