@@ -169,8 +169,6 @@ default-features = false
 [dev-dependencies]
 # Succinct and more readable binary blobs
 base64 = "0.22.1"
-# Used to update file's modified time for tests
-filetime = "0.2.30"
 # Snapshot testing
 insta = "1.49.0"
 # Assertions displayed as diffs which is immensely helpful for some of our large
