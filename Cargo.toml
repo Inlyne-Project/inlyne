@@ -41,7 +41,7 @@ wayland = ["copypasta/wayland", "winit/wayland", "winit/wayland-csd-adwaita"]
 anstream = "1.0.0"
 anstyle = "1.0.14"
 # Easier error handling
-anyhow = "1.0.102"
+anyhow = "1.0.105"
 # System preferred color scheme detection
 dark-light = "2.0.0"
 # System specific directories
@@ -53,7 +53,7 @@ fxhash = "0.2.1"
 # GPU text rendering
 glyphon = "0.3"
 # Used to values used in YAML frontmatter when converting to HTML
-html-escape = "0.2.13"
+html-escape = "0.2.15"
 # Parsing the HTML document that the markdown+html was converted into
 html5ever = "0.39.0"
 # Provides some extra helpers that we use for our custom panic hook
@@ -63,14 +63,14 @@ image = "0.25.10"
 # 2D GPU graphics rendering
 lyon = "1.0.19"
 # Images are compressed to in-memory lz4 blobs
-lz4_flex = "0.13.1"
+lz4_flex = "0.13.2"
 # Generic metrics facade for our metrics recording/emission infra
 metrics = "0.24.6"
 # File event notifications for the live reloading feature
-notify = "8.2.0"
+notify = "8.2.2"
 percent-encoding = "2.3.2"
 # Used to open external links like in the user's browser
-open = "5.3.5"
+open = "5.4.5"
 # Some alternative atomics that are slightly more ergonoics than `std`'s
 parking_lot = "0.12.5"
 # Dead simple way to handle some async operations
@@ -85,29 +85,29 @@ smart-debug = "0.0.3"
 syntect = "5.3.0"
 # Some CSS layout algos that we use as a pretty decent alternative to us
 # lacking HTML ones
-taffy = "0.12.1"
+taffy = "0.12.2"
 # For parsing our config file
-toml = "1.1.2"
+toml = "1.2.3"
 tracing.workspace = true
 # Extra syntax and theme definitions for `syntect`
-two-face = "0.5.1"
+two-face = "0.5.2"
 # More text hashing...
-twox-hash = "2.1.2"
+twox-hash = "2.1.5"
 # HTTP client for requesting images from urls
-ureq = "3.3.0"
+ureq = "3.5.2"
 # Cross platform GPU magic sauce
 wgpu = "0.16"
 # Parses the optional YAML frontmatter
-yaml_serde = "0.10.4"
+yaml_serde = "0.10.7"
 
 # Used for casting types to GPU compatible formats
 [dependencies.bytemuck]
-version = "1.25.0"
+version = "1.25.2"
 features = ["derive"]
 
 # Command line arg parsing
 [dependencies.clap]
-version = "4.6.1"
+version = "4.6.10"
 features = ["cargo", "derive"]
 
 # Converts our markdown+html to pure HTML
@@ -131,7 +131,7 @@ features = ["fontconfig"]
 
 # Common dep used from yaml that can probably be replaced with a `Vec<(_, _)>`
 [dependencies.indexmap]
-version = "2.14.0"
+version = "2.14.2"
 features = ["serde"]
 
 # Metrics helpers used for our custom metric logger
@@ -148,7 +148,7 @@ default-features = false
 
 # For dealing with both TOML and YAML
 [dependencies.serde]
-version = "1.0.228"
+version = "1.0.229"
 features = ["derive"]
 
 # Common dep used by `html5ever`
@@ -170,9 +170,9 @@ default-features = false
 # Succinct and more readable binary blobs
 base64 = "0.22.1"
 # Used to update file's modified time for tests
-filetime = "0.2.29"
+filetime = "0.2.30"
 # Snapshot testing
-insta = "1.47.2"
+insta = "1.49.0"
 # Assertions displayed as diffs which is immensely helpful for some of our large
 # values
 pretty_assertions = "1.4.1"
