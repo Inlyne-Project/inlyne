@@ -4,7 +4,7 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use tiny_http::{Header, Method, Request, Response, ResponseBox, Server};
+use teeny_http::{Header, Method, Request, Response, ResponseBox, Server};
 
 type HandlerFn = fn(&State, &Request, &str) -> ResponseBox;
 

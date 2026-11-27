@@ -179,7 +179,7 @@ pretty_assertions = "1.4.1"
 # Throwaway files/dirs for isolated test environments
 tempfile = "3.27.0"
 # Use for setting up a local http server to test image requests in isolation
-tiny_http = "0.12.0"
+teeny-http = "0.12.2"
 
 [target.'cfg(inlyne_tcp_metrics)'.dependencies]
 metrics-exporter-tcp = "0.11.2"
