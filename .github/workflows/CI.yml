@@ -56,7 +56,7 @@ jobs:
           rustup component add clippy rustfmt
 
       - name: Check spelling
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@main
       - name: Formatting
         run: cargo fmt --check
 
